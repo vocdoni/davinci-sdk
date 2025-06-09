@@ -20,6 +20,7 @@ import {
     BallotProofInputs,
     BallotMode as ApiBallotMode
 } from "../../../src/sequencer";
+import { getElectionMetadataTemplate } from "../../../src/core";
 import {
     SmartContractService,
     ProcessRegistryService,
@@ -178,7 +179,7 @@ async function step6_fetchRootSize(api: VocdoniApiService, censusId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 7: Create Process via Sequencer API
+//   STEP 8: Create Process via Sequencer API
 // ────────────────────────────────────────────────────────────
 interface ApiFlowResult {
     censusId: string;
@@ -188,15 +189,37 @@ interface ApiFlowResult {
     processId: string;
     encryptionPubKey: [string, string];
     stateRoot: string;
+    metadataUri: string;
 }
-async function step7_createProcess(
+
+// ────────────────────────────────────────────────────────────
+//   STEP 7: Push Election Metadata
+// ────────────────────────────────────────────────────────────
+async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
+    step(7, "Push election metadata");
+    const metadata = getElectionMetadataTemplate();
+    metadata.title.default = "Test Election " + Date.now();
+    metadata.description.default = "This is a test election created via script";
+    
+    const hash = await api.pushMetadata(metadata);
+    const metadataUrl = api.getMetadataUrl(hash);
+    console.log("   metadata hash:", hash);
+    console.log("   metadata url:", metadataUrl);
+    
+    // Verify metadata was stored correctly
+    const storedMetadata = await api.getMetadata(hash);
+    console.log("   metadata stored successfully:", storedMetadata.title.default);
+    success("Metadata pushed to storage");
+    return metadataUrl;
+}
+async function step8_createProcess(
     api: VocdoniApiService,
     provider: JsonRpcProvider,
     wallet: Wallet,
     censusRoot: string,
     censusSize: number
 ): Promise<Pick<ApiFlowResult, "processId" | "encryptionPubKey" | "stateRoot">> {
-    step(7, "Create process via Sequencer API");
+    step(8, "Create process via Sequencer API");
     const chainId = Chain.Sepolia;
     const nonce   = await provider.getTransactionCount(wallet.address);
     const ballotMode: ApiBallotMode = {
@@ -220,10 +243,10 @@ async function step7_createProcess(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 8: Check Admin on‐chain
+//   STEP 9: Check Admin on‐chain
 // ────────────────────────────────────────────────────────────
-async function step8_checkAdmin(wallet: Wallet, orgId: string) {
-    step(8, "Verify admin rights on OrganizationRegistry");
+async function step9_checkAdmin(wallet: Wallet, orgId: string) {
+    step(9, "Verify admin rights on OrganizationRegistry");
     const svc = new OrganizationRegistryService(
         ORGANIZATION_REGISTRY_ADDR,
         wallet
@@ -234,14 +257,14 @@ async function step8_checkAdmin(wallet: Wallet, orgId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 9: Submit newProcess on‐chain
+//   STEP 10: Submit newProcess on‐chain
 // ────────────────────────────────────────────────────────────
-async function step9_newProcessOnChain(
+async function step10_newProcessOnChain(
     wallet: Wallet,
     orgId: string,
     args: ApiFlowResult
 ) {
-    step(9, "Submit newProcess on‐chain");
+    step(10, "Submit newProcess on‐chain");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     await SmartContractService.executeTx(
         registry.newProcess(
@@ -264,7 +287,7 @@ async function step9_newProcessOnChain(
                 censusRoot: args.censusRoot,
                 censusURI: args.censusId
             } as Census,
-            "ipfs://example-metadata",
+            args.metadataUri,
             orgId,
             args.processId,
             { x: args.encryptionPubKey[0], y: args.encryptionPubKey[1] } as EncryptionKey,
@@ -275,10 +298,10 @@ async function step9_newProcessOnChain(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 10: Fetch on‐chain Process
+//   STEP 11: Fetch on‐chain Process
 // ────────────────────────────────────────────────────────────
-async function step10_fetchOnChain(wallet: Wallet, processId: string) {
-    step(10, "Fetch on‐chain process");
+async function step11_fetchOnChain(wallet: Wallet, processId: string) {
+    step(11, "Fetch on‐chain process");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     const stored = await registry.getProcess(processId);
     console.log(
@@ -290,9 +313,9 @@ async function step10_fetchOnChain(wallet: Wallet, processId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 11: Generate zk‐SNARK inputs (Go/WASM) for each voter
+//   STEP 12: Generate zk‐SNARK inputs (Go/WASM) for each voter
 // ────────────────────────────────────────────────────────────
-async function step11_generateProofInputs(
+async function step12_generateProofInputs(
     wasmExecUrl: string,
     wasmUrl: string,
     participants: TestParticipant[],
@@ -305,7 +328,7 @@ async function step11_generateProofInputs(
     out: BallotProofOutput;
     circomInputs: Groth16ProofInputs;
 }>> {
-    step(11, "Generate zk‐SNARK inputs for each participant");
+    step(12, "Generate zk‐SNARK inputs for each participant");
     const sdk = new BallotProof({ wasmExecUrl, wasmUrl });
     await sdk.init();
 
@@ -346,15 +369,15 @@ async function step11_generateProofInputs(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 12: Run fullProve + verify for each input
+//   STEP 13: Run fullProve + verify for each input
 // ────────────────────────────────────────────────────────────
-async function step12_runGroth16Proofs(
+async function step13_runGroth16Proofs(
     circuitUrl: string,
     provingKeyUrl: string,
     verificationKeyUrl: string,
     list: Array<{ key: string; voteID: string; circomInputs: Groth16ProofInputs }>
 ): Promise<Array<{ key: string; voteID: string; proof: Groth16Proof; publicSignals: string[] }>> {
-    step(12, "Run snarkjs.fullProve + verify for each input");
+    step(13, "Run snarkjs.fullProve + verify for each input");
     const pg = new CircomProof({
         wasmUrl: circuitUrl,
         zkeyUrl: provingKeyUrl,
@@ -376,9 +399,9 @@ async function step12_runGroth16Proofs(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 13: Submit one vote per participant
+//   STEP 14: Submit one vote per participant
 // ────────────────────────────────────────────────────────────
-export async function step13_submitVotes(
+export async function step14_submitVotes(
     api: VocdoniApiService,
     wallet: Wallet,
     processId: string,
@@ -387,7 +410,7 @@ export async function step13_submitVotes(
     listProofInputs: Array<{ key: string; voteID: string; out: BallotProofOutput; circomInputs: Groth16ProofInputs }>,
     proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>
 ): Promise<string[]> {
-    step(13, "Submit votes for each participant");
+    step(14, "Submit votes for each participant");
     const voteIds: string[] = [];
 
     for (let i = 0; i < participants.length; i++) {
@@ -433,12 +456,12 @@ export async function step13_submitVotes(
     return voteIds;
 }
 
-async function step14_checkVoteIds<T>(
+async function step15_checkVoteIds<T>(
     a: T[],
     b: T[],
     label: string
 ) {
-    step(14, "Check same voteIDs");
+    step(15, "Check same voteIDs");
 
     console.log(chalk.yellow("\n→ expected voteIDs:"), a);
     console.log(chalk.yellow("→ returned voteIDs:"), b);
@@ -471,23 +494,25 @@ async function run() {
     await step5_verifyParticipants(api, censusId);
     const { censusRoot, censusSize } = await step6_fetchRootSize(api, censusId);
 
+    const metadataUri = await step7_pushMetadata(api);
     const { processId, encryptionPubKey, stateRoot } =
-        await step7_createProcess(api, provider, wallet, censusRoot, censusSize);
+        await step8_createProcess(api, provider, wallet, censusRoot, censusSize);
 
-    // 8–10) on‐chain process registry
-    await step8_checkAdmin(wallet, orgId);
-    await step9_newProcessOnChain(wallet, orgId, {
+    // 9–11) on‐chain process registry
+    await step9_checkAdmin(wallet, orgId);
+    await step10_newProcessOnChain(wallet, orgId, {
         censusId,
         participants,
         censusRoot,
         censusSize,
         processId,
         encryptionPubKey,
-        stateRoot
+        stateRoot,
+        metadataUri
     });
-    await step10_fetchOnChain(wallet, processId);
+    await step11_fetchOnChain(wallet, processId);
 
-    const listProofInputs = await step11_generateProofInputs(
+    const listProofInputs = await step12_generateProofInputs(
         info.ballotProofWasmHelperExecJsUrl,
         info.ballotProofWasmHelperUrl,
         participants,
@@ -496,7 +521,7 @@ async function run() {
         { maxCount:1, maxValue:"10", minValue:"0", forceUniqueness:false, costFromWeight:false, costExponent:0, maxTotalCost:"10", minTotalCost:"0" }
     );
 
-    const proofs = await step12_runGroth16Proofs(
+    const proofs = await step13_runGroth16Proofs(
         info.circuitUrl,
         info.provingKeyUrl,
         info.verificationKeyUrl,
@@ -506,7 +531,7 @@ async function run() {
     // give sequencer a breather
     await new Promise((r) => setTimeout(r, 45_000));
 
-    const voteIds = await step13_submitVotes(
+    const voteIds = await step14_submitVotes(
         api,
         wallet,
         processId,
@@ -518,7 +543,7 @@ async function run() {
 
     console.log(chalk.bold.cyan("\nVote IDs:"), voteIds);
 
-    await step14_checkVoteIds(
+    await step15_checkVoteIds(
         listProofInputs.map((x) => x.voteID),
         voteIds,
         "voteID mismatch!"

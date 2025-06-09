@@ -5,6 +5,7 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, '../../../.env') });
 import { VocdoniApiService } from "../../../../src/sequencer/api";
 import { mockProvider, mockWallet, generateMockCensusParticipants, generateMockProcessRequest, isValidUUID, isValidHex } from "../utils";
+import { getElectionMetadataTemplate } from "../../../../src/core/types";
 
 const api = new VocdoniApiService(process.env.API_URL!);
 let censusId: string;
@@ -110,6 +111,30 @@ describe("VocdoniApiService Integration", () => {
         expect(Array.isArray(response.encryptionPubKey)).toBe(true);
         expect(response.encryptionPubKey.length).toBe(2);
         expect(isValidHex(response.stateRoot, 64)).toBe(true);
+    });
+
+    describe("Metadata operations", () => {
+        let metadataHash: string;
+        const testMetadata = getElectionMetadataTemplate();
+        testMetadata.title.default = "Test Election";
+        testMetadata.description.default = "This is a test election";
+
+        it("should push metadata and return a valid hex hash", async () => {
+            const hash = await api.pushMetadata(testMetadata);
+            expect(isValidHex(hash, 64)).toBe(true);
+            metadataHash = hash;
+        });
+
+        it("should retrieve metadata using the hash", async () => {
+            const metadata = await api.getMetadata(metadataHash);
+            expect(metadata).toEqual(testMetadata);
+        });
+
+        it("should throw error for invalid hash format", async () => {
+            await expect(api.getMetadata("invalid-hash"))
+                .rejects
+                .toThrow("Invalid metadata hash format");
+        });
     });
 
     it("should delete the census", async () => {
