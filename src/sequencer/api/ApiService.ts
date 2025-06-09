@@ -6,11 +6,17 @@ import {
     CreateProcessResponse,
     GetProcessResponse,
     InfoResponse,
-    VoteRequest, VoteStatusResponse,
+    VoteRequest, 
+    VoteStatusResponse,
 } from "./types";
+import { ElectionMetadata } from "../../core";
 
 function isUUId(str: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+function isHexString(str: string): boolean {
+    return /^0x[0-9a-f]{64}$/i.test(str);
 }
 
 export class VocdoniApiService extends BaseService {
@@ -126,5 +132,28 @@ export class VocdoniApiService extends BaseService {
             method: "GET",
             url: "/info"
         });
+    }
+
+    async pushMetadata(metadata: ElectionMetadata): Promise<string> {
+        const { hash } = await this.request<{ hash: string }>({
+            method: "POST",
+            url: "/metadata",
+            data: metadata
+        });
+        return hash;
+    }
+
+    async getMetadata(hash: string): Promise<ElectionMetadata> {
+        if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
+
+        return await this.request<ElectionMetadata>({
+            method: "GET",
+            url: `/metadata/${hash}`
+        });
+    }
+
+    getMetadataUrl(hash: string): string {
+        if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
+        return `${this.axios.defaults.baseURL}/metadata/${hash}`;
     }
 }
