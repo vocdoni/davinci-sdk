@@ -9,11 +9,10 @@ import {
     OrganizationRegistryService,
     ProcessRegistryService,
     ProcessStatus,
-    type BallotMode,
-    type Census,
-    type EncryptionKey,
-    SmartContractService, deployedAddresses as addresses
+    SmartContractService, 
+    deployedAddresses as addresses
 } from "../../../src/contracts";
+import { BallotMode, Census, EncryptionKey } from "../../../src/core";
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
@@ -88,8 +87,8 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         initStateRoot  = randomHex(32);
         initDuration   = 3600;  // seconds
         initCensus = {
-            censusOrigin: BigInt(1),
-            maxVotes:     BigInt(5),
+            censusOrigin: 1,
+            maxVotes:     "5",
             censusRoot:   randomHex(32),
             censusURI:    `ipfs://census-${Date.now()}`,
         };
@@ -157,7 +156,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         //
         const newCensus: Census = {
             ...initCensus,
-            maxVotes: BigInt(10),
+            maxVotes: "10",
             censusURI: initCensus.censusURI + "-v2",
         };
         const censusUpdated = new Promise<void>((resolve) => {
@@ -166,7 +165,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                     id.toLowerCase() === processId.toLowerCase() &&
                     hexlify(root).toLowerCase() === hexlify(newCensus.censusRoot).toLowerCase() &&
                     uri === newCensus.censusURI &&
-                    maxVotes === newCensus.maxVotes
+                    maxVotes === BigInt(newCensus.maxVotes)
                 ) resolve();
             });
         });
@@ -177,7 +176,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
 
         const afterC = await procService.getProcess(processId);
         expect(afterC.census.censusURI).toBe(newCensus.censusURI);
-        expect(afterC.census.maxVotes).toBe(newCensus.maxVotes);
+        expect(afterC.census.maxVotes).toBe(BigInt(newCensus.maxVotes));
 
         //
         // 5) UPDATE DURATION & WAIT ProcessDurationChanged

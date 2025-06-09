@@ -22,4 +22,5 @@ export default {
   testEnvironment: 'node',
   detectOpenHandles: false,
   forceExit: true,
+  passWithNoTests: true,
 };

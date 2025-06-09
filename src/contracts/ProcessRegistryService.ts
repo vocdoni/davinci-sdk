@@ -6,6 +6,7 @@ import {
 } from "@vocdoni/davinci-contracts";
 import { SmartContractService } from "./SmartContractService";
 import type { ContractRunner } from "ethers";
+import { BallotMode, Census, EncryptionKey } from '../core';
 
 // Custom errors
 export class CreateProcessError      extends Error {}
@@ -21,11 +22,6 @@ type StatusChangedCallback       = (processID: string, newStatus: bigint) => voi
 type CensusUpdatedCallback      = (processID: string, root: string, uri: string, maxVotes: bigint) => void;
 type DurationChangedCallback     = (processID: string, duration: bigint) => void;
 type StateRootUpdatedCallback    = (processID: string, newStateRoot: bigint) => void;
-
-// Typed helpers from the contract
-export type BallotMode       = IProcessRegistry.BallotModeStruct;
-export type Census           = IProcessRegistry.CensusStruct;
-export type EncryptionKey    = IProcessRegistry.EncryptionKeyStruct;
 
 export enum ProcessStatus {
     READY   = 0,
@@ -72,13 +68,21 @@ export class ProcessRegistryService extends SmartContractService {
         encryptionKey: EncryptionKey,
         initStateRoot: bigint
     ) {
+        // Convert Census type from core to contract format
+        const contractCensus: IProcessRegistry.CensusStruct = {
+            censusOrigin: BigInt(census.censusOrigin),
+            maxVotes: BigInt(census.maxVotes),
+            censusRoot: census.censusRoot,
+            censusURI: census.censusURI
+        };
+
         return this.sendTx(
             this.contract.newProcess(
                 status,
                 startTime,
                 duration,
                 ballotMode,
-                census,
+                contractCensus,
                 metadata,
                 organizationId,
                 processID,
@@ -104,8 +108,16 @@ export class ProcessRegistryService extends SmartContractService {
     }
 
     setProcessCensus(processID: string, census: Census) {
+        // Convert Census type from core to contract format
+        const contractCensus: IProcessRegistry.CensusStruct = {
+            censusOrigin: BigInt(census.censusOrigin),
+            maxVotes: BigInt(census.maxVotes),
+            censusRoot: census.censusRoot,
+            censusURI: census.censusURI
+        };
+
         return this.sendTx(
-            this.contract.setProcessCensus(processID, census).catch(e => {
+            this.contract.setProcessCensus(processID, contractCensus).catch(e => {
                 throw new SetCensusError(e.message);
             }),
             async () => ({ success: true })

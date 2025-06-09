@@ -139,18 +139,21 @@ export const ElectionMetadataTemplate: ElectionMetadata = {
             description: {
                 default: '',
             },
+            meta: {},
             choices: [
                 {
                     title: {
                         default: 'Yes',
                     },
                     value: 0,
+                    meta: {},
                 },
                 {
                     title: {
                         default: 'No',
                     },
                     value: 1,
+                    meta: {},
                 },
             ],
         },
