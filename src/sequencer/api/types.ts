@@ -1,13 +1,4 @@
-export interface BallotMode {
-    maxCount: number;
-    maxValue: string;
-    minValue: string;
-    forceUniqueness: boolean;
-    costFromWeight: boolean;
-    costExponent: number;
-    maxTotalCost: string;
-    minTotalCost: string;
-}
+import { BallotMode, Census, EncryptionKey } from '../../core/types';
 
 export interface CreateProcessRequest {
     censusRoot: string;
@@ -21,29 +12,6 @@ export interface CreateProcessResponse {
     processId: string;
     encryptionPubKey: [string, string];
     stateRoot: string;
-}
-
-export interface EncryptionKey {
-    x: string;
-    y: string;
-}
-
-export interface Census {
-    censusOrigin: number;
-    maxVotes: string;
-    censusRoot: string;
-    censusURI: string;
-}
-
-export interface BallotMode {
-    maxCount: number;
-    maxValue: string;
-    minValue: string;
-    forceUniqueness: boolean;
-    costFromWeight: boolean;
-    costExponent: number;
-    maxTotalCost: string;
-    minTotalCost: string;
 }
 
 export interface GetProcessResponse {

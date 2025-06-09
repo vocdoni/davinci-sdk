@@ -35,6 +35,29 @@ const createOutput = (name, options) => [
 ];
 
 export default [
+  // Core bundle
+  createBundle({
+    plugins: [
+      json(),
+      commonjs(),
+      resolve(),
+      esbuild({ target: 'esnext' })
+    ],
+    output: createOutput('core', { umdName: 'CoreSDK' })
+  }, {
+    input: 'src/core/index.ts',
+    includeSnarkjs: false
+  }),
+  
+  // Core types
+  createBundle({
+    plugins: [dts()],
+    output: { file: 'dist/core.d.ts', format: 'es' }
+  }, {
+    input: 'src/core/index.ts',
+    includeSnarkjs: false
+  }),
+
   // Contracts bundle
   createBundle({
     plugins: [

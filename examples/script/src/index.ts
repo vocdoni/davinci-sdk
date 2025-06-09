@@ -17,19 +17,17 @@ import {
     Groth16Proof,
     ProofInputs as Groth16ProofInputs,
     BallotProof,
-    BallotProofInputs,
-    BallotMode as ApiBallotMode
+    BallotProofInputs
 } from "../../../src/sequencer";
-import { getElectionMetadataTemplate } from "../../../src/core";
+import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
 import {
     SmartContractService,
     ProcessRegistryService,
     OrganizationRegistryService,
     ProcessStatus,
-    type Census,
-    type EncryptionKey,
     deployedAddresses as addresses
 } from "../../../src/contracts";
+import { Census, EncryptionKey } from "../../../src/core";
 import { randomBytes } from "crypto";
 
 config();
