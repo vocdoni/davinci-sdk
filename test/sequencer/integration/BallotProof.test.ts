@@ -1,7 +1,14 @@
 import { BallotProof, BallotProofInputs } from "../../../src/sequencer";
+import { VocdoniApiService } from "../../../src/sequencer/api";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load environment variables from test/.env
+config({ path: resolve(__dirname, '../../.env') });
 
 describe("BallotProofService Integration", () => {
     let service: BallotProof;
+    let api: VocdoniApiService;
 
     const example: BallotProofInputs = {
         address: "40aA6F90Dd3731eD10d6aA544200ACC647144669",
@@ -27,9 +34,12 @@ describe("BallotProofService Integration", () => {
     };
 
     beforeAll(async () => {
+        api = new VocdoniApiService(process.env.API_URL!);
+        const info = await api.getInfo();
+        
         service = new BallotProof({
-            wasmExecUrl: 'https://github.com/vocdoni/davinci-node/raw/refs/heads/main/cmd/ballotproof-wasm/wasm_exec.js',
-            wasmUrl: 'https://github.com/vocdoni/davinci-node/raw/refs/heads/main/cmd/ballotproof-wasm/ballotproof.wasm'
+            wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+            wasmUrl: info.ballotProofWasmHelperUrl
         });
         await service.init();
     });

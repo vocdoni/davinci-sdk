@@ -1,4 +1,10 @@
 import { Groth16Proof, CircomProof, ProofInputs } from '../../../src/sequencer';
+import { VocdoniApiService } from '../../../src/sequencer/api';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load environment variables from test/.env
+config({ path: resolve(__dirname, '../../.env') });
 
 const finalInputs: ProofInputs = {
     fields: [
@@ -66,12 +72,16 @@ describe("CircomProofService Integration", () => {
     let service: CircomProof;
     let proof: Groth16Proof;
     let publicSignals: string[];
+    let api: VocdoniApiService;
 
-    beforeAll(() => {
+    beforeAll(async () => {
+        api = new VocdoniApiService(process.env.API_URL!);
+        const info = await api.getInfo();
+        
         service = new CircomProof({
-            wasmUrl: 'https://circuits.ams3.cdn.digitaloceanspaces.com/dev/ballot_proof.wasm',
-            zkeyUrl: 'https://circuits.ams3.cdn.digitaloceanspaces.com/dev/ballot_proof_pkey.zkey',
-            vkeyUrl: 'https://circuits.ams3.cdn.digitaloceanspaces.com/dev/ballot_proof_vkey.json'
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl
         });
     });
 
