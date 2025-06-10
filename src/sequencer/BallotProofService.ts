@@ -68,6 +68,10 @@ export class BallotProof {
     private readonly wasmUrl: string;
     private readonly initTimeoutMs: number;
 
+    // Cache for wasm files
+    private static wasmExecCache = new Map<string, string>();
+    private static wasmBinaryCache = new Map<string, ArrayBuffer>();
+
     constructor(opts: BallotProofOptions) {
         const { wasmExecUrl, wasmUrl, initTimeoutMs } = opts;
 
@@ -86,12 +90,16 @@ export class BallotProof {
     async init(): Promise<void> {
         if (this.initialized) return;
 
-        // 1) Fetch & eval Go runtime shim
-        const shim = await fetch(this.wasmExecUrl);
-        if (!shim.ok) {
-            throw new Error(`Failed to fetch wasm_exec.js from ${this.wasmExecUrl}`);
+        // 1) Fetch & eval Go runtime shim (with caching)
+        let shimCode = BallotProof.wasmExecCache.get(this.wasmExecUrl);
+        if (!shimCode) {
+            const shim = await fetch(this.wasmExecUrl);
+            if (!shim.ok) {
+                throw new Error(`Failed to fetch wasm_exec.js from ${this.wasmExecUrl}`);
+            }
+            shimCode = await shim.text();
+            BallotProof.wasmExecCache.set(this.wasmExecUrl, shimCode);
         }
-        const shimCode = await shim.text();
         new Function(shimCode)();  // registers globalThis.Go
 
         if (typeof globalThis.Go !== "function") {
@@ -99,16 +107,24 @@ export class BallotProof {
         }
         this.go = new globalThis.Go();
 
-        // 2) Fetch & instantiate your Go‐compiled WASM
-        const resp = await fetch(this.wasmUrl);
-        if (!resp.ok) {
-            throw new Error(`Failed to fetch ballotproof.wasm from ${this.wasmUrl}`);
+        // 2) Fetch & instantiate your Go‐compiled WASM (with caching)
+        let bytes = BallotProof.wasmBinaryCache.get(this.wasmUrl);
+        if (!bytes) {
+            const resp = await fetch(this.wasmUrl);
+            if (!resp.ok) {
+                throw new Error(`Failed to fetch ballotproof.wasm from ${this.wasmUrl}`);
+            }
+            bytes = await resp.arrayBuffer();
+            BallotProof.wasmBinaryCache.set(this.wasmUrl, bytes);
         }
-        const bytes = await resp.arrayBuffer();
         const { instance } = await WebAssembly.instantiate(bytes, this.go.importObject);
 
         // 3) Start the Go scheduler (it sets up BallotProofWasm)
-        this.go.run(instance).catch(() => { /* swallow the exit exception */ });
+        try {
+            await this.go.run(instance);
+        } catch {
+            // swallow the exit exception
+        }
 
         // 4) Wait for the global BallotProofWasm helper to appear
         const deadline = Date.now() + this.initTimeoutMs;
