@@ -24,11 +24,11 @@ export class VocdoniApiService extends BaseService {
         super(baseURL);
     }
 
-    async ping(): Promise<void> {
-        await this.request({ method: "GET", url: "/ping" });
+    ping(): Promise<void> {
+        return this.request({ method: "GET", url: "/ping" });
     }
 
-    async createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
+    createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
         return this.request({
             method: "POST",
             url: "/processes",
@@ -36,88 +36,83 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    async getProcess(processId: string): Promise<GetProcessResponse> {
+    getProcess(processId: string): Promise<GetProcessResponse> {
         return this.request({
             method: "GET",
             url: `/processes/${processId}`
         });
     }
 
-    async createCensus(): Promise<string> {
-        const res = await this.request<{ census: string }>({
+    createCensus(): Promise<string> {
+        return this.request<{ census: string }>({
             method: "POST",
             url: "/censuses"
-        });
-        return res.census;
+        }).then(res => res.census);
     }
 
-    async addParticipants(censusId: string, participants: CensusParticipant[]): Promise<void> {
+    addParticipants(censusId: string, participants: CensusParticipant[]): Promise<void> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        await this.request({
+        return this.request({
             method: "POST",
             url: `/censuses/${censusId}/participants`,
             data: { participants }
         });
     }
 
-    async getParticipants(censusId: string): Promise<CensusParticipant[]> {
+    getParticipants(censusId: string): Promise<CensusParticipant[]> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        const res = await this.request<{ participants: CensusParticipant[] }>({
+        return this.request<{ participants: CensusParticipant[] }>({
             method: "GET",
             url: `/censuses/${censusId}/participants`
-        });
-        return res.participants;
+        }).then(res => res.participants);
     }
 
-    async getCensusRoot(censusId: string): Promise<string> {
+    getCensusRoot(censusId: string): Promise<string> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        const res = await this.request<{ root: string }>({
+        return this.request<{ root: string }>({
             method: "GET",
             url: `/censuses/${censusId}/root`
-        });
-        return res.root;
+        }).then(res => res.root);
     }
 
-    async getCensusSize(censusId: string): Promise<number> {
+    getCensusSize(censusId: string): Promise<number> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        const res = await this.request<{ size: number }>({
+        return this.request<{ size: number }>({
             method: "GET",
             url: `/censuses/${censusId}/size`
-        });
-        return res.size;
+        }).then(res => res.size);
     }
 
-    async deleteCensus(censusId: string): Promise<void> {
+    deleteCensus(censusId: string): Promise<void> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        await this.request({
+        return this.request({
             method: "DELETE",
             url: `/censuses/${censusId}`
         });
     }
 
-    async getCensusProof(censusRoot: string, key: string): Promise<CensusProof> {
-        return await this.request<CensusProof>({
+    getCensusProof(censusRoot: string, key: string): Promise<CensusProof> {
+        return this.request<CensusProof>({
             method: "GET",
             url: `/censuses/${censusRoot}/proof`,
             params: {key}
         });
     }
 
-    async submitVote(vote: VoteRequest): Promise<string> {
-        const { voteId } = await this.request<{ voteId: string }>({
+    submitVote(vote: VoteRequest): Promise<string> {
+        return this.request<{ voteId: string }>({
             method: "POST",
             url: "/votes",
             data: vote,
-        });
-        return voteId;
+        }).then(res => res.voteId);
     }
 
-    async getVoteStatus(
+    getVoteStatus(
         processId: string,
         voteId: string
     ): Promise<VoteStatusResponse> {
@@ -127,26 +122,25 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    async getInfo(): Promise<InfoResponse> {
+    getInfo(): Promise<InfoResponse> {
         return this.request<InfoResponse>({
             method: "GET",
             url: "/info"
         });
     }
 
-    async pushMetadata(metadata: ElectionMetadata): Promise<string> {
-        const { hash } = await this.request<{ hash: string }>({
+    pushMetadata(metadata: ElectionMetadata): Promise<string> {
+        return this.request<{ hash: string }>({
             method: "POST",
             url: "/metadata",
             data: metadata
-        });
-        return hash;
+        }).then(res => res.hash);
     }
 
-    async getMetadata(hash: string): Promise<ElectionMetadata> {
+    getMetadata(hash: string): Promise<ElectionMetadata> {
         if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
 
-        return await this.request<ElectionMetadata>({
+        return this.request<ElectionMetadata>({
             method: "GET",
             url: `/metadata/${hash}`
         });
