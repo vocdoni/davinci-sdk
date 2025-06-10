@@ -24,8 +24,8 @@ export class VocdoniApiService extends BaseService {
         super(baseURL);
     }
 
-    ping(): Promise<void> {
-        return this.request({ method: "GET", url: "/ping" });
+    async ping(): Promise<void> {
+        await this.request({ method: "GET", url: "/ping" });
     }
 
     createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
@@ -50,10 +50,10 @@ export class VocdoniApiService extends BaseService {
         }).then(res => res.census);
     }
 
-    addParticipants(censusId: string, participants: CensusParticipant[]): Promise<void> {
+    async addParticipants(censusId: string, participants: CensusParticipant[]): Promise<void> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        return this.request({
+        await this.request({
             method: "POST",
             url: `/censuses/${censusId}/participants`,
             data: { participants }
@@ -87,10 +87,10 @@ export class VocdoniApiService extends BaseService {
         }).then(res => res.size);
     }
 
-    deleteCensus(censusId: string): Promise<void> {
+    async deleteCensus(censusId: string): Promise<void> {
         if (!isUUId(censusId)) throw new Error("Invalid census ID format");
 
-        return this.request({
+        await this.request({
             method: "DELETE",
             url: `/censuses/${censusId}`
         });

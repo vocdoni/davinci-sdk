@@ -280,8 +280,8 @@ async function step10_newProcessOnChain(
                 minTotalCost: "0"
             },
             {
-                censusOrigin: BigInt(1),
-                maxVotes: BigInt(args.censusSize),
+                censusOrigin: 1,
+                maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
                 censusURI: args.censusId
             } as Census,
@@ -548,6 +548,7 @@ async function run() {
     );
 
     console.log(chalk.bold.green("\n✅ All done!\n"));
+    process.exit(0);
 }
 
 run().catch((err) => {

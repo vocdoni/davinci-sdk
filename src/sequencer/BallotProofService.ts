@@ -120,11 +120,7 @@ export class BallotProof {
         const { instance } = await WebAssembly.instantiate(bytes, this.go.importObject);
 
         // 3) Start the Go scheduler (it sets up BallotProofWasm)
-        try {
-            await this.go.run(instance);
-        } catch {
-            // swallow the exit exception
-        }
+        this.go.run(instance).catch(() => { /* swallow the exit exception */ });
 
         // 4) Wait for the global BallotProofWasm helper to appear
         const deadline = Date.now() + this.initTimeoutMs;
