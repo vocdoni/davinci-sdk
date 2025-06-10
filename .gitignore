@@ -25,3 +25,4 @@ coverage/
 .DS_Store
 *.log
 .cache/
+davinci-node/
