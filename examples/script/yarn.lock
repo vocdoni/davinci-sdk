@@ -219,22 +219,22 @@
     undici-types "~6.19.2"
 
 "@types/node@^20.5.9":
-  version "20.17.57"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.17.57.tgz#f807455e3303ba8ba08fcb1db90619356abfaa99"
-  integrity sha512-f3T4y6VU4fVQDKVqJV4Uppy8c1p/sVvS3peyqxyWnzkqXFJLRU7Y1Bl7rMS1Qe9z0v4M6McY0Fp9yBsgHJUsWQ==
+  version "20.19.0"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.19.0.tgz#7006b097b15dfea06695c3bbdba98b268797f65b"
+  integrity sha512-hfrc+1tud1xcdVTABC2JiomZJEklMcXYNTVtZLAeqTVWD+qL5jkHKT+1lOtqDdGxt+mB53DTtiz673vfjU8D1Q==
   dependencies:
-    undici-types "~6.19.2"
+    undici-types "~6.21.0"
 
-"@vocdoni/davinci-contracts@0.0.4":
-  version "0.0.4"
-  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.4.tgz#ad68e06ed305fafe0fdf108cb76becab491f82d2"
-  integrity sha512-PkoJpZZ4Vi6K2diN58zeLRGbzSMRgx/qXT8vCzFXIbnmSaU7BMAJss07N4iWFmbJhLNHLuBbYCpQ225XqCYoIQ==
+"@vocdoni/davinci-contracts@0.0.5":
+  version "0.0.5"
+  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.5.tgz#c30926116e1ad817d33e382b26312e3308c62c4e"
+  integrity sha512-8uVE78hJUEQpmY5QIe2M4voDXbonfgOlv2Iqng3ko5jkpGmXBpyoa7RzEpjDAAdLPyTAknfgIC/C/bgtKya6FA==
 
 "@vocdoni/davinci-sdk@file:../..":
   version "0.0.1"
   dependencies:
     "@ethereumjs/common" "^4.4.0"
-    "@vocdoni/davinci-contracts" "0.0.4"
+    "@vocdoni/davinci-contracts" "0.0.5"
     axios "^1.8.4"
     ethers "^6.7.1"
     snarkjs "^0.7.5"
@@ -832,6 +832,11 @@ undici-types@~6.19.2:
   version "6.19.8"
   resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-6.19.8.tgz#35111c9d1437ab83a7cdc0abae2f26d88eda0a02"
   integrity sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==
+
+undici-types@~6.21.0:
+  version "6.21.0"
+  resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-6.21.0.tgz#691d00af3909be93a7faa13be61b3a5b50ef12cb"
+  integrity sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==
 
 wasmbuilder@0.0.16:
   version "0.0.16"

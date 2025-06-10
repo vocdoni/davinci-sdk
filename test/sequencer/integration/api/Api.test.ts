@@ -97,7 +97,7 @@ describe("VocdoniApiService Integration", () => {
     });
 
     it("should create a process and validate the response", async () => {
-        const nonce = await mockProvider.getTransactionCount(mockWallet.address, "latest");
+        const nonce = await mockProvider.getTransactionCount(mockWallet.address, "latest") + 1;
         const censusRoot = await api.getCensusRoot(censusId);
         const payload = generateMockProcessRequest(censusRoot);
         
@@ -130,9 +130,8 @@ describe("VocdoniApiService Integration", () => {
             expect(metadata).toEqual(testMetadata);
         });
 
-        it("should throw error for invalid hash format", async () => {
-            await expect(api.getMetadata("invalid-hash"))
-                .rejects
+        it("should throw error for invalid hash format", () => {
+            expect(() => api.getMetadata("invalid-hash"))
                 .toThrow("Invalid metadata hash format");
         });
     });
