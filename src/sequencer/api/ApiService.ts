@@ -6,6 +6,8 @@ import {
     CreateProcessResponse,
     GetProcessResponse,
     InfoResponse,
+    ListProcessesResponse,
+    VoteBallot,
     VoteRequest, 
     VoteStatusResponse,
 } from "./types";
@@ -41,6 +43,13 @@ export class VocdoniApiService extends BaseService {
             method: "GET",
             url: `/processes/${processId}`
         });
+    }
+
+    listProcesses(): Promise<string[]> {
+        return this.request<ListProcessesResponse>({
+            method: "GET",
+            url: "/processes"
+        }).then(res => res.processes);
     }
 
     createCensus(): Promise<string> {
@@ -118,8 +127,36 @@ export class VocdoniApiService extends BaseService {
     ): Promise<VoteStatusResponse> {
         return this.request<VoteStatusResponse>({
             method: "GET",
-            url: `/votes/status/${processId}/${voteId}`,
+            url: `/votes/${processId}/voteId/${voteId}`,
         });
+    }
+
+    getVoteByNullifier(
+        processId: string,
+        nullifier: string
+    ): Promise<VoteBallot> {
+        return this.request<VoteBallot>({
+            method: "GET",
+            url: `/votes/${processId}/nullifier/${nullifier}`,
+        });
+    }
+
+    async hasAddressVoted(
+        processId: string,
+        address: string
+    ): Promise<boolean> {
+        try {
+            await this.request({
+                method: "GET",
+                url: `/votes/${processId}/address/${address}`,
+            });
+            return true;
+        } catch (error: any) {
+            if (error?.code === 40001) {
+                return false;
+            }
+            throw error;
+        }
     }
 
     getInfo(): Promise<InfoResponse> {
