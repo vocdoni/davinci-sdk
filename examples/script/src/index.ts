@@ -46,6 +46,18 @@ const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 const PROCESS_REGISTRY_ADDR      = addresses.processRegistry.sepolia;
 const ORGANIZATION_REGISTRY_ADDR = addresses.organizationRegistry.sepolia;
 
+// Ballot mode configuration for two questions with four options each (0-3)
+const BALLOT_MODE: ApiBallotMode = {
+    maxCount:        2,  // Two questions
+    maxValue:       "3", // Four options (0,1,2,3)
+    minValue:       "0",
+    forceUniqueness: false,
+    costFromWeight:  false,
+    costExponent:    0,
+    maxTotalCost:   "6", // Sum of max values for both questions (3 + 3)
+    minTotalCost:    "0",
+};
+
 // ────────────────────────────────────────────────────────────
 //   LOGGING HELPERS
 // ────────────────────────────────────────────────────────────
@@ -189,6 +201,88 @@ async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
     metadata.title.default = "Test Election " + Date.now();
     metadata.description.default = "This is a test election created via script";
     
+    // Set up two questions with three options each
+    metadata.questions = [
+        {
+            title: {
+                default: "What is your favorite color?",
+            },
+            description: {
+                default: "Choose your preferred color from the options below",
+            },
+            meta: {},
+            choices: [
+                {
+                    title: {
+                        default: "Red",
+                    },
+                    value: 0,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Blue",
+                    },
+                    value: 1,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Green",
+                    },
+                    value: 2,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Yellow",
+                    },
+                    value: 3,
+                    meta: {},
+                },
+            ],
+        },
+        {
+            title: {
+                default: "What is your preferred transportation?",
+            },
+            description: {
+                default: "Select your most used mode of transportation",
+            },
+            meta: {},
+            choices: [
+                {
+                    title: {
+                        default: "Car",
+                    },
+                    value: 0,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Bike",
+                    },
+                    value: 1,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Public Transport",
+                    },
+                    value: 2,
+                    meta: {},
+                },
+                {
+                    title: {
+                        default: "Walking",
+                    },
+                    value: 3,
+                    meta: {},
+                },
+            ],
+        },
+    ];
+    
     const hash = await api.pushMetadata(metadata);
     const metadataUrl = api.getMetadataUrl(hash);
     console.log("   metadata hash:", hash);
@@ -225,19 +319,9 @@ async function step8_createProcess(
     step(8, "Create process via Sequencer API");
     const chainId = Chain.Sepolia;
     const nonce   = await provider.getTransactionCount(wallet.address);
-    const ballotMode: ApiBallotMode = {
-        maxCount:        1,
-        maxValue:       "10",
-        minValue:       "0",
-        forceUniqueness: false,
-        costFromWeight:  false,
-        costExponent:    0,
-        maxTotalCost:   "10",
-        minTotalCost:    "0",
-    };
     const signature = await wallet.signMessage(`${chainId}${nonce}`);
     const { processId, encryptionPubKey, stateRoot } =
-        await api.createProcess({ censusRoot, ballotMode, nonce, chainId, signature });
+        await api.createProcess({ censusRoot, ballotMode: BALLOT_MODE, nonce, chainId, signature });
     console.log("   processId:", processId);
     console.log("   pubKey:", encryptionPubKey);
     console.log("   stateRoot:", stateRoot);
@@ -274,16 +358,7 @@ async function step10_newProcessOnChain(
             ProcessStatus.READY,
             Math.floor(Date.now() / 1000) + 60,
             3600 * 8,
-            {
-                maxCount: 1,
-                maxValue: "10",
-                minValue: "0",
-                forceUniqueness: false,
-                costFromWeight: false,
-                costExponent: 0,
-                maxTotalCost: "10",
-                minTotalCost: "0"
-            },
+            BALLOT_MODE,
             {
                 censusOrigin: 1,
                 maxVotes: args.censusSize.toString(),
@@ -346,6 +421,23 @@ async function step12_generateProofInputs(
         const kHex = randomBytes(8).toString("hex");
         const kStr = BigInt("0x" + kHex).toString();
 
+        // Generate random choices for each question (0-3)
+        const randomChoice1 = Math.floor(Math.random() * 4);
+        const randomChoice2 = Math.floor(Math.random() * 4);
+
+        // Create arrays of 4 positions each (1 for selected choice, 0 for others)
+        const question1Choices = Array(4).fill("0");
+        const question2Choices = Array(4).fill("0");
+        question1Choices[randomChoice1] = "1";
+        question2Choices[randomChoice2] = "1";
+
+        // Log the participant's choices
+        const colorChoice = ["Red", "Blue", "Green", "Yellow"][randomChoice1];
+        const transportChoice = ["Car", "Bike", "Public Transport", "Walking"][randomChoice2];
+        console.log(`   • ${p.key} votes:
+     Q1: ${colorChoice} (choice array: [${question1Choices.join(", ")}])
+     Q2: ${transportChoice} (choice array: [${question2Choices.join(", ")}])`);
+
         const inputs: BallotProofInputs = {
             address:       p.key.replace(/^0x/, ""),
             processID:     processId.replace(/^0x/, ""),
@@ -354,7 +446,7 @@ async function step12_generateProofInputs(
             k:             kStr,
             ballotMode,
             weight:        p.weight,
-            fieldValues:   ["1"],
+            fieldValues:   [...question1Choices, ...question2Choices], // Array of 8 positions
         };
 
         const out = await sdk.proofInputs(inputs);
@@ -567,6 +659,59 @@ async function step18_verifyVotes(
 }
 
 // ────────────────────────────────────────────────────────────
+//   STEP 19: End Process
+// ────────────────────────────────────────────────────────────
+async function step19_endProcess(wallet: Wallet, processId: string) {
+    step(19, "End the voting process");
+    
+    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+    
+    // End the process
+    await SmartContractService.executeTx(
+        registry.setProcessStatus(processId, ProcessStatus.ENDED)
+    );
+    success("Process ended successfully");
+    
+    // Wait for another script to move the process to RESULTS state
+    info("Waiting for process to be in RESULTS state...");
+    const resultsReady = new Promise<void>((resolve) => {
+        registry.onProcessStatusChanged((id: string, status: bigint) => {
+            if (
+                id.toLowerCase() === processId.toLowerCase() &&
+                status === BigInt(ProcessStatus.RESULTS)
+            ) resolve();
+        });
+    });
+    await resultsReady;
+    success("Process is now in RESULTS state");
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 20: Show Final Results
+// ────────────────────────────────────────────────────────────
+async function step20_showResults(wallet: Wallet, processId: string) {
+    step(20, "Show final election results");
+    
+    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+    const process = await registry.getProcess(processId);
+    
+    console.log(chalk.cyan("\nElection Results:"));
+    console.log(chalk.yellow("\nQuestion 1: What is your favorite color?"));
+    console.log("Red (0):              ", process.result[0].toString());
+    console.log("Blue (1):             ", process.result[1].toString());
+    console.log("Green (2):            ", process.result[2].toString());
+    console.log("Yellow (3):           ", process.result[3].toString());
+    
+    console.log(chalk.yellow("\nQuestion 2: What is your preferred transportation?"));
+    console.log("Car (0):              ", process.result[4].toString());
+    console.log("Bike (1):             ", process.result[5].toString());
+    console.log("Public Transport (2): ", process.result[6].toString());
+    console.log("Walking (3):          ", process.result[7].toString());
+    
+    success("Results retrieved successfully");
+}
+
+// ────────────────────────────────────────────────────────────
 //   ENTRY POINT
 // ────────────────────────────────────────────────────────────
 async function run() {
@@ -608,7 +753,7 @@ async function run() {
         participants,
         processId,
         encryptionPubKey,
-        { maxCount:1, maxValue:"10", minValue:"0", forceUniqueness:false, costFromWeight:false, costExponent:0, maxTotalCost:"10", minTotalCost:"0" }
+        BALLOT_MODE
     );
 
     const proofs = await step13_runGroth16Proofs(
@@ -644,6 +789,12 @@ async function run() {
 
     // Verify votes
     await step18_verifyVotes(api, processId, participants, listProofInputs);
+
+    // End the process
+    await step19_endProcess(wallet, processId);
+
+    // Show final results
+    await step20_showResults(wallet, processId);
 
     console.log(chalk.bold.green("\n✅ All done!\n"));
     process.exit(0);
