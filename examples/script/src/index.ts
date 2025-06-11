@@ -181,20 +181,6 @@ async function step6_fetchRootSize(api: VocdoniApiService, censusId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 8: Create Process via Sequencer API
-// ────────────────────────────────────────────────────────────
-interface ApiFlowResult {
-    censusId: string;
-    participants: TestParticipant[];
-    censusRoot: string;
-    censusSize: number;
-    processId: string;
-    encryptionPubKey: [string, string];
-    stateRoot: string;
-    metadataUri: string;
-}
-
-// ────────────────────────────────────────────────────────────
 //   STEP 7: Push Election Metadata
 // ────────────────────────────────────────────────────────────
 async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
@@ -214,6 +200,21 @@ async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
     success("Metadata pushed to storage");
     return metadataUrl;
 }
+
+// ────────────────────────────────────────────────────────────
+//   STEP 8: Create Process via Sequencer API
+// ────────────────────────────────────────────────────────────
+interface ApiFlowResult {
+    censusId: string;
+    participants: TestParticipant[];
+    censusRoot: string;
+    censusSize: number;
+    processId: string;
+    encryptionPubKey: [string, string];
+    stateRoot: string;
+    metadataUri: string;
+}
+
 async function step8_createProcess(
     api: VocdoniApiService,
     provider: JsonRpcProvider,
@@ -500,14 +501,14 @@ async function step16_checkVoteIds<T>(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 16: Wait for votes to be processed
+//   STEP 17: Wait for votes to be processed
 // ────────────────────────────────────────────────────────────
-async function step16_waitForVotesProcessed(
+async function step17_waitForVotesProcessed(
     api: VocdoniApiService,
     processId: string,
     voteIds: string[]
 ) {
-    step(16, "Wait for votes to be settled");
+    step(17, "Wait for votes to be settled");
     
     while (true) {
         let allSettled = true;
@@ -533,15 +534,15 @@ async function step16_waitForVotesProcessed(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 17: Verify votes
+//   STEP 18: Verify votes
 // ────────────────────────────────────────────────────────────
-async function step17_verifyVotes(
+async function step18_verifyVotes(
     api: VocdoniApiService,
     processId: string,
     participants: TestParticipant[],
     listProofInputs: Array<{ out: BallotProofOutput }>
 ) {
-    step(17, "Verify votes");
+    step(18, "Verify votes");
     
     // Check that participants have voted
     for (let i = 0; i < participants.length; i++) {
@@ -639,10 +640,10 @@ async function run() {
     );
 
     // Wait for votes to be processed
-    await step16_waitForVotesProcessed(api, processId, voteIds);
+    await step17_waitForVotesProcessed(api, processId, voteIds);
 
     // Verify votes
-    await step17_verifyVotes(api, processId, participants, listProofInputs);
+    await step18_verifyVotes(api, processId, participants, listProofInputs);
 
     console.log(chalk.bold.green("\n✅ All done!\n"));
     process.exit(0);
