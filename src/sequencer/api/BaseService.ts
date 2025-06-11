@@ -19,8 +19,10 @@ export class BaseService {
         } catch (err) {
             const error = err as AxiosError<ApiError>;
             const message = error.response?.data?.error || error.message;
-            const code = error.response?.data?.code || error.response?.status || 500;
-            throw { message, code };
+            const code = error.response?.data?.code || error.code || error.response?.status || 500;
+            const e = new Error(message);
+            (e as any).code = code;
+            throw e;
         }
     }
 }

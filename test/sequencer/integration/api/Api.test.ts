@@ -96,6 +96,65 @@ describe("VocdoniApiService Integration", () => {
         expect(proof).toHaveProperty("weight");
     });
 
+    it("should list all processes", async () => {
+        const processes = await api.listProcesses();
+        expect(Array.isArray(processes)).toBe(true);
+        // Each process ID should be a valid hex string
+        processes.forEach(processId => {
+            expect(isValidHex(processId, 64)).toBe(true);
+        });
+    });
+
+    it("should check if an address has voted", async () => {
+        const processes = await api.listProcesses();
+        if (processes.length === 0) {
+            console.log('Skipping test: no processes available');
+            return;
+        }
+
+        // First check with a random address that hasn't voted
+        const randomAddress = mockWallet.address;
+        const hasVoted = await api.hasAddressVoted(processes[0], randomAddress);
+        expect(hasVoted).toBe(false);
+    });
+
+    it("should get vote by nullifier", async () => {
+        const processes = await api.listProcesses();
+        if (processes.length === 0) {
+            console.log('Skipping test: no processes available');
+            return;
+        }
+
+        const nullifier = "123";
+        await expect(api.getVoteByNullifier(processes[0], nullifier))
+            .rejects
+            .toThrow();
+    });
+
+    it("should get process details with sequencer stats", async () => {
+        const processes = await api.listProcesses();
+        if (processes.length === 0) {
+            console.log('Skipping test: no processes available');
+            return;
+        }
+
+        const process = await api.getProcess(processes[0]);
+        expect(typeof process.voteCount).toBe('string');
+        expect(typeof process.voteOverwriteCount).toBe('string');
+        expect(typeof process.isFinalized).toBe('boolean');
+        expect(typeof process.isAcceptingVotes).toBe('boolean');
+        expect(process).toHaveProperty('sequencerStats');
+        const { sequencerStats } = process;
+        expect(typeof sequencerStats.stateTransitionCount).toBe('number');
+        expect(typeof sequencerStats.lastStateTransitionDate).toBe('string');
+        expect(typeof sequencerStats.settledStateTransitionCount).toBe('number');
+        expect(typeof sequencerStats.aggregatedVotesCount).toBe('number');
+        expect(typeof sequencerStats.verifiedVotesCount).toBe('number');
+        expect(typeof sequencerStats.pendingVotesCount).toBe('number');
+        expect(typeof sequencerStats.currentBatchSize).toBe('number');
+        expect(typeof sequencerStats.lastBatchSize).toBe('number');
+    });
+
     it("should create a process and validate the response", async () => {
         const nonce = await mockProvider.getTransactionCount(mockWallet.address, "latest") + 1;
         const censusRoot = await api.getCensusRoot(censusId);

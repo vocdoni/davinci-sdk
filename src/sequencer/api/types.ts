@@ -48,6 +48,20 @@ export interface GetProcessResponse {
             properties: Record<string, string>;
         };
     };
+    voteCount: string;
+    voteOverwriteCount: string;
+    isFinalized: boolean;
+    isAcceptingVotes: boolean;
+    sequencerStats: {
+        stateTransitionCount: number;
+        lastStateTransitionDate: string;
+        settledStateTransitionCount: number;
+        aggregatedVotesCount: number;
+        verifiedVotesCount: number;
+        pendingVotesCount: number;
+        currentBatchSize: number;
+        lastBatchSize: number;
+    };
 }
 
 export interface CensusParticipant {
@@ -136,4 +150,8 @@ export enum VoteStatus {
 
 export interface VoteStatusResponse {
     status: VoteStatus;
+}
+
+export interface ListProcessesResponse {
+    processes: string[];
 }

@@ -35,9 +35,13 @@ config();
 // ────────────────────────────────────────────────────────────
 //   CONFIG / CONSTANTS
 // ────────────────────────────────────────────────────────────
-const API_URL                    = process.env.API_URL!;
-const RPC_URL                    = process.env.SEPOLIA_RPC!;
-const PRIVATE_KEY                = process.env.PRIVATE_KEY!;
+if (!process.env.API_URL) throw new Error("API_URL environment variable is required");
+if (!process.env.SEPOLIA_RPC) throw new Error("SEPOLIA_RPC environment variable is required");
+if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY environment variable is required");
+
+const API_URL                    = process.env.API_URL;
+const RPC_URL                    = process.env.SEPOLIA_RPC;
+const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 
 const PROCESS_REGISTRY_ADDR      = addresses.processRegistry.sepolia;
 const ORGANIZATION_REGISTRY_ADDR = addresses.organizationRegistry.sepolia;
@@ -397,9 +401,30 @@ async function step13_runGroth16Proofs(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 14: Submit one vote per participant
+//   STEP 14: Wait for process to be ready
 // ────────────────────────────────────────────────────────────
-export async function step14_submitVotes(
+async function step14_waitForProcess(
+    api: VocdoniApiService,
+    processId: string
+) {
+    step(14, "Wait for process to be ready");
+    
+    while (true) {
+        const process = await api.getProcess(processId);
+        if (process.isAcceptingVotes) {
+            success("Process is ready to accept votes");
+            break;
+        }
+
+        info("Process not ready yet, checking again in 10 seconds...");
+        await new Promise(r => setTimeout(r, 10000));
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 15: Submit one vote per participant
+// ────────────────────────────────────────────────────────────
+export async function step15_submitVotes(
     api: VocdoniApiService,
     wallet: Wallet,
     processId: string,
@@ -408,7 +433,7 @@ export async function step14_submitVotes(
     listProofInputs: Array<{ key: string; voteID: string; out: BallotProofOutput; circomInputs: Groth16ProofInputs }>,
     proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>
 ): Promise<string[]> {
-    step(14, "Submit votes for each participant");
+    step(15, "Submit votes for each participant");
     const voteIds: string[] = [];
 
     for (let i = 0; i < participants.length; i++) {
@@ -454,12 +479,12 @@ export async function step14_submitVotes(
     return voteIds;
 }
 
-async function step15_checkVoteIds<T>(
+async function step16_checkVoteIds<T>(
     a: T[],
     b: T[],
     label: string
 ) {
-    step(15, "Check same voteIDs");
+    step(16, "Check same voteIDs");
 
     console.log(chalk.yellow("\n→ expected voteIDs:"), a);
     console.log(chalk.yellow("→ returned voteIDs:"), b);
@@ -470,6 +495,72 @@ async function step15_checkVoteIds<T>(
     for (let i = 0; i < a.length; i++) {
         if (a[i] !== b[i]) {
             throw new Error(`${label}: element ${i} differs: ${a[i]} vs ${b[i]}`);
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 16: Wait for votes to be processed
+// ────────────────────────────────────────────────────────────
+async function step16_waitForVotesProcessed(
+    api: VocdoniApiService,
+    processId: string,
+    voteIds: string[]
+) {
+    step(16, "Wait for votes to be settled");
+    
+    while (true) {
+        let allSettled = true;
+        let settledCount = 0;
+
+        for (let i = 0; i < voteIds.length; i++) {
+            const status = await api.getVoteStatus(processId, voteIds[i]);
+            if (status.status === "processed") {
+                settledCount++;
+            } else {
+                allSettled = false;
+            }
+        }
+
+        if (allSettled) {
+            success("All votes have been settled");
+            break;
+        }
+
+        info(`${settledCount}/${voteIds.length} votes settled, checking again in 10 seconds...`);
+        await new Promise(r => setTimeout(r, 10000));
+    }
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 17: Verify votes
+// ────────────────────────────────────────────────────────────
+async function step17_verifyVotes(
+    api: VocdoniApiService,
+    processId: string,
+    participants: TestParticipant[],
+    listProofInputs: Array<{ out: BallotProofOutput }>
+) {
+    step(17, "Verify votes");
+    
+    // Check that participants have voted
+    for (let i = 0; i < participants.length; i++) {
+        const hasVoted = await api.hasAddressVoted(processId, participants[i].key);
+        if (!hasVoted) {
+            throw new Error(`Expected participant ${participants[i].key} to have voted`);
+        }
+        success(`  [${i + 1}/${participants.length}] Verified participant ${participants[i].key} has voted`);
+    }
+
+    // Try to get votes by nullifier
+    for (let i = 0; i < listProofInputs.length; i++) {
+        const { out } = listProofInputs[i];
+        try {
+            const ballot = await api.getVoteByNullifier(processId, out.nullifier);
+            success(`  [${i + 1}/${listProofInputs.length}] Retrieved vote for nullifier ${out.nullifier}`);
+        } catch (error) {
+            console.error(`Failed to get vote for nullifier ${out.nullifier}:`, error);
+            throw error;
         }
     }
 }
@@ -526,10 +617,10 @@ async function run() {
         listProofInputs
     );
 
-    // give sequencer a breather
-    await new Promise((r) => setTimeout(r, 45_000));
+    // Wait for process to be ready
+    await step14_waitForProcess(api, processId);
 
-    const voteIds = await step14_submitVotes(
+    const voteIds = await step15_submitVotes(
         api,
         wallet,
         processId,
@@ -541,11 +632,17 @@ async function run() {
 
     console.log(chalk.bold.cyan("\nVote IDs:"), voteIds);
 
-    await step15_checkVoteIds(
+    await step16_checkVoteIds(
         listProofInputs.map((x) => x.voteID),
         voteIds,
         "voteID mismatch!"
     );
+
+    // Wait for votes to be processed
+    await step16_waitForVotesProcessed(api, processId, voteIds);
+
+    // Verify votes
+    await step17_verifyVotes(api, processId, participants, listProofInputs);
 
     console.log(chalk.bold.green("\n✅ All done!\n"));
     process.exit(0);
