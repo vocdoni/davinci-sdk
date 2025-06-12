@@ -121,20 +121,37 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
             });
         });
 
-        await SmartContractService.executeTx(
-            procService.newProcess(
-                ProcessStatus.READY,
-                Math.floor(Date.now()/1000) + 60,
-                initDuration,
-                ballotMode,
-                initCensus,
-                metadataURI,
-                orgId,
-                processId,
-                encryptionKey,
-                BigInt(initStateRoot)
-            )
+        const newProcessStream = procService.newProcess(
+            ProcessStatus.READY,
+            Math.floor(Date.now()/1000) + 60,
+            initDuration,
+            ballotMode,
+            initCensus,
+            metadataURI,
+            orgId,
+            processId,
+            encryptionKey,
+            BigInt(initStateRoot)
         );
+
+        for await (const event of newProcessStream) {
+            switch (event.status) {
+                case 'pending':
+                    expect(event.hash).toBeDefined();
+                    expect(typeof event.hash).toBe('string');
+                    expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+                    break;
+                case 'completed':
+                    expect(event.response).toEqual({ success: true });
+                    break;
+                case 'reverted':
+                    fail('Transaction should not revert');
+                    break;
+                case 'failed':
+                    fail('Transaction should not fail');
+                    break;
+            }
+        }
         await procCreated;
 
         // initial on‐chain read
@@ -169,9 +186,26 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                 ) resolve();
             });
         });
-        await SmartContractService.executeTx(
-            procService.setProcessCensus(processId, newCensus)
-        );
+        const setCensusStream = procService.setProcessCensus(processId, newCensus);
+        
+        for await (const event of setCensusStream) {
+            switch (event.status) {
+                case 'pending':
+                    expect(event.hash).toBeDefined();
+                    expect(typeof event.hash).toBe('string');
+                    expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+                    break;
+                case 'completed':
+                    expect(event.response).toEqual({ success: true });
+                    break;
+                case 'reverted':
+                    fail('Transaction should not revert');
+                    break;
+                case 'failed':
+                    fail('Transaction should not fail');
+                    break;
+            }
+        }
         await censusUpdated;
 
         const afterC = await procService.getProcess(processId);
@@ -193,9 +227,26 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                 ) resolve();
             });
         });
-        await SmartContractService.executeTx(
-            procService.setProcessDuration(processId, newDuration)
-        );
+        const setDurationStream = procService.setProcessDuration(processId, newDuration);
+        
+        for await (const event of setDurationStream) {
+            switch (event.status) {
+                case 'pending':
+                    expect(event.hash).toBeDefined();
+                    expect(typeof event.hash).toBe('string');
+                    expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+                    break;
+                case 'completed':
+                    expect(event.response).toEqual({ success: true });
+                    break;
+                case 'reverted':
+                    fail('Transaction should not revert');
+                    break;
+                case 'failed':
+                    fail('Transaction should not fail');
+                    break;
+            }
+        }
         await durationChanged;
 
         const afterD = await procService.getProcess(processId);
@@ -212,9 +263,26 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                 ) resolve();
             });
         });
-        await SmartContractService.executeTx(
-            procService.endProcess(processId)
-        );
+        const endProcessStream = procService.endProcess(processId);
+        
+        for await (const event of endProcessStream) {
+            switch (event.status) {
+                case 'pending':
+                    expect(event.hash).toBeDefined();
+                    expect(typeof event.hash).toBe('string');
+                    expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+                    break;
+                case 'completed':
+                    expect(event.response).toEqual({ success: true });
+                    break;
+                case 'reverted':
+                    fail('Transaction should not revert');
+                    break;
+                case 'failed':
+                    fail('Transaction should not fail');
+                    break;
+            }
+        }
         await ended;
 
         const final = await procService.getProcess(processId);
