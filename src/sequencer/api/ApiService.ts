@@ -7,9 +7,11 @@ import {
     GetProcessResponse,
     InfoResponse,
     ListProcessesResponse,
+    SequencerStats,
     VoteBallot,
     VoteRequest, 
     VoteStatusResponse,
+    WorkersResponse,
 } from "./types";
 import { ElectionMetadata } from "../../core";
 
@@ -186,5 +188,19 @@ export class VocdoniApiService extends BaseService {
     getMetadataUrl(hash: string): string {
         if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
         return `${this.axios.defaults.baseURL}/metadata/${hash}`;
+    }
+
+    getStats(): Promise<SequencerStats> {
+        return this.request<SequencerStats>({
+            method: "GET",
+            url: "/sequencer/stats"
+        });
+    }
+
+    getWorkers(): Promise<WorkersResponse> {
+        return this.request<WorkersResponse>({
+            method: "GET",
+            url: "/sequencer/workers"
+        });
     }
 }
