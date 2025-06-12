@@ -50,7 +50,6 @@ export interface GetProcessResponse {
     };
     voteCount: string;
     voteOverwriteCount: string;
-    isFinalized: boolean;
     isAcceptingVotes: boolean;
     sequencerStats: {
         stateTransitionCount: number;
@@ -154,4 +153,24 @@ export interface VoteStatusResponse {
 
 export interface ListProcessesResponse {
     processes: string[];
+}
+
+export interface SequencerStats {
+    activeProcesses: number;
+    pendingVotes: number;
+    verifiedVotes: number;
+    aggregatedVotes: number;
+    stateTransitions: number;
+    settledStateTransitions: number;
+    lastStateTransitionDate: string;
+}
+
+export interface WorkerStats {
+    address: string;
+    successCount: number;
+    failedCount: number;
+}
+
+export interface WorkersResponse {
+    workers: WorkerStats[];
 }

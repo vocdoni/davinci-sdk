@@ -141,7 +141,6 @@ describe("VocdoniApiService Integration", () => {
         const process = await api.getProcess(processes[0]);
         expect(typeof process.voteCount).toBe('string');
         expect(typeof process.voteOverwriteCount).toBe('string');
-        expect(typeof process.isFinalized).toBe('boolean');
         expect(typeof process.isAcceptingVotes).toBe('boolean');
         expect(process).toHaveProperty('sequencerStats');
         const { sequencerStats } = process;
@@ -197,5 +196,35 @@ describe("VocdoniApiService Integration", () => {
 
     it("should delete the census", async () => {
         await expect(api.deleteCensus(censusId)).resolves.toBeUndefined();
+    });
+
+    describe("Sequencer statistics", () => {
+        it("should get sequencer stats", async () => {
+            const stats = await api.getStats();
+            
+            expect(typeof stats.activeProcesses).toBe('number');
+            expect(typeof stats.pendingVotes).toBe('number');
+            expect(typeof stats.verifiedVotes).toBe('number');
+            expect(typeof stats.aggregatedVotes).toBe('number');
+            expect(typeof stats.stateTransitions).toBe('number');
+            expect(typeof stats.settledStateTransitions).toBe('number');
+            expect(typeof stats.lastStateTransitionDate).toBe('string');
+            
+            // Validate date format
+            expect(new Date(stats.lastStateTransitionDate).toString()).not.toBe('Invalid Date');
+        });
+
+        it("should get workers stats", async () => {
+            const response = await api.getWorkers();
+            
+            expect(Array.isArray(response.workers)).toBe(true);
+            
+            // Check each worker's structure
+            response.workers.forEach(worker => {
+                expect(typeof worker.address).toBe('string');
+                expect(typeof worker.successCount).toBe('number');
+                expect(typeof worker.failedCount).toBe('number');
+            });
+        });
     });
 });
