@@ -608,7 +608,7 @@ async function step17_waitForVotesProcessed(
 
         for (let i = 0; i < voteIds.length; i++) {
             const status = await api.getVoteStatus(processId, voteIds[i]);
-            if (status.status === "processed") {
+            if (status.status === "settled") {
                 settledCount++;
             } else {
                 allSettled = false;
@@ -661,10 +661,25 @@ async function step18_verifyVotes(
 // ────────────────────────────────────────────────────────────
 //   STEP 19: End Process
 // ────────────────────────────────────────────────────────────
-async function step19_endProcess(wallet: Wallet, processId: string) {
+async function step19_endProcess(wallet: Wallet, processId: string, expectedVoteCount: number) {
     step(19, "End the voting process");
     
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+    
+    // Wait for vote count to match expected votes
+    info("Waiting for all votes to be counted on-chain...");
+    while (true) {
+        const process = await registry.getProcess(processId);
+        const currentVotes = Number(process.voteCount);
+        
+        if (currentVotes === expectedVoteCount) {
+            success(`Vote count matches expected (${currentVotes}/${expectedVoteCount})`);
+            break;
+        }
+
+        info(`Current vote count: ${currentVotes}/${expectedVoteCount}, checking again in 10 seconds...`);
+        await new Promise(r => setTimeout(r, 10000));
+    }
     
     // End the process
     await SmartContractService.executeTx(
@@ -791,7 +806,7 @@ async function run() {
     await step18_verifyVotes(api, processId, participants, listProofInputs);
 
     // End the process
-    await step19_endProcess(wallet, processId);
+    await step19_endProcess(wallet, processId, participants.length);
 
     // Show final results
     await step20_showResults(wallet, processId);
