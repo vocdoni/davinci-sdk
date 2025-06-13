@@ -1,0 +1,27 @@
+{
+  "replace": {
+    "main": "dist/contracts.js",
+    "module": "dist/contracts.mjs",
+    "types": "dist/contracts.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/types.d.ts",
+        "import": "./dist/contracts.mjs",
+        "require": "./dist/contracts.js"
+      },
+      "./contracts": {
+        "types": "./dist/types.d.ts",
+        "import": "./dist/contracts.mjs",
+        "require": "./dist/contracts.js"
+      },
+      "./sequencer": {
+        "types": "./dist/types.d.ts",
+        "import": "./dist/sequencer.mjs",
+        "require": "./dist/sequencer.js"
+      },
+      "./types": "./dist/types.d.ts",
+      "./package.json": "./package.json"
+    }
+  },
+  "remove": ["clean-package"]
+}
