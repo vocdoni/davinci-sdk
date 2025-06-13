@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request: ~
+
+jobs:
+  build:
+    name: Build, lint, and test on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['18.x']
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install deps
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Unit tests
+        run: yarn test:unit
+
+  integration:
+    name: Integration tests
+    runs-on: [self-hosted]
+    needs: build
+
+    env:
+      # Test private key for Ethereum wallet with funds
+      PRIVATE_KEY: ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+
+      - name: Install deps
+        run: yarn install --frozen-lockfile
+
+      - name: Setup test environment
+        run: |
+          cd test/end2end
+          ./start.sh
+        timeout-minutes: 30
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Anvil RPC to be ready..."
+          timeout 120 bash -c 'until curl -s -X POST -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}" http://localhost:8545 > /dev/null; do sleep 2; done'
+          
+          echo "Waiting for Sequencer API to be ready..."
+          timeout 1200 bash -c 'until curl -s http://localhost:9090/info > /dev/null; do sleep 10; done'
+          
+          echo "All services are ready!"
+
+      - name: Run integration tests
+        run: |
+          echo "Integration test environment is ready!"
+          echo "Services running:"
+          echo "- Anvil RPC: http://localhost:8545"
+          echo "- Sequencer API: http://localhost:9090"
+          echo "- Contract Addresses: http://localhost:8000/addresses.env"
+          
+          # Display contract addresses for verification
+          echo "Contract addresses:"
+          curl -s http://localhost:8000/addresses.env || echo "Could not fetch contract addresses"
+          
+          echo "Running integration tests..."
+          yarn test:integration
+
+      - name: Debug logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker containers status ==="
+          docker ps -a
+          echo "=== Docker compose logs ==="
+          cd test/end2end/davinci-node/testenv
+          docker compose logs --tail=100
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up Docker containers..."
+          cd test/end2end/davinci-node/testenv
+          docker compose down -v --remove-orphans || true
+          docker system prune -f || true
