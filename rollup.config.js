@@ -35,53 +35,7 @@ const createOutput = (name, options) => [
 ];
 
 export default [
-  // Core bundle
-  createBundle({
-    plugins: [
-      json(),
-      commonjs(),
-      resolve(),
-      esbuild({ target: 'esnext' })
-    ],
-    output: createOutput('core', { umdName: 'CoreSDK' })
-  }, {
-    input: 'src/core/index.ts',
-    includeSnarkjs: false
-  }),
-  
-  // Core types
-  createBundle({
-    plugins: [dts()],
-    output: { file: 'dist/core.d.ts', format: 'es' }
-  }, {
-    input: 'src/core/index.ts',
-    includeSnarkjs: false
-  }),
-
-  // Contracts bundle
-  createBundle({
-    plugins: [
-      json(),
-      commonjs(),
-      resolve(),
-      esbuild({ target: 'esnext' })
-    ],
-    output: createOutput('contracts', { umdName: 'ContractsSDK' })
-  }, {
-    input: 'src/contracts/index.ts',
-    includeSnarkjs: true
-  }),
-  
-  // Contracts types
-  createBundle({
-    plugins: [dts()],
-    output: { file: 'dist/contracts.d.ts', format: 'es' }
-  }, {
-    input: 'src/contracts/index.ts',
-    includeSnarkjs: true
-  }),
-  
-  // Sequencer bundle
+  // Main bundle
   createBundle({
     plugins: [
       json(),
@@ -90,18 +44,36 @@ export default [
       nodePolyfills(),
       esbuild({ target: 'esnext' })
     ],
-    output: createOutput('sequencer', { umdName: 'SequencerSDK' })
+    output: createOutput('index', { umdName: 'VocdoniSDK' })
   }, {
-    input: 'src/sequencer/index.ts',
-    includeSnarkjs: false
+    input: 'src/index.ts',
+    includeSnarkjs: true
   }),
   
-  // Sequencer types
+  // Main types bundle
+  createBundle({
+    plugins: [dts()],
+    output: { file: 'dist/index.d.ts', format: 'es' }
+  }, {
+    input: 'src/index.ts',
+    includeSnarkjs: true
+  }),
+
+  // Contracts types bundle
+  createBundle({
+    plugins: [dts()],
+    output: { file: 'dist/contracts.d.ts', format: 'es' }
+  }, {
+    input: 'src/contracts/index.ts',
+    includeSnarkjs: true
+  }),
+
+  // Sequencer types bundle
   createBundle({
     plugins: [dts()],
     output: { file: 'dist/sequencer.d.ts', format: 'es' }
   }, {
     input: 'src/sequencer/index.ts',
-    includeSnarkjs: false
+    includeSnarkjs: true
   })
 ];

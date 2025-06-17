@@ -46,6 +46,9 @@ const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 const PROCESS_REGISTRY_ADDR      = addresses.processRegistry.sepolia;
 const ORGANIZATION_REGISTRY_ADDR = addresses.organizationRegistry.sepolia;
 
+//const PROCESS_REGISTRY_ADDR      = "0xBC1A75100023add2E798f16790704372E2a36085";
+//const ORGANIZATION_REGISTRY_ADDR = "0x4102a669FAAD42e6202b2c7bF5d6C5aB0F722217";
+
 // Ballot mode configuration for two questions with four options each (0-3)
 const BALLOT_MODE: ApiBallotMode = {
     maxCount:        2,  // Two questions

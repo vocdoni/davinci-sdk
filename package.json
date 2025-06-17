@@ -1,20 +1,19 @@
 {
-  "name": "davinci-sdk",
-  "version": "0.0.1",
+  "name": "@vocdoni/davinci-sdk",
+  "version": "0.0.2",
   "type": "module",
-  "main": "dist/contracts.js",
-  "module": "dist/contracts.mjs",
-  "types": "dist/contracts.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    "./contracts": {
-      "types": "./dist/contracts.d.ts",
-      "import": "./dist/contracts.mjs",
-      "require": "./dist/contracts.js"
-    },
-    "./sequencer": {
-      "types": "./dist/sequencer.d.ts",
-      "import": "./dist/sequencer.mjs",
-      "require": "./dist/sequencer.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
   },
   "scripts": {
