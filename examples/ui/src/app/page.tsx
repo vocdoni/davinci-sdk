@@ -8,6 +8,7 @@ import StepIndicator from '@/components/StepIndicator';
 import { ThemeProvider, createTheme, Box } from '@mui/material';
 import { Wallet, JsonRpcSigner } from 'ethers';
 import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
+import CensusCreationScreen from '@/components/CensusCreationScreen';
 
 const theme = createTheme({
   palette: {
@@ -39,6 +40,7 @@ const STEPS = [
   'Welcome',
   'Connect Wallet',
   'Create Organization',
+  'Create Census',
   'Configure Vote',
   'Review & Deploy'
 ] as const;
@@ -47,6 +49,7 @@ enum Step {
   Welcome,
   ConnectWallet,
   CreateOrganization,
+  CreateCensus,
   ConfigureVote,
   ReviewAndDeploy
 }
@@ -54,6 +57,7 @@ enum Step {
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<Step>(Step.Welcome);
   const [wallet, setWallet] = useState<Wallet | JsonRpcSigner | null>(null);
+  const [censusId, setCensusId] = useState<string | null>(null);
 
   const handleWalletConnected = useCallback((connectedWallet: Wallet | JsonRpcSigner) => {
     setWallet(connectedWallet);
@@ -79,6 +83,14 @@ export default function Home() {
         ) : (
           <WelcomeScreen onNext={handleNext} />
         );
+      case Step.CreateCensus:
+        return <CensusCreationScreen 
+          onNext={(id) => {
+            setCensusId(id);
+            handleNext();
+          }} 
+          onBack={handleBack} 
+        />;
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }
