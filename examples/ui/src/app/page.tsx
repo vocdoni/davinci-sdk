@@ -9,6 +9,7 @@ import { ThemeProvider, createTheme, Box } from '@mui/material';
 import { Wallet, JsonRpcSigner } from 'ethers';
 import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
 import CensusCreationScreen from '@/components/CensusCreationScreen';
+import CreateElectionScreen from '@/components/CreateElectionScreen';
 
 const theme = createTheme({
   palette: {
@@ -41,7 +42,7 @@ const STEPS = [
   'Connect Wallet',
   'Create Organization',
   'Create Census',
-  'Configure Vote',
+  'Create Election',
   'Review & Deploy'
 ] as const;
 
@@ -50,7 +51,7 @@ enum Step {
   ConnectWallet,
   CreateOrganization,
   CreateCensus,
-  ConfigureVote,
+  CreateElection,
   ReviewAndDeploy
 }
 
@@ -91,6 +92,17 @@ export default function Home() {
           }} 
           onBack={handleBack} 
         />;
+      case Step.CreateElection:
+        return wallet && censusId ? (
+          <CreateElectionScreen
+            onNext={handleNext}
+            onBack={handleBack}
+            wallet={wallet}
+            censusId={censusId}
+          />
+        ) : (
+          <WelcomeScreen onNext={handleNext} />
+        );
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }

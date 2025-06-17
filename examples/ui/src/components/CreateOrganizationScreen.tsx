@@ -58,6 +58,7 @@ export default function CreateOrganizationScreen({ onBack, onNext, wallet }: Cre
           setTxStatus('Transaction confirmed!');
           setSuccess(true);
           setOrgId(newOrgId);
+          localStorage.setItem('organizationId', newOrgId);
           break;
         } else if (status.status === TxStatus.Failed) {
           throw new Error('Transaction failed');
