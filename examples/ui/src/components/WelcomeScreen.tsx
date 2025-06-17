@@ -15,7 +15,11 @@ import {
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
 import { deployedAddresses } from '@vocdoni/davinci-sdk';
 
-export default function WelcomeScreen() {
+interface WelcomeScreenProps {
+  onNext: () => void;
+}
+
+export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
@@ -125,7 +129,7 @@ export default function WelcomeScreen() {
         color="primary"
         size="large"
         disabled={!isConnected || isLoading}
-        onClick={() => {/* Handle navigation to next step */}}
+        onClick={onNext}
       >
         Next
       </Button>
