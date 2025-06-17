@@ -11,6 +11,7 @@ import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
 import CensusCreationScreen from '@/components/CensusCreationScreen';
 import CreateElectionScreen from '@/components/CreateElectionScreen';
 import CheckElectionScreen from '@/components/CheckElectionScreen';
+import VotingScreen from '@/components/VotingScreen';
 
 const theme = createTheme({
   palette: {
@@ -44,7 +45,8 @@ const STEPS = [
   'Create Organization',
   'Create Census',
   'Create Election',
-  'Check Election Status'
+  'Check Election Status',
+  'Vote'
 ] as const;
 
 enum Step {
@@ -53,7 +55,8 @@ enum Step {
   CreateOrganization,
   CreateCensus,
   CreateElection,
-  CheckElectionStatus
+  CheckElectionStatus,
+  Vote
 }
 
 export default function Home() {
@@ -106,6 +109,8 @@ export default function Home() {
         );
       case Step.CheckElectionStatus:
         return <CheckElectionScreen onNext={handleNext} onBack={handleBack} />;
+      case Step.Vote:
+        return <VotingScreen onNext={handleNext} onBack={handleBack} />;
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }
