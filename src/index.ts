@@ -2,7 +2,7 @@
 export * from './core';
 
 // Export contracts module
-export * as contracts from './contracts';
+export * from './contracts';
 
 // Export sequencer module
-export * as sequencer from './sequencer';
+export * from './sequencer';
