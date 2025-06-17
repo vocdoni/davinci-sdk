@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useWallets } from '@/context/WalletContext';
 import {
   Box,
   Button,
@@ -27,7 +28,8 @@ interface CensusCreationScreenProps {
 }
 
 export default function CensusCreationScreen({ onBack, onNext }: CensusCreationScreenProps) {
-  const [wallets, setWallets] = useState<string[]>([]);
+  const [addresses, setAddresses] = useState<string[]>([]);
+  const { walletMap, setWalletMap } = useWallets();
   const [newAddress, setNewAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,8 +38,10 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
   const [censusId, setCensusId] = useState<string | null>(null);
 
   const generateRandomWallets = () => {
-    const newWallets = Array.from({ length: 10 }, () => Wallet.createRandom().address);
-    setWallets(newWallets);
+    const newWallets = Array.from({ length: 10 }, () => Wallet.createRandom());
+    const newAddresses = newWallets.map(w => w.address);
+    setAddresses(newAddresses);
+    setWalletMap(Object.fromEntries(newWallets.map(w => [w.address, new Wallet(w.privateKey)])));
   };
 
   const handleAddAddress = () => {
@@ -45,17 +49,20 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       setError('Invalid Ethereum address format');
       return;
     }
-    if (wallets.includes(newAddress)) {
+    if (addresses.includes(newAddress)) {
       setError('Address already in the list');
       return;
     }
-    setWallets([...wallets, newAddress]);
+    setAddresses([...addresses, newAddress]);
     setNewAddress('');
     setError(null);
   };
 
   const handleRemoveAddress = (address: string) => {
-    setWallets(wallets.filter(w => w !== address));
+    setAddresses(addresses.filter(w => w !== address));
+    const newWalletMap = { ...walletMap };
+    delete newWalletMap[address];
+    setWalletMap(newWalletMap);
   };
 
   const handleCopyAddress = (address: string) => {
@@ -63,7 +70,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
   };
 
   const handleCreateCensus = async () => {
-    if (wallets.length === 0) {
+    if (addresses.length === 0) {
       setError('Add at least one address to create a census');
       return;
     }
@@ -81,23 +88,26 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       setCensusId(newCensusId);
       
       // Add voters in batches
-      const batchSize = Math.ceil(wallets.length / 4); // Split into 4 parts for progress
-      for (let i = 0; i < wallets.length; i += batchSize) {
-        const batch = wallets.slice(i, i + batchSize);
+      const batchSize = Math.ceil(addresses.length / 4); // Split into 4 parts for progress
+      for (let i = 0; i < addresses.length; i += batchSize) {
+        const batch = addresses.slice(i, i + batchSize);
+        
+        // Add participants using addresses
         await api.addParticipants(newCensusId, batch.map(address => ({
           key: address,
           weight: "1" // All voters have equal weight
         })));
-        setProgress(40 + Math.floor((i / wallets.length) * 40));
+        setProgress(40 + Math.floor((i / addresses.length) * 40));
       }
 
       // Verify participants were stored
       setProgress(80);
       const storedParticipants = await api.getParticipants(newCensusId);
-      if (storedParticipants.length !== wallets.length) {
+      if (storedParticipants.length !== addresses.length) {
         throw new Error('Not all participants were stored in the census');
       }
-      
+
+
       setProgress(100);
       setCensusCreated(true);
     } catch (err) {
@@ -132,7 +142,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
             <Button
               variant="contained"
               onClick={handleCreateCensus}
-              disabled={wallets.length === 0 || isLoading || censusCreated}
+              disabled={addresses.length === 0 || isLoading || censusCreated}
             >
               Create Census
             </Button>
@@ -180,7 +190,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
           )}
 
           <List>
-            {wallets.map((address, index) => (
+            {addresses.map((address, index) => (
               <ListItem
                 key={address}
                 secondaryAction={

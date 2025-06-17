@@ -253,15 +253,16 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
           setProgress(100);
           setElectionCreated(true);
 
-          // Store the process details for the next step
-          localStorage.setItem('electionDetails', JSON.stringify({
-            processId,
-            encryptionPubKey,
-            stateRoot,
-            metadataUrl,
-            censusRoot,
-            censusSize,
-          }));
+      // Store the process details for the next step
+      localStorage.setItem('electionDetails', JSON.stringify({
+        processId,
+        encryptionPubKey,
+        stateRoot,
+        metadataUrl,
+        censusRoot,
+        censusSize,
+        censusId,
+      }));
           break;
         } else if (status.status === TxStatus.Failed) {
           throw new Error('Transaction failed');
