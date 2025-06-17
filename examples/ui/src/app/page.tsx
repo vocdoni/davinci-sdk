@@ -10,6 +10,7 @@ import { Wallet, JsonRpcSigner } from 'ethers';
 import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
 import CensusCreationScreen from '@/components/CensusCreationScreen';
 import CreateElectionScreen from '@/components/CreateElectionScreen';
+import CheckElectionScreen from '@/components/CheckElectionScreen';
 
 const theme = createTheme({
   palette: {
@@ -43,7 +44,7 @@ const STEPS = [
   'Create Organization',
   'Create Census',
   'Create Election',
-  'Review & Deploy'
+  'Check Election Status'
 ] as const;
 
 enum Step {
@@ -52,7 +53,7 @@ enum Step {
   CreateOrganization,
   CreateCensus,
   CreateElection,
-  ReviewAndDeploy
+  CheckElectionStatus
 }
 
 export default function Home() {
@@ -103,6 +104,8 @@ export default function Home() {
         ) : (
           <WelcomeScreen onNext={handleNext} />
         );
+      case Step.CheckElectionStatus:
+        return <CheckElectionScreen onNext={handleNext} onBack={handleBack} />;
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }
