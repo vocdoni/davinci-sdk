@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import WelcomeScreen from '@/components/WelcomeScreen';
-import { ThemeProvider, createTheme } from '@mui/material';
+import ConnectWalletScreen from '@/components/ConnectWalletScreen';
+import StepIndicator from '@/components/StepIndicator';
+import { ThemeProvider, createTheme, Box } from '@mui/material';
 
 const theme = createTheme({
   palette: {
@@ -30,11 +33,51 @@ const theme = createTheme({
   },
 });
 
+const STEPS = [
+  'Welcome',
+  'Connect Wallet',
+  'Create Organization',
+  'Configure Vote',
+  'Review & Deploy'
+] as const;
+
+enum Step {
+  Welcome,
+  ConnectWallet,
+  CreateOrganization,
+  ConfigureVote,
+  ReviewAndDeploy
+}
+
 export default function Home() {
+  const [currentStep, setCurrentStep] = useState<Step>(Step.Welcome);
+
+  const handleNext = () => {
+    setCurrentStep(prev => prev + 1);
+  };
+
+  const handleBack = () => {
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case Step.Welcome:
+        return <WelcomeScreen onNext={handleNext} />;
+      case Step.ConnectWallet:
+        return <ConnectWalletScreen onNext={handleNext} onBack={handleBack} />;
+      default:
+        return <WelcomeScreen onNext={handleNext} />;
+    }
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <Layout>
-        <WelcomeScreen />
+        <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', px: 3 }}>
+          <StepIndicator activeStep={currentStep} steps={STEPS} />
+          {renderStep()}
+        </Box>
       </Layout>
     </ThemeProvider>
   );
