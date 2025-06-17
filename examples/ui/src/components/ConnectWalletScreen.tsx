@@ -4,19 +4,21 @@ import {
   Typography,
   Button,
 } from '@mui/material';
-import { BrowserProvider, Wallet } from 'ethers';
+import { BrowserProvider, Wallet, JsonRpcSigner } from 'ethers';
 import WalletConnect from './WalletConnect';
 
 interface ConnectWalletScreenProps {
   onBack: () => void;
   onNext: () => void;
+  onWalletConnected: (wallet: Wallet | JsonRpcSigner) => void;
 }
 
-export default function ConnectWalletScreen({ onBack, onNext }: ConnectWalletScreenProps) {
-  const [wallet, setWallet] = useState<Wallet | BrowserProvider | null>(null);
+export default function ConnectWalletScreen({ onBack, onNext, onWalletConnected }: ConnectWalletScreenProps) {
+  const [wallet, setWallet] = useState<Wallet | JsonRpcSigner | null>(null);
 
-  const handleWalletConnected = (connectedWallet: Wallet | BrowserProvider) => {
+  const handleWalletConnected = async (connectedWallet: Wallet | JsonRpcSigner) => {
     setWallet(connectedWallet);
+    onWalletConnected(connectedWallet);
   };
 
   return (

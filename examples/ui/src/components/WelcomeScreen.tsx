@@ -12,6 +12,7 @@ import {
   Alert,
   Link,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
 import { deployedAddresses } from '@vocdoni/davinci-sdk';
 
@@ -70,9 +71,20 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
               <CircularProgress />
             </Box>
           ) : error ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
+            <Box>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={checkConnection}
+                startIcon={<RefreshIcon />}
+                disabled={isLoading}
+              >
+                Retry Connection
+              </Button>
+            </Box>
           ) : isConnected ? (
             <Alert severity="success" sx={{ mb: 2 }}>
               Connected to Vocdoni API
@@ -130,8 +142,9 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
         size="large"
         disabled={!isConnected || isLoading}
         onClick={onNext}
+        endIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
       >
-        Next
+        {isLoading ? 'Checking Connection...' : 'Next'}
       </Button>
     </Box>
   );

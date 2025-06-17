@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Layout from '@/components/layout/Layout';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import ConnectWalletScreen from '@/components/ConnectWalletScreen';
 import StepIndicator from '@/components/StepIndicator';
 import { ThemeProvider, createTheme, Box } from '@mui/material';
+import { Wallet, JsonRpcSigner } from 'ethers';
+import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
 
 const theme = createTheme({
   palette: {
@@ -51,6 +53,11 @@ enum Step {
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<Step>(Step.Welcome);
+  const [wallet, setWallet] = useState<Wallet | JsonRpcSigner | null>(null);
+
+  const handleWalletConnected = useCallback((connectedWallet: Wallet | JsonRpcSigner) => {
+    setWallet(connectedWallet);
+  }, []);
 
   const handleNext = () => {
     setCurrentStep(prev => prev + 1);
@@ -65,7 +72,13 @@ export default function Home() {
       case Step.Welcome:
         return <WelcomeScreen onNext={handleNext} />;
       case Step.ConnectWallet:
-        return <ConnectWalletScreen onNext={handleNext} onBack={handleBack} />;
+        return <ConnectWalletScreen onNext={handleNext} onBack={handleBack} onWalletConnected={handleWalletConnected} />;
+      case Step.CreateOrganization:
+        return wallet ? (
+          <CreateOrganizationScreen onNext={handleNext} onBack={handleBack} wallet={wallet} />
+        ) : (
+          <WelcomeScreen onNext={handleNext} />
+        );
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }
