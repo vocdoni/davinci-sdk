@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { JsonRpcProvider, BrowserProvider, Wallet } from 'ethers';
+import { useState } from 'react';
+import { JsonRpcProvider, BrowserProvider, Wallet, JsonRpcSigner } from 'ethers';
 import {
   Box,
   Button,
@@ -12,15 +12,11 @@ import {
   CircularProgress,
   Tabs,
   Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 interface WalletConnectProps {
-  onWalletConnected: (wallet: Wallet | BrowserProvider) => void;
+  onWalletConnected: (wallet: Wallet | JsonRpcSigner) => void;
 }
 
 export default function WalletConnect({ onWalletConnected }: WalletConnectProps) {
@@ -30,7 +26,6 @@ export default function WalletConnect({ onWalletConnected }: WalletConnectProps)
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -54,7 +49,7 @@ export default function WalletConnect({ onWalletConnected }: WalletConnectProps)
       
       setAddress(address);
       setBalance(formatEther(balance));
-      onWalletConnected(provider);
+      onWalletConnected(signer);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to MetaMask');
     } finally {
