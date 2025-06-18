@@ -5,12 +5,12 @@
     "types": "dist/contracts.d.ts",
     "exports": {
       "./contracts": {
-        "types": "./dist/types.d.ts",
+        "types": "./dist/contracts.d.ts",
         "import": "./dist/contracts.mjs",
         "require": "./dist/contracts.js"
       },
       "./sequencer": {
-        "types": "./dist/types.d.ts",
+        "types": "./dist/sequencer.d.ts",
         "import": "./dist/sequencer.mjs",
         "require": "./dist/sequencer.js"
       },
