@@ -62,6 +62,18 @@ export default [
     }
   ),
 
+  // Contracts types
+  createBundle(
+    {
+      plugins: [dts()],
+      output: { file: 'dist/contracts.d.ts', format: 'es' },
+    },
+    {
+      input: 'src/contracts/index.ts',
+      includeSnarkjs: true,
+    }
+  ),
+
   // Sequencer bundle
   createBundle(
     {
