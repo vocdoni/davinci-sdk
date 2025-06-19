@@ -25,6 +25,10 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import ErrorIcon from '@mui/icons-material/Error';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import { 
   VocdoniApiService, 
   BallotProof, 
@@ -75,7 +79,7 @@ interface Question extends IQuestion {
 interface Vote {
   address: string;
   voteId: string;
-  status: 'pending' | 'processed' | 'error';
+  status: 'pending' | 'verified' | 'aggregated' | 'processed' | 'settled' | 'error';
 }
 
 interface VoteStatus {
@@ -173,11 +177,9 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
           const api = new VocdoniApiService(process.env.API_URL || '');
           const status = await api.getVoteStatus(processId, updatedVotes[i].voteId);
           
-          if (status.status === 'processed') {
-            updatedVotes[i].status = 'processed';
-          } else if (status.status === 'error') {
-            updatedVotes[i].status = 'error';
-          } else {
+          updatedVotes[i].status = status.status as Vote['status'];
+          
+          if (status.status !== 'processed' && status.status !== 'error') {
             allProcessed = false;
           }
         }
@@ -337,23 +339,20 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       const checkVoteStatus = async () => {
         let isDone = false;
         while (!isDone) {
-          const status = await api.getVoteStatus(details.processId, voteId);
-          if (status.status === 'processed' || status.status === 'error') {
-            setSubmittedVotes(prev => {
-              const updated = prev.map(v => 
-                v.voteId === voteId ? { ...v, status: status.status as 'processed' | 'error' } : v
-              );
-              return updated;
-            });
+          const voteStatus = await api.getVoteStatus(details.processId, voteId);
+          setSubmittedVotes(prev => {
+            const updated = prev.map(v => 
+              v.voteId === voteId ? { 
+                ...v, 
+                status: voteStatus.status as Vote['status']
+              } : v
+            );
+            return updated;
+          });
+
+          if (voteStatus.status === 'processed' || voteStatus.status === 'error') {
             isDone = true;
           } else {
-            // Update UI to show we're still checking
-            setSubmittedVotes(prev => {
-              const updated = prev.map(v => 
-                v.voteId === voteId ? { ...v, status: 'pending' as const } : v
-              );
-              return updated;
-            });
             await new Promise(r => setTimeout(r, 2000));
           }
         }
@@ -413,7 +412,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                   >
                     {availableAddresses.map((address: string) => (
                       <MenuItem key={address} value={address}>
-                        {address}
+                        {`${address.slice(0, 6)}...${address.slice(-4)}`}
                       </MenuItem>
                     ))}
                   </Select>
@@ -503,16 +502,25 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                         <CheckCircleIcon color="success" />
                       ) : vote.status === 'error' ? (
                         <ErrorIcon color="error" />
+                      ) : vote.status === 'verified' ? (
+                        <CloudDoneIcon color="info" />
+                      ) : vote.status === 'aggregated' ? (
+                        <HourglassEmptyIcon color="warning" />
+                      ) : vote.status === 'settled' ? (
+                        <CheckCircleIcon color="success" />
                       ) : (
                         <CircularProgress size={24} />
                       )}
                     </ListItemIcon>
                     <ListItemText
-                      primary={vote.address}
+                      primary={`${vote.address.slice(0, 6)}...${vote.address.slice(-4)}`}
                       secondary={
-                        vote.status === 'processed' ? 'Vote processed' :
-                        vote.status === 'error' ? 'Vote failed' :
-                        'Processing vote...'
+                        vote.status === 'processed' ? 'Vote processed successfully' :
+                        vote.status === 'error' ? 'Vote processing failed' :
+                        vote.status === 'verified' ? 'Vote verified, waiting for aggregation...' :
+                        vote.status === 'aggregated' ? 'Vote aggregated, waiting for processing...' :
+                        vote.status === 'settled' ? 'Vote settled and finalized' :
+                        'Vote submitted, waiting for verification...'
                       }
                     />
                   </ListItem>
