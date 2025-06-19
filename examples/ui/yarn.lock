@@ -1143,9 +1143,9 @@
   resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.5.tgz#c30926116e1ad817d33e382b26312e3308c62c4e"
   integrity sha512-8uVE78hJUEQpmY5QIe2M4voDXbonfgOlv2Iqng3ko5jkpGmXBpyoa7RzEpjDAAdLPyTAknfgIC/C/bgtKya6FA==
 
-"@vocdoni/davinci-sdk@../../vocdoni-davinci-sdk-v0.0.2.tgz":
+"@vocdoni/davinci-sdk@./davinci-sdk.tgz":
   version "0.0.2"
-  resolved "../../vocdoni-davinci-sdk-v0.0.2.tgz#a2dcd53c97788abd6b87de7cb63525fd7589ca02"
+  resolved "./davinci-sdk.tgz#0597f11f98269f41d1a08691f70622a90b7868ad"
   dependencies:
     "@ethereumjs/common" "^4.4.0"
     "@vocdoni/davinci-contracts" "0.0.5"
