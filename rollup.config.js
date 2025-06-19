@@ -46,7 +46,17 @@ export default [
       includeSnarkjs: false,
     }
   ),
-
+  // Core types
+  createBundle(
+    {
+      plugins: [dts()],
+      output: { file: 'dist/core.d.ts', format: 'es' },
+    },
+    {
+      input: 'src/core/index.ts',
+      includeSnarkjs: false,
+    }
+  ),
   // Contracts bundle
   createBundle(
     {
@@ -96,17 +106,6 @@ export default [
     },
     {
       input: 'src/sequencer/index.ts',
-      includeSnarkjs: false,
-    }
-  ),
-  // Common types
-  createBundle(
-    {
-      plugins: [dts()],
-      output: { file: 'dist/types.d.ts', format: 'es' },
-    },
-    {
-      input: 'src/core/types/index.ts',
       includeSnarkjs: false,
     }
   ),

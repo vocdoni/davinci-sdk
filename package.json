@@ -5,8 +5,8 @@
   "main": "src/index.ts",
   "exports": {
     "./contracts": "./src/contracts/index.ts",
-    "./sequencer": "./src/sequencer/index.ts",
-    "./types": "./src/core/types/index.ts"
+    "./core": "./src/core/index.ts",
+    "./sequencer": "./src/sequencer/index.ts"
   },
   "scripts": {
     "clean": "rimraf dist",
