@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallets } from '@/context/WalletContext';
 import {
   Box,
@@ -19,7 +19,6 @@ import { Wallet } from 'ethers';
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 interface CensusCreationScreenProps {
@@ -37,11 +36,19 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
   const [progress, setProgress] = useState(0);
   const [censusId, setCensusId] = useState<string | null>(null);
 
-  const generateRandomWallets = () => {
-    const newWallets = Array.from({ length: 10 }, () => Wallet.createRandom());
-    const newAddresses = newWallets.map(w => w.address);
-    setAddresses(newAddresses);
-    setWalletMap(Object.fromEntries(newWallets.map(w => [w.address, new Wallet(w.privateKey)])));
+  useEffect(() => {
+    // Generate initial 10 random wallets on component mount
+    const initialWallets = Array.from({ length: 10 }, () => Wallet.createRandom());
+    const initialAddresses = initialWallets.map(w => w.address);
+    setAddresses(initialAddresses);
+    setWalletMap(Object.fromEntries(initialWallets.map(w => [w.address, new Wallet(w.privateKey)])));
+  }, [setWalletMap]);
+
+  const handleAddRandomWallet = () => {
+    const newWallet = Wallet.createRandom();
+    setAddresses(prev => [...prev, newWallet.address]);
+    const updatedWalletMap = { ...walletMap, [newWallet.address]: new Wallet(newWallet.privateKey) };
+    setWalletMap(updatedWalletMap);
   };
 
   const handleAddAddress = () => {
@@ -107,7 +114,6 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
         throw new Error('Not all participants were stored in the census');
       }
 
-
       setProgress(100);
       setCensusCreated(true);
     } catch (err) {
@@ -125,7 +131,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       </Typography>
 
       <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
-        Create a census by adding wallet addresses that will be allowed to vote. You can use the randomly generated addresses or add your own.
+        Create a census by adding wallet addresses that will be allowed to vote. You can add more random wallets or your own addresses.
       </Typography>
 
       <Card sx={{ mb: 4 }}>
@@ -133,11 +139,11 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
           <Box sx={{ mb: 3, display: 'flex', gap: 2, justifyContent: 'center' }}>
             <Button
               variant="contained"
-              onClick={generateRandomWallets}
-              startIcon={<RefreshIcon />}
+              onClick={handleAddRandomWallet}
+              startIcon={<AddIcon />}
               disabled={isLoading}
             >
-              Generate 10 Random Wallets
+              Add Random Wallet
             </Button>
             <Button
               variant="contained"
@@ -148,25 +154,6 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
             </Button>
           </Box>
 
-          <Box sx={{ mb: 3, display: 'flex', gap: 1 }}>
-            <TextField
-              fullWidth
-              label="Add Ethereum Address"
-              variant="outlined"
-              value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-              disabled={isLoading || censusCreated}
-              placeholder="0x..."
-            />
-            <Button
-              variant="contained"
-              onClick={handleAddAddress}
-              disabled={!newAddress || isLoading || censusCreated}
-              startIcon={<AddIcon />}
-            >
-              Add
-            </Button>
-          </Box>
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
