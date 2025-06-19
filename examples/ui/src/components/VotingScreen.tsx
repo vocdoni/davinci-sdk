@@ -34,9 +34,21 @@ import {
   ProofInputs,
   IQuestion,
   MultiLanguage,
+  InfoResponse,
 } from '@vocdoni/davinci-sdk';
 import { Wallet, HDNodeWallet } from 'ethers';
 import { useWallets } from '@/context/WalletContext';
+
+const getCircuitUrls = (info: InfoResponse) => {
+  const isDev = process.env.NODE_ENV === 'development';
+  return {
+    ballotProofExec: isDev ? '/wasm_exec.js' : info.ballotProofWasmHelperExecJsUrl,
+    ballotProof: isDev ? '/ballotproof.wasm' : info.ballotProofWasmHelperUrl,
+    circuit: isDev ? '/ballot_proof.wasm' : info.circuitUrl,
+    provingKey: isDev ? '/ballot_proof_pkey.zkey' : info.provingKeyUrl,
+    verificationKey: isDev ? '/ballot_proof_vkey.json' : info.verificationKeyUrl,
+  };
+};
 
 interface VotingScreenProps {
   onBack: () => void;
@@ -78,6 +90,7 @@ const VOTE_STEPS = [
 export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<Array<{ key: string; weight: string | undefined }>>([]);
   const [addresses, setAddresses] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -91,6 +104,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
   });
   const [activeStep, setActiveStep] = useState(-1);
   const [waitTime, setWaitTime] = useState(0);
+  const { walletMap } = useWallets();
 
   useEffect(() => {
     const loadElectionData = async () => {
@@ -104,9 +118,12 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
 
         const api = new VocdoniApiService(process.env.API_URL || '');
 
-        // Get census participants
-        const participants = await api.getParticipants(details.censusId);
-        setAddresses(participants.map(p => p.key));
+        // Get census participants for their weights
+        const censusParticipants = await api.getParticipants(details.censusId);
+        setParticipants(censusParticipants.map(p => ({ key: p.key, weight: p.weight })));
+        
+        // Use addresses from our stored wallets
+        setAddresses(Object.keys(walletMap));
 
         // Get election metadata and map to our Question interface
         // Extract hash from the metadata URL
@@ -138,7 +155,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
     };
 
     loadElectionData();
-  }, []);
+  }, [walletMap]);
 
   const handleVote = async () => {
     try {
@@ -160,8 +177,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       setVoteStatus(prev => ({ ...prev, censusProofGenerated: true }));
       setActiveStep(1);
 
-      // Step 2: Generate zk-SNARK inputs
-      const { walletMap } = useWallets();
+      // Step 2: Get the wallet from the census
       const wallet = walletMap[selectedAddress];
       if (!wallet) {
         throw new Error('Wallet not found for selected address');
@@ -172,22 +188,31 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         .join('');
       const kStr = BigInt("0x" + kHex).toString();
 
+      // Get WASM URLs from API info
+      const info = await api.getInfo();
+      const urls = getCircuitUrls(info);
       const sdk = new BallotProof({
-        wasmExecUrl: process.env.BALLOT_PROOF_WASM_HELPER_EXEC_JS_URL || '',
-        wasmUrl: process.env.BALLOT_PROOF_WASM_HELPER_URL || '',
+        wasmExecUrl: urls.ballotProofExec,
+        wasmUrl: urls.ballotProof,
       });
       await sdk.init();
 
-      // Convert answers to field values array
-      // For each question, create an array of 4 positions (1 for selected choice, 0 for others)
-      const fieldValues = questions.map((question, questionIndex) => {
+      // Calculate ballot mode values
+      const maxValue = (Math.max(...questions.map(q => q.choices.length)) - 1).toString(); // -1 because choices are 0-based
+      const maxTotalCost = questions.map(q => q.choices.length - 1).reduce((a, b) => a + b, 0).toString();
+
+      // Create arrays for each question with length equal to their choices
+      const questionArrays = questions.map((question, questionIndex) => {
+        const choices = Array(question.choices.length).fill("0");
         const selectedValue = answers[questionIndex];
-        const choices = Array(4).fill("0");
         if (selectedValue !== -1) {
           choices[selectedValue] = "1";
         }
         return choices;
-      }).flat(); // Flatten the array of arrays
+      });
+      
+      // Flatten all arrays into one, preserving order
+      const fieldValues = questionArrays.flat();
 
       const inputs = {
         address: selectedAddress.replace(/^0x/, ""),
@@ -197,15 +222,15 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         k: kStr,
         ballotMode: {
           maxCount: questions.length,
-          maxValue: "1",
+          maxValue,
           minValue: "0",
           forceUniqueness: false,
           costFromWeight: false,
           costExponent: 0,
-          maxTotalCost: questions.length.toString(),
+          maxTotalCost,
           minTotalCost: "0",
         },
-        weight: "1",
+        weight: participants.find(p => p.key === selectedAddress)?.weight || "1",
         fieldValues,
       };
 
@@ -215,9 +240,9 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
 
       // Step 3: Run fullProve + verify
       const pg = new CircomProof({
-        wasmUrl: process.env.CIRCUIT_URL || '',
-        zkeyUrl: process.env.PROVING_KEY_URL || '',
-        vkeyUrl: process.env.VERIFICATION_KEY_URL || '',
+        wasmUrl: urls.circuit,
+        zkeyUrl: urls.provingKey,
+        vkeyUrl: urls.verificationKey,
       });
 
       const { proof, publicSignals } = await pg.generate(out.circomInputs as ProofInputs);
@@ -232,7 +257,11 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         ciphertexts: out.ballot.ciphertexts,
       };
 
-      const sigBytes = Uint8Array.from(Buffer.from(out.voteID.replace(/^0x/, ""), "hex"));
+      const sigBytes = Uint8Array.from(
+        out.voteID.replace(/^0x/, "")
+          .match(/.{1,2}/g)!
+          .map(byte => parseInt(byte, 16))
+      );
       const signature = await wallet.signMessage(sigBytes);
 
       const voteRequest = {
@@ -243,7 +272,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         ballot: voteBallot,
         ballotProof: { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
         ballotInputsHash: out.ballotInputHash,
-        address: wallet.address,
+        address: selectedAddress,
         signature,
       };
 
@@ -303,7 +332,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                   onChange={(e) => setSelectedAddress(e.target.value)}
                   disabled={isLoading}
                 >
-                  {addresses.map((address) => (
+                  {addresses.map((address: string) => (
                     <MenuItem key={address} value={address}>
                       {address}
                     </MenuItem>

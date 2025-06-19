@@ -45,16 +45,21 @@ interface Question {
   choices: Array<{ title: { default: string }; value: number }>;
 }
 
-// Ballot mode configuration
-const BALLOT_MODE = {
-  maxCount: 1,
-  maxValue: "3",
-  minValue: "0",
-  forceUniqueness: false,
-  costFromWeight: false,
-  costExponent: 0,
-  maxTotalCost: "3",
-  minTotalCost: "0",
+// Calculate ballot mode based on questions
+const calculateBallotMode = (questions: Question[]) => {
+  const maxValue = (Math.max(...questions.map(q => q.choices.length)) - 1).toString(); // -1 because choices are 0-based
+  const maxTotalCost = questions.map(q => q.choices.length - 1).reduce((a, b) => a + b, 0).toString();
+
+  return {
+    maxCount: questions.length,
+    maxValue,
+    minValue: "0",
+    forceUniqueness: false,
+    costFromWeight: false,
+    costExponent: 0,
+    maxTotalCost,
+    minTotalCost: "0",
+  };
 };
 
 export default function CreateElectionScreen({ onBack, onNext, wallet, censusId }: CreateElectionScreenProps) {
@@ -211,9 +216,10 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       const nonce = await (wallet as any).provider.getTransactionCount(address);
       const signature = await wallet.signMessage(`${chainId}${nonce}`);
 
+      const ballotMode = calculateBallotMode(questions);
       const { processId, encryptionPubKey, stateRoot } = await api.createProcess({
         censusRoot,
-        ballotMode: BALLOT_MODE,
+        ballotMode,
         nonce,
         chainId,
         signature,
@@ -230,7 +236,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
         ProcessStatus.READY,
         Math.floor(Date.now() / 1000) + 60, // Start time: 1 minute from now
         3600 * 8, // Duration: 8 hours
-        BALLOT_MODE,
+        ballotMode,
         {
           censusOrigin: 1,
           maxVotes: censusSize.toString(),
