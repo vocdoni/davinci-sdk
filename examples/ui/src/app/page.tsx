@@ -12,6 +12,7 @@ import CensusCreationScreen from '@/components/CensusCreationScreen';
 import CreateElectionScreen from '@/components/CreateElectionScreen';
 import CheckElectionScreen from '@/components/CheckElectionScreen';
 import VotingScreen from '@/components/VotingScreen';
+import EndProcessScreen from '@/components/EndProcessScreen';
 
 const theme = createTheme({
   palette: {
@@ -46,7 +47,8 @@ const STEPS = [
   'Create Census',
   'Create Election',
   'Check Election Status',
-  'Vote'
+  'Vote',
+  'End Process'
 ] as const;
 
 enum Step {
@@ -56,7 +58,8 @@ enum Step {
   CreateCensus,
   CreateElection,
   CheckElectionStatus,
-  Vote
+  Vote,
+  EndProcess
 }
 
 export default function Home() {
@@ -110,7 +113,13 @@ export default function Home() {
       case Step.CheckElectionStatus:
         return <CheckElectionScreen onNext={handleNext} onBack={handleBack} />;
       case Step.Vote:
-        return <VotingScreen onNext={handleNext} onBack={handleBack} />;
+        return <VotingScreen onNext={() => setCurrentStep(Step.EndProcess)} onBack={handleBack} />;
+      case Step.EndProcess:
+        return wallet ? (
+          <EndProcessScreen onNext={handleNext} onBack={handleBack} wallet={wallet} />
+        ) : (
+          <WelcomeScreen onNext={handleNext} />
+        );
       default:
         return <WelcomeScreen onNext={handleNext} />;
     }
