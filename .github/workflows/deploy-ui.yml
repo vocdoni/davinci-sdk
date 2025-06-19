@@ -16,10 +16,10 @@ jobs:
       id-token: write   # to verify the deployment originates from an appropriate source
       contents: read    # to checkout the repository
 
-    # Deploy to the github-pages environment
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # Remove environment restriction to allow deployment from any branch
+    # environment:
+    #   name: github-pages
+    #   url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -65,9 +65,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const deploymentUrl = `https://${context.repo.owner}.github.io/${context.repo.repo}/`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '🚀 UI deployed to GitHub Pages: ${{ steps.deployment.outputs.page_url }}'
+              body: `🚀 UI deployed to GitHub Pages: ${deploymentUrl}`
             })
