@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -31,6 +31,9 @@ import {
   TxStatus
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 interface CreateElectionScreenProps {
   onBack: () => void;
@@ -83,6 +86,11 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
   const [electionCreated, setElectionCreated] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<string>('');
+  const [endDate, setEndDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setHours(date.getHours() + 1); // Default: 1 hour from now
+    return date;
+  });
 
   // Question editing states
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
@@ -232,10 +240,13 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
         wallet
       );
 
+      const startTime = Math.floor(Date.now() / 1000) + 60; // Start time: 1 minute from now
+      const duration = Math.floor(endDate.getTime() / 1000) - startTime; // Duration in seconds
+
       const txGenerator = registry.newProcess(
         ProcessStatus.READY,
-        Math.floor(Date.now() / 1000) + 60, // Start time: 1 minute from now
-        3600 * 8, // Duration: 8 hours
+        startTime,
+        duration,
         ballotMode,
         {
           censusOrigin: 1,
@@ -322,6 +333,21 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
             rows={3}
             sx={{ mb: 3 }}
           />
+
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DateTimePicker
+              label="End Date"
+              value={endDate}
+              onChange={(newValue) => newValue && setEndDate(newValue)}
+              disabled={isLoading || electionCreated}
+              minDateTime={(() => {
+                const minDate = new Date();
+                minDate.setHours(minDate.getHours() + 1);
+                return minDate;
+              })()}
+              sx={{ width: '100%', mb: 3 }}
+            />
+          </LocalizationProvider>
 
           <Divider sx={{ my: 3 }} />
 

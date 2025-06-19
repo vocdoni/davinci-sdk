@@ -14,7 +14,9 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",
+    "@mui/x-date-pickers": "^8.5.2",
     "@vocdoni/davinci-sdk": "./davinci-sdk.tgz",
+    "date-fns": "^4.1.0",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
