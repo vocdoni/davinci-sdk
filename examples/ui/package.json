@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "preinstall": "cd ../.. && yarn pack && mv vocdoni-davinci-sdk-v*.tgz examples/ui/davinci-sdk.tgz",
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
@@ -13,7 +14,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",
-    "@vocdoni/davinci-sdk": "../../vocdoni-davinci-sdk-v0.0.2.tgz",
+    "@vocdoni/davinci-sdk": "./davinci-sdk.tgz",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
