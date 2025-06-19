@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
+import ErrorIcon from '@mui/icons-material/Error';
 import { 
   VocdoniApiService, 
   BallotProof, 
@@ -71,12 +72,17 @@ interface Question extends IQuestion {
   choices: Array<{ title: MultiLanguage<string>; value: number }>;
 }
 
+interface Vote {
+  address: string;
+  voteId: string;
+  status: 'pending' | 'processed' | 'error';
+}
+
 interface VoteStatus {
   censusProofGenerated: boolean;
   zkInputsGenerated: boolean;
   proofGenerated: boolean;
   voteSubmitted: boolean;
-  voteConfirmed: boolean;
 }
 
 const VOTE_STEPS = [
@@ -84,7 +90,6 @@ const VOTE_STEPS = [
   'Generate ZK Inputs',
   'Generate & Verify Proof',
   'Submit Vote',
-  'Confirm Vote',
 ];
 
 export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
@@ -100,8 +105,9 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
     zkInputsGenerated: false,
     proofGenerated: false,
     voteSubmitted: false,
-    voteConfirmed: false,
   });
+  const [submittedVotes, setSubmittedVotes] = useState<Vote[]>([]);
+  const [processingVotes, setProcessingVotes] = useState(false);
   const [activeStep, setActiveStep] = useState(-1);
   const [waitTime, setWaitTime] = useState(0);
   const { walletMap } = useWallets();
@@ -156,6 +162,37 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
 
     loadElectionData();
   }, [walletMap]);
+
+  const processVotes = async (processId: string) => {
+    while (true) {
+      let allProcessed = true;
+      const updatedVotes = [...submittedVotes];
+      
+      for (let i = 0; i < updatedVotes.length; i++) {
+        if (updatedVotes[i].status === 'pending') {
+          const api = new VocdoniApiService(process.env.API_URL || '');
+          const status = await api.getVoteStatus(processId, updatedVotes[i].voteId);
+          
+          if (status.status === 'processed') {
+            updatedVotes[i].status = 'processed';
+          } else if (status.status === 'error') {
+            updatedVotes[i].status = 'error';
+          } else {
+            allProcessed = false;
+          }
+        }
+      }
+      
+      setSubmittedVotes(updatedVotes);
+      
+      if (allProcessed) {
+        setProcessingVotes(false);
+        break;
+      }
+      
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  };
 
   const handleVote = async () => {
     try {
@@ -280,16 +317,48 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       setVoteStatus(prev => ({ ...prev, voteSubmitted: true }));
       setActiveStep(4);
 
-      // Step 5: Wait for vote to be processed
-      while (true) {
-        const status = await api.getVoteStatus(details.processId, voteId);
-        if (status.status === "processed") {
-          setVoteStatus(prev => ({ ...prev, voteConfirmed: true }));
-          clearInterval(timer);
-          break;
+      // Add vote to submitted votes list and start processing
+      const newVote = { address: selectedAddress, voteId, status: 'pending' as const };
+      setSubmittedVotes(prev => [...prev, newVote]);
+      
+      // Reset for next vote
+      setVoteStatus({
+        censusProofGenerated: false,
+        zkInputsGenerated: false,
+        proofGenerated: false,
+        voteSubmitted: false,
+      });
+      setActiveStep(-1);
+      setSelectedAddress('');
+      setAnswers(Object.fromEntries(Object.keys(answers).map(k => [k, -1])));
+      clearInterval(timer);
+
+      // Start processing the new vote
+      const checkVoteStatus = async () => {
+        let isDone = false;
+        while (!isDone) {
+          const status = await api.getVoteStatus(details.processId, voteId);
+          if (status.status === 'processed' || status.status === 'error') {
+            setSubmittedVotes(prev => {
+              const updated = prev.map(v => 
+                v.voteId === voteId ? { ...v, status: status.status as 'processed' | 'error' } : v
+              );
+              return updated;
+            });
+            isDone = true;
+          } else {
+            // Update UI to show we're still checking
+            setSubmittedVotes(prev => {
+              const updated = prev.map(v => 
+                v.voteId === voteId ? { ...v, status: 'pending' as const } : v
+              );
+              return updated;
+            });
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
-        await new Promise(r => setTimeout(r, 2000));
-      }
+      };
+      checkVoteStatus().catch(console.error);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote');
@@ -306,9 +375,18 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
   };
 
   const allQuestionsAnswered = Object.values(answers).every(value => value !== -1);
+  const allVotesProcessed = submittedVotes.length > 0 && submittedVotes.every(v => 
+    v.status === 'processed' || v.status === 'error'
+  );
+
+  // Get addresses that haven't voted yet
+  const availableAddresses = addresses.filter(address => {
+    const hasVoted = submittedVotes.some(vote => vote.address.toLowerCase() === address.toLowerCase());
+    return !hasVoted;
+  });
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', textAlign: 'center' }}>
+    <Box sx={{ maxWidth: 1200, mx: 'auto', textAlign: 'center' }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Cast Your Vote
       </Typography>
@@ -317,100 +395,133 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         Select your address and answer the questions to cast your vote.
       </Typography>
 
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          {error ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          ) : (
-            <>
-              <FormControl fullWidth sx={{ mb: 4 }}>
-                <InputLabel>Select Your Address</InputLabel>
-                <Select
-                  value={selectedAddress}
-                  onChange={(e) => setSelectedAddress(e.target.value)}
-                  disabled={isLoading}
-                >
-                  {addresses.map((address: string) => (
-                    <MenuItem key={address} value={address}>
-                      {address}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {questions.map((question, questionIndex) => (
-                <Box key={questionIndex} sx={{ mb: 4 }}>
-                  <Typography variant="h6" align="left" gutterBottom>
-                    {question.title.default}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" align="left" sx={{ mb: 2 }}>
-                    {question.description.default}
-                  </Typography>
-                  <RadioGroup
-                    value={answers[questionIndex]}
-                    onChange={(e) => setAnswers(prev => ({
-                      ...prev,
-                      [questionIndex]: parseInt(e.target.value)
-                    }))}
+      <Box sx={{ display: 'flex', gap: 4, mb: 4 }}>
+        <Card sx={{ flex: '1 1 60%' }}>
+          <CardContent>
+            {error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            ) : (
+              <>
+                <FormControl fullWidth sx={{ mb: 4 }}>
+                  <InputLabel>Select Your Address</InputLabel>
+                  <Select
+                    value={selectedAddress}
+                    onChange={(e) => setSelectedAddress(e.target.value)}
+                    disabled={isLoading || availableAddresses.length === 0}
                   >
-                    {question.choices.map((choice, choiceIndex) => (
-                      <FormControlLabel
-                        key={choiceIndex}
-                        value={choiceIndex}
-                        control={<Radio />}
-                        label={choice.title.default}
-                        disabled={isLoading}
-                      />
+                    {availableAddresses.map((address: string) => (
+                      <MenuItem key={address} value={address}>
+                        {address}
+                      </MenuItem>
                     ))}
-                  </RadioGroup>
-                </Box>
-              ))}
+                  </Select>
+                </FormControl>
 
-              {activeStep >= 0 && (
-                <Box sx={{ width: '100%', mb: 4 }}>
-                  <Stepper activeStep={activeStep}>
-                    {VOTE_STEPS.map((label, index) => (
-                      <Step key={label}>
-                        <StepLabel
-                          StepIconComponent={() => renderStepIcon(
-                            index < activeStep,
-                            index === activeStep
-                          )}
-                        >
-                          {label}
-                        </StepLabel>
-                      </Step>
-                    ))}
-                  </Stepper>
-                  {activeStep >= 0 && activeStep < VOTE_STEPS.length && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      {VOTE_STEPS[activeStep]}... ({waitTime}s)
+                {questions.map((question, questionIndex) => (
+                  <Box key={questionIndex} sx={{ mb: 4 }}>
+                    <Typography variant="h6" align="left" gutterBottom>
+                      {question.title.default}
                     </Typography>
-                  )}
-                </Box>
-              )}
+                    <Typography variant="body2" color="text.secondary" align="left" sx={{ mb: 2 }}>
+                      {question.description.default}
+                    </Typography>
+                    <RadioGroup
+                      value={answers[questionIndex]}
+                      onChange={(e) => setAnswers(prev => ({
+                        ...prev,
+                        [questionIndex]: parseInt(e.target.value)
+                      }))}
+                    >
+                      {question.choices.map((choice, choiceIndex) => (
+                        <FormControlLabel
+                          key={choiceIndex}
+                          value={choiceIndex}
+                          control={<Radio />}
+                          label={choice.title.default}
+                          disabled={isLoading}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </Box>
+                ))}
 
-              {voteStatus.voteConfirmed ? (
-                <Alert severity="success" sx={{ mt: 2 }}>
-                  Vote submitted and confirmed successfully!
-                </Alert>
-              ) : (
+                {activeStep >= 0 && (
+                  <Box sx={{ width: '100%', mb: 4 }}>
+                    <Stepper activeStep={activeStep}>
+                      {VOTE_STEPS.map((label, index) => (
+                        <Step key={label}>
+                          <StepLabel
+                            StepIconComponent={() => renderStepIcon(
+                              index < activeStep,
+                              index === activeStep
+                            )}
+                          >
+                            {label}
+                          </StepLabel>
+                        </Step>
+                      ))}
+                    </Stepper>
+                    {activeStep >= 0 && activeStep < VOTE_STEPS.length && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        {VOTE_STEPS[activeStep]}... ({waitTime}s)
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+
                 <Button
                   fullWidth
                   variant="contained"
                   color="primary"
                   onClick={handleVote}
-                  disabled={!selectedAddress || !allQuestionsAnswered || isLoading}
+                  disabled={!selectedAddress || !allQuestionsAnswered || isLoading || availableAddresses.length === 0}
                 >
                   Cast Vote
                 </Button>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card sx={{ flex: '1 1 40%' }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Vote Status
+            </Typography>
+            {submittedVotes.length === 0 ? (
+              <Typography color="text.secondary">
+                No votes submitted yet
+              </Typography>
+            ) : (
+              <List>
+                {submittedVotes.map((vote, index) => (
+                  <ListItem key={index}>
+                    <ListItemIcon>
+                      {vote.status === 'processed' ? (
+                        <CheckCircleIcon color="success" />
+                      ) : vote.status === 'error' ? (
+                        <ErrorIcon color="error" />
+                      ) : (
+                        <CircularProgress size={24} />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={vote.address}
+                      secondary={
+                        vote.status === 'processed' ? 'Vote processed' :
+                        vote.status === 'error' ? 'Vote failed' :
+                        'Processing vote...'
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
         <Button
@@ -423,7 +534,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         <Button
           variant="contained"
           onClick={onNext}
-          disabled={!voteStatus.voteConfirmed}
+          disabled={!allVotesProcessed}
         >
           Next
         </Button>
