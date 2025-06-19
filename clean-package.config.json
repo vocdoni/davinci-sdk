@@ -14,12 +14,16 @@
         "import": "./dist/contracts.mjs",
         "require": "./dist/contracts.js"
       },
+      "./core": {
+        "types": "./dist/core.d.ts",
+        "import": "./dist/core.mjs",
+        "require": "./dist/core.js"
+      },
       "./sequencer": {
         "types": "./dist/sequencer.d.ts",
         "import": "./dist/sequencer.mjs",
         "require": "./dist/sequencer.js"
       },
-      "./types": "./dist/types.d.ts",
       "./package.json": "./package.json"
     }
   },
