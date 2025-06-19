@@ -494,20 +494,27 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                 No votes submitted yet
               </Typography>
             ) : (
-              <List>
+              <>
+                <List>
                 {submittedVotes.map((vote, index) => (
                   <ListItem key={index}>
                     <ListItemIcon>
-                      {vote.status === 'processed' ? (
-                        <CheckCircleIcon color="success" />
-                      ) : vote.status === 'error' ? (
+                      {vote.status === 'error' ? (
                         <ErrorIcon color="error" />
-                      ) : vote.status === 'verified' ? (
-                        <CloudDoneIcon color="info" />
-                      ) : vote.status === 'aggregated' ? (
-                        <HourglassEmptyIcon color="warning" />
-                      ) : vote.status === 'settled' ? (
+                      ) : vote.status === 'verified' || vote.status === 'aggregated' || vote.status === 'settled' ? (
                         <CheckCircleIcon color="success" />
+                      ) : vote.status === 'processed' ? (
+                        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                          <CheckCircleIcon color="success" />
+                          <CircularProgress 
+                            size={24} 
+                            sx={{ 
+                              position: 'absolute',
+                              left: 0,
+                              color: 'rgba(0, 0, 0, 0.3)'
+                            }} 
+                          />
+                        </Box>
                       ) : (
                         <CircularProgress size={24} />
                       )}
@@ -526,6 +533,19 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                   </ListItem>
                 ))}
               </List>
+
+              {submittedVotes.length > 0 && !allVotesProcessed && (
+                <Alert 
+                  severity="info" 
+                  sx={{ mt: 2 }}
+                  icon={<CircularProgress size={20} />}
+                >
+                  <Typography>
+                    Waiting for all votes to be processed before proceeding...
+                  </Typography>
+                </Alert>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
