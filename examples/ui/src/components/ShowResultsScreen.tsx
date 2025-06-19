@@ -11,6 +11,7 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  LinearProgress,
 } from '@mui/material';
 import { 
   ProcessRegistryService,
@@ -127,20 +128,50 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
         <CardContent>
           {results.questions.map((question, questionIndex) => (
             <Box key={questionIndex} sx={{ mb: 4 }}>
-              <Typography variant="h6" align="left" gutterBottom>
-                {question.title}
-              </Typography>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" align="left" gutterBottom>
+                  {question.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" align="left">
+                  Total votes: {question.choices.reduce((acc, curr) => acc + curr.votes, 0)}
+                </Typography>
+              </Box>
               
-              <List>
-                {question.choices.map((choice, choiceIndex) => (
-                  <ListItem key={choiceIndex}>
-                    <ListItemText
-                      primary={choice.title}
-                      secondary={`Votes: ${choice.votes}`}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              <Box>
+                {question.choices.map((choice, choiceIndex) => {
+                  const totalVotes = question.choices.reduce((acc, curr) => acc + curr.votes, 0);
+                  return (
+                    <Box key={choiceIndex} sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="body1">{choice.title}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {choice.votes} votes ({Math.round((choice.votes / totalVotes) * 100)}%)
+                        </Typography>
+                      </Box>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={(choice.votes / totalVotes) * 100}
+                        sx={{ 
+                          height: 10, 
+                          borderRadius: 5,
+                          backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: 5,
+                            backgroundColor: [
+                            '#2B6CB0',
+                            '#38A169',
+                            '#805AD5',
+                            '#D53F8C',
+                            '#DD6B20',
+                            '#718096'
+                          ][choiceIndex % 6]
+                          }
+                        }}
+                      />
+                    </Box>
+                  );
+                })}
+              </Box>
 
               {questionIndex < results.questions.length - 1 && (
                 <Divider sx={{ my: 2 }} />

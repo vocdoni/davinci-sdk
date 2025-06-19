@@ -118,30 +118,6 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
             </Alert>
           ) : (
             <>
-              {processState.txHash && (
-                <Alert 
-                  severity="info" 
-                  sx={{ 
-                    mb: 2,
-                    '& .MuiAlert-message': {
-                      width: '100%'
-                    }
-                  }}
-                >
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Link
-                      href={`https://sepolia.etherscan.io/tx/${processState.txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      color="primary"
-                      sx={{ display: 'inline-block' }}
-                    >
-                      View transaction on Etherscan
-                    </Link>
-                  </Box>
-                </Alert>
-              )}
-
               <List>
                 <ListItem>
                   <ListItemIcon>
@@ -164,6 +140,7 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
                     }
                   />
                 </ListItem>
+
                 <ListItem>
                   <ListItemIcon>
                     {processState.resultsReady ? (
@@ -186,6 +163,22 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
                   />
                 </ListItem>
               </List>
+
+              {processState.txHash && (
+                <Box sx={{ mt: 2, mb: 3, textAlign: 'center' }}>
+                  <Typography variant="body1" color="text.secondary" gutterBottom>
+                    {processState.txStatus}
+                  </Typography>
+                  <Link
+                    href={`https://sepolia.etherscan.io/tx/${processState.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="primary"
+                  >
+                    View on Etherscan
+                  </Link>
+                </Box>
+              )}
 
               <Button
                 fullWidth
