@@ -1,0 +1,73 @@
+name: Deploy UI to GitHub Pages
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  deploy:
+    # Only run when the PR is labeled with "deploy-ui"
+    if: contains(github.event.label.name, 'deploy-ui')
+    runs-on: ubuntu-latest
+    
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+      contents: read    # to checkout the repository
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: |
+            yarn.lock
+            examples/ui/yarn.lock
+
+      - name: Install root dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install UI dependencies and build SDK
+        working-directory: examples/ui
+        run: yarn install --frozen-lockfile
+
+      - name: Build UI for production
+        working-directory: examples/ui
+        run: |
+          yarn build
+        env:
+          NODE_ENV: production
+          NEXT_LINT: false
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: examples/ui/out
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Comment deployment URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 UI deployed to GitHub Pages: ${{ steps.deployment.outputs.page_url }}'
+            })
