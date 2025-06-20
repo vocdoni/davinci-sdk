@@ -71,6 +71,12 @@ RPC_URL=
     - [Alchemy](https://www.alchemy.com/)
     - [QuickNode](https://www.quicknode.com/)
 
+- **ORGANIZATION_REGISTRY_ADDRESS** (Optional): Custom organization registry contract address
+  - If not provided, will use the default deployed address for the network
+
+- **PROCESS_REGISTRY_ADDRESS** (Optional): Custom process registry contract address
+  - If not provided, will use the default deployed address for the network
+
 ## Running the Application
 
 ### Development Mode

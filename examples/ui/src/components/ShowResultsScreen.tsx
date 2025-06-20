@@ -16,8 +16,8 @@ import {
 import { 
   ProcessRegistryService,
   VocdoniApiService,
-  deployedAddresses,
 } from '@vocdoni/davinci-sdk';
+import { getProcessRegistryAddress } from '../utils/contractAddresses';
 import { Wallet, JsonRpcSigner } from 'ethers';
 
 interface ShowResultsScreenProps {
@@ -54,7 +54,7 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
 
         // Get process results
         const registry = new ProcessRegistryService(
-          deployedAddresses.processRegistry.sepolia,
+          getProcessRegistryAddress(),
           wallet
         );
         const electionProcess = await registry.getProcess(details.processId);

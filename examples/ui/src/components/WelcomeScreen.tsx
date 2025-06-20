@@ -18,7 +18,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
-import { deployedAddresses } from '@vocdoni/davinci-sdk';
+import { getContractAddresses } from '../utils/contractAddresses';
 
 interface WelcomeScreenProps {
   onNext: () => void;
@@ -32,6 +32,9 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
     process: string;
     organization: string;
   } | null>(null);
+
+  // Get contract addresses (from env vars or fallback to deployed addresses)
+  const contractAddresses = getContractAddresses();
 
   useEffect(() => {
     checkConnection();
@@ -117,13 +120,13 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
             </ListItem>
             <ListItem>
               <Tooltip title={
-                apiAddresses && apiAddresses.organization === deployedAddresses.organizationRegistry.sepolia.toLowerCase() ?
+                apiAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ?
                 "Contract address verified" :
                 "Contract address mismatch between SDK and API"
               }>
                 <ListItemIcon>
                   {apiAddresses ? (
-                    apiAddresses.organization === deployedAddresses.organizationRegistry.sepolia.toLowerCase() ? (
+                    apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ? (
                       <CheckCircleIcon color="success" />
                     ) : (
                       <ErrorIcon color="error" />
@@ -137,25 +140,25 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
                 primary="Organization Registry Contract" 
                 secondary={
                   <Link 
-                    href={`https://sepolia.etherscan.io/address/${deployedAddresses.organizationRegistry.sepolia}`}
+                    href={`https://sepolia.etherscan.io/address/${contractAddresses.organizationRegistry}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
                   >
-                    {deployedAddresses.organizationRegistry.sepolia}
+                    {contractAddresses.organizationRegistry}
                   </Link>
                 }
               />
             </ListItem>
             <ListItem>
               <Tooltip title={
-                apiAddresses && apiAddresses.process === deployedAddresses.processRegistry.sepolia.toLowerCase() ?
+                apiAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ?
                 "Contract address verified" :
                 "Contract address mismatch between SDK and API"
               }>
                 <ListItemIcon>
                   {apiAddresses ? (
-                    apiAddresses.process === deployedAddresses.processRegistry.sepolia.toLowerCase() ? (
+                    apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ? (
                       <CheckCircleIcon color="success" />
                     ) : (
                       <ErrorIcon color="error" />
@@ -169,12 +172,12 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
                 primary="Process Registry Contract" 
                 secondary={
                   <Link 
-                    href={`https://sepolia.etherscan.io/address/${deployedAddresses.processRegistry.sepolia}`}
+                    href={`https://sepolia.etherscan.io/address/${contractAddresses.processRegistry}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
                   >
-                    {deployedAddresses.processRegistry.sepolia}
+                    {contractAddresses.processRegistry}
                   </Link>
                 }
               />
@@ -184,8 +187,8 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
       </Card>
 
       {apiAddresses && (
-        apiAddresses.process !== deployedAddresses.processRegistry.sepolia.toLowerCase() ||
-        apiAddresses.organization !== deployedAddresses.organizationRegistry.sepolia.toLowerCase()
+        apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
+        apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
       ) ? (
         <Alert severity="error" sx={{ mb: 2 }}>
           Contract addresses mismatch between SDK and API. Please check the configuration.
@@ -200,8 +203,8 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
           !isConnected || 
           isLoading || 
           Boolean(apiAddresses && (
-            apiAddresses.process !== deployedAddresses.processRegistry.sepolia.toLowerCase() ||
-            apiAddresses.organization !== deployedAddresses.organizationRegistry.sepolia.toLowerCase()
+            apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
+            apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
           ))
         }
         onClick={onNext}
