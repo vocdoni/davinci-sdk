@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
-  basePath: '/davinci-sdk',
+  basePath: process.env.NODE_ENV === 'production' ? '/davinci-sdk' : '',
   images: {
     unoptimized: true,
   },
