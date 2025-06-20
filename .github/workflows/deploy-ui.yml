@@ -43,12 +43,14 @@ jobs:
       - name: Debug module resolution
         run: |
           cd examples/ui
-          echo "=== Checking if SDK module exists ==="
-          ls -la node_modules/@vocdoni/ || echo "No @vocdoni directory found"
-          echo "=== Checking package.json dependencies ==="
-          cat package.json | grep -A5 -B5 davinci-sdk
-          echo "=== Checking if tarball exists ==="
-          ls -la davinci-sdk.tgz || echo "No tarball found"
+          echo "=== Checking SDK module structure ==="
+          ls -la node_modules/@vocdoni/davinci-sdk/ || echo "No davinci-sdk directory found"
+          echo "=== Checking SDK package.json ==="
+          cat node_modules/@vocdoni/davinci-sdk/package.json || echo "No package.json in SDK"
+          echo "=== Checking SDK main entry ==="
+          ls -la node_modules/@vocdoni/davinci-sdk/dist/ || echo "No dist directory"
+          echo "=== Testing Node.js module resolution ==="
+          node -e "try { console.log('SDK found:', require.resolve('@vocdoni/davinci-sdk')); } catch(e) { console.log('SDK resolution failed:', e.message); }"
         
       - name: Build with Next.js
         run: |
