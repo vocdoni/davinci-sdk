@@ -27,10 +27,10 @@ import {
   ProcessStatus,
   Census,
   EncryptionKey,
-  deployedAddresses,
   TxStatus
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
+import { getProcessRegistryAddress } from '../utils/contractAddresses';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -236,7 +236,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       // Step 4: Submit process on-chain
       setProgress(70);
       const registry = new ProcessRegistryService(
-        deployedAddresses.processRegistry.sepolia,
+        getProcessRegistryAddress(),
         wallet
       );
 

@@ -19,10 +19,10 @@ import {
   ProcessRegistryService,
   ProcessStatus,
   SmartContractService,
-  deployedAddresses,
   TxStatus
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
+import { getProcessRegistryAddress } from '../utils/contractAddresses';
 
 interface EndProcessScreenProps {
   onBack: () => void;
@@ -56,7 +56,7 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
       const details = JSON.parse(detailsStr);
 
       const registry = new ProcessRegistryService(
-        deployedAddresses.processRegistry.sepolia,
+        getProcessRegistryAddress(),
         wallet
       );
 

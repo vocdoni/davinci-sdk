@@ -46,7 +46,7 @@ jobs:
           yarn build
         env:
           API_URL: ${{ secrets.API_URL }}
-          SEPOLIA_RPC: ${{ secrets.SEPOLIA_RPC }}
+          RPC_URL: ${{ secrets.SEPOLIA_RPC }}
           ESLINT_NO_DEV_ERRORS: true
           
       - name: Upload artifact

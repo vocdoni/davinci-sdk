@@ -11,7 +11,8 @@ import {
   Link,
 } from '@mui/material';
 import { Wallet, JsonRpcSigner } from 'ethers';
-import { OrganizationRegistryService, SmartContractService, deployedAddresses, TxStatus } from '@vocdoni/davinci-sdk';
+import { OrganizationRegistryService, SmartContractService, TxStatus } from '@vocdoni/davinci-sdk';
+import { getOrganizationRegistryAddress } from '../utils/contractAddresses';
 
 interface CreateOrganizationScreenProps {
   onBack: () => void;
@@ -39,7 +40,7 @@ export default function CreateOrganizationScreen({ onBack, onNext, wallet }: Cre
       setError(null);
 
       const orgService = new OrganizationRegistryService(
-        deployedAddresses.organizationRegistry.sepolia,
+        getOrganizationRegistryAddress(),
         wallet
       );
 

@@ -26,9 +26,9 @@ import {
   ProcessStatus,
   Census,
   EncryptionKey,
-  deployedAddresses
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
+import { getProcessRegistryAddress } from '../utils/contractAddresses';
 
 interface ConfigureVoteScreenProps {
   onBack: () => void;
@@ -218,7 +218,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       // Step 4: Submit process on-chain
       setProgress(70);
       const registry = new ProcessRegistryService(
-        deployedAddresses.processRegistry.sepolia,
+        getProcessRegistryAddress(),
         wallet
       );
 
