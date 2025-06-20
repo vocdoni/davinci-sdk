@@ -3,6 +3,8 @@ name: Deploy UI to GitHub Pages
 on:
   pull_request:
     types: [labeled]
+  push:
+    branches: [feature/ui_gha]
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -20,7 +22,7 @@ jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
-    if: contains(github.event.label.name, 'deploy-ui')
+    if: contains(github.event.label.name, 'deploy-ui') || github.event_name == 'push'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'yarn'
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -43,11 +44,14 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
         
+      - name: Clear yarn cache
+        run: yarn cache clean
+        
       - name: Install UI dependencies
         run: |
           cd examples/ui
           rm -f yarn.lock
-          yarn install
+          yarn install --no-lockfile
         
       - name: Build with Next.js
         run: |
