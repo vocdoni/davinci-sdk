@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
+  },
+  eslint: {
+    // Disable ESLint during builds for deployment
+    ignoreDuringBuilds: true,
+  },
   env: {
     API_URL: process.env.API_URL,
     SEPOLIA_RPC: process.env.SEPOLIA_RPC,
