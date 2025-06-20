@@ -40,6 +40,16 @@ jobs:
           cd examples/ui
           yarn install
         
+      - name: Debug module resolution
+        run: |
+          cd examples/ui
+          echo "=== Checking if SDK module exists ==="
+          ls -la node_modules/@vocdoni/ || echo "No @vocdoni directory found"
+          echo "=== Checking package.json dependencies ==="
+          cat package.json | grep -A5 -B5 davinci-sdk
+          echo "=== Checking if tarball exists ==="
+          ls -la davinci-sdk.tgz || echo "No tarball found"
+        
       - name: Build with Next.js
         run: |
           cd examples/ui
