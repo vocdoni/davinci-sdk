@@ -9,6 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+yarn.lock
+davinci-sdk.tgz
 
 # testing
 /coverage
