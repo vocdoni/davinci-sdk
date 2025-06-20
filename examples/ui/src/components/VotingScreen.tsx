@@ -47,11 +47,11 @@ import { useWallets } from '@/context/WalletContext';
 const getCircuitUrls = (info: InfoResponse) => {
   const isDev = process.env.NODE_ENV === 'development';
   return {
-    ballotProofExec: isDev ? '/wasm_exec.js' : info.ballotProofWasmHelperExecJsUrl,
-    ballotProof: isDev ? '/ballotproof.wasm' : info.ballotProofWasmHelperUrl,
-    circuit: isDev ? '/ballot_proof.wasm' : info.circuitUrl,
-    provingKey: isDev ? '/ballot_proof_pkey.zkey' : info.provingKeyUrl,
-    verificationKey: isDev ? '/ballot_proof_vkey.json' : info.verificationKeyUrl,
+    ballotProofExec: info.ballotProofWasmHelperExecJsUrl,
+    ballotProof: info.ballotProofWasmHelperUrl,
+    circuit: info.circuitUrl,
+    provingKey: info.provingKeyUrl,
+    verificationKey: info.verificationKeyUrl,
   };
 };
 
