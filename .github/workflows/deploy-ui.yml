@@ -44,14 +44,10 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
         
-      - name: Clear yarn cache
-        run: yarn cache clean
-        
       - name: Install UI dependencies
         run: |
           cd examples/ui
-          rm -f yarn.lock
-          yarn install --no-lockfile
+          yarn install --frozen-lockfile
         
       - name: Build with Next.js
         run: |
