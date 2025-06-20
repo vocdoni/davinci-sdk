@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
         
+      - name: Build SDK
+        run: yarn build
+        
       - name: Install UI dependencies
         run: |
           cd examples/ui
