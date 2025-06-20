@@ -57,15 +57,15 @@ Edit the `.env` file with your configuration:
 # Vocdoni API endpoint
 API_URL=
 
-# Sepolia RPC endpoint
-SEPOLIA_RPC=
+# Ethereum RPC endpoint
+RPC_URL=
 ```
 
 #### Environment Variables
 
 - **API_URL**: The Vocdoni sequencer API endpoint
   
-- **SEPOLIA_RPC**: Ethereum Sepolia testnet RPC endpoint
+- **RPC_URL**: Ethereum RPC endpoint
   - You can use public endpoints or get your own from providers like:
     - [Infura](https://infura.io/)
     - [Alchemy](https://www.alchemy.com/)

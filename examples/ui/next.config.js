@@ -12,7 +12,7 @@ const nextConfig = {
   },
   env: {
     API_URL: process.env.API_URL,
-    SEPOLIA_RPC: process.env.SEPOLIA_RPC,
+    RPC_URL: process.env.RPC_URL,
     PRIVATE_KEY: process.env.PRIVATE_KEY,
   },
   webpack: (config) => {

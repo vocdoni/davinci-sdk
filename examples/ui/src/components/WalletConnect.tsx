@@ -66,7 +66,7 @@ export default function WalletConnect({ onWalletConnected }: WalletConnectProps)
         throw new Error('Invalid private key format');
       }
 
-      const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
+      const provider = new JsonRpcProvider(process.env.RPC_URL);
       const wallet = new Wallet(privateKey, provider);
       const address = await wallet.getAddress();
       const balance = await provider.getBalance(address);
