@@ -25,13 +25,13 @@ const createOutput = (name, options) => [
     file: `dist/${name}.umd.js`,
     format: 'umd',
     globals: {
-      axios: 'axios',
+      'axios': 'axios',
       '@vocdoni/davinci-contracts': 'davinciContracts',
-      ethers: 'ethers',
-      snarkjs: 'snarkjs',
-      '@ethereumjs/common': 'ethereumjsCommon',
-    },
-  },
+      'ethers': 'ethers',
+      'snarkjs': 'snarkjs',
+      '@ethereumjs/common': 'ethereumjsCommon'
+    }
+  }
 ];
 
 export default [
@@ -49,48 +49,35 @@ export default [
     input: 'src/index.ts',
     includeSnarkjs: true
   }),
-
-  // Contracts bundle
-  createBundle(
-    {
-      plugins: [json(), commonjs(), resolve(), esbuild({ target: 'esnext' })],
-      output: createOutput('contracts', { umdName: 'ContractsSDK' }),
-    },
-    {
-      input: 'src/contracts/index.ts',
-      includeSnarkjs: true,
-    }
-  ),
-
-  // Contracts types
-  createBundle(
-    {
-      plugins: [dts()],
-      output: { file: 'dist/contracts.d.ts', format: 'es' },
-    },
-    {
-      input: 'src/contracts/index.ts',
-      includeSnarkjs: true,
-    }
-  ),
-
   // Sequencer bundle
-  createBundle(
-    {
-      plugins: [
-        json(),
-        commonjs(),
-        resolve({ browser: true }),
-        nodePolyfills(),
-        esbuild({ target: 'esnext' }),
-      ],
-      output: createOutput('sequencer', { umdName: 'SequencerSDK' }),
-    },
-    {
-      input: 'src/sequencer/index.ts',
-      includeSnarkjs: false,
-    }
-  ),
+  createBundle({
+    plugins: [
+      json(),
+      commonjs(),
+      resolve({ browser: true }),
+      nodePolyfills(),
+      esbuild({ target: 'esnext' })
+    ],
+    output: createOutput('sequencer', { umdName: 'Sequencer' })
+  }, {
+    input: 'src/sequencer/index.ts',
+    includeSnarkjs: true
+  }),
+  // Contracts bundle
+  createBundle({
+    plugins: [
+      json(),
+      commonjs(),
+      resolve({ browser: true }),
+      nodePolyfills(),
+      esbuild({ target: 'esnext' })
+    ],
+    output: createOutput('contracts', { umdName: 'Contracts' })
+  }, {
+    input: 'src/contracts/index.ts',
+    includeSnarkjs: true
+  }),
+
   // Main types bundle
   createBundle({
     plugins: [dts()],
