@@ -113,10 +113,11 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    getCensusProof(censusRoot: string, key: string): Promise<CensusProof> {
+    getCensusProof(censusURI: string, censusRoot: string, key: string): Promise<CensusProof> {
         return this.request<CensusProof>({
             method: "GET",
-            url: `/censuses/${censusRoot}/proof`,
+            baseURL: censusURI.replace(/0x[0-9a-f]+$/, ""), // Ensure we don't append the root multiple times
+            url: `${censusRoot}/proof`,
             params: {key}
         });
     }
