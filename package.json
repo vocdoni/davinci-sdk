@@ -1,12 +1,8 @@
 {
   "name": "@vocdoni/davinci-sdk",
-  "version": "0.0.3-beta1",
+  "version": "0.0.3-beta2",
   "type": "module",
   "main": "src/index.ts",
-  "files": [
-    "dist",
-    "README.md"
-  ],
   "exports": {
     ".": "./src/index.ts",
     "./contracts": "./src/contracts/index.ts",

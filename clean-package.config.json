@@ -3,6 +3,10 @@
     "main": "dist/contracts.js",
     "module": "dist/contracts.mjs",
     "types": "dist/contracts.d.ts",
+    "files": [
+      "dist",
+      "README.md"
+    ],
     "exports": {
       ".": {
         "types": "./dist/types.d.ts",
