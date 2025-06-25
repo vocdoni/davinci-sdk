@@ -252,7 +252,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
           censusOrigin: 1,
           maxVotes: censusSize.toString(),
           censusRoot: censusRoot,
-          censusURI: censusId
+          censusURI: (process.env.API_URL || '') + `/censuses/${censusRoot}`,
         } as Census,
         metadataUrl,
         organizationId,

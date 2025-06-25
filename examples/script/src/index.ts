@@ -366,7 +366,7 @@ async function step10_newProcessOnChain(
                 censusOrigin: 1,
                 maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
-                censusURI: args.censusId
+                censusURI: API_URL + `/censuses/${args.censusRoot}`
             } as Census,
             args.metadataUri,
             orgId,
