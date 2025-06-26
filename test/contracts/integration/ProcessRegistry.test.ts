@@ -6,10 +6,8 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet, hexlify } from "ethers";
 import {
-    OrganizationRegistryService,
     ProcessRegistryService,
     ProcessStatus,
-    SmartContractService, 
     deployedAddresses as addresses
 } from "../../../src/contracts";
 import { BallotMode, Census, EncryptionKey } from "../../../src/core";
@@ -19,7 +17,6 @@ jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC!);
 const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
 
-const ORG_REGISTRY_ADDR  = addresses.organizationRegistry.sepolia;
 const PROC_REGISTRY_ADDR = addresses.processRegistry.sepolia;
 
 function randomHex(bytes: number): string {
@@ -31,10 +28,8 @@ function randomHex(bytes: number): string {
 }
 
 describe("ProcessRegistryService Integration (Sepolia)", () => {
-    let orgService: OrganizationRegistryService;
     let procService: ProcessRegistryService;
 
-    let orgId: string;
     let processId: string;
     let initStateRoot: string;
     let initDuration: number;
@@ -42,46 +37,16 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
     const metadataURI = `ipfs://meta-${Date.now()}`;
 
     beforeAll(() => {
-        orgService  = new OrganizationRegistryService(ORG_REGISTRY_ADDR, wallet);
         procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);
     });
 
     afterAll(() => {
-        orgService.removeAllListeners();
         procService.removeAllListeners();
     });
 
     it("should run full process lifecycle and emit events", async () => {
         //
-        // 1) CREATE ORGANIZATION
-        //
-        orgId = Wallet.createRandom().address;
-        const orgName = `Org-${Date.now()}`;
-        const orgMeta = `ipfs://org-meta-${Date.now()}`;
-
-        const orgCreated = new Promise<void>((resolve) => {
-            orgService.onOrganizationCreated((id: string, creator: string) => {
-                if (
-                    id.toLowerCase() === orgId.toLowerCase() &&
-                    creator.toLowerCase() === wallet.address.toLowerCase()
-                ) resolve();
-            });
-        });
-
-        await SmartContractService.executeTx(
-            orgService.createOrganization(orgId, orgName, orgMeta, [wallet.address])
-        );
-        await orgCreated;
-
-        // verify
-        const { name: fetchedName, metadataURI: fetchedMeta } =
-            await orgService.getOrganization(orgId);
-        expect(fetchedName).toBe(orgName);
-        expect(fetchedMeta).toBe(orgMeta);
-        expect(await orgService.isAdministrator(orgId, wallet.address)).toBe(true);
-
-        //
-        // 2) PREPARE PROCESS PARAMETERS
+        // 1) PREPARE PROCESS PARAMETERS
         //
         processId      = randomHex(32);
         initStateRoot  = randomHex(32);
@@ -110,14 +75,14 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         };
 
         //
-        // 3) NEW PROCESS & WAIT ProcessCreated
+        // 2) NEW PROCESS & WAIT ProcessCreated
         //
         const procCreated = new Promise<void>((resolve) => {
             procService.onProcessCreated((id: string, creator: string) => {
-                if (
-                    id.toLowerCase() === processId.toLowerCase() &&
-                    creator.toLowerCase() === wallet.address.toLowerCase()
-                ) resolve();
+                processId = id; // Capture the actual process ID from the event
+                if (creator.toLowerCase() === wallet.address.toLowerCase()) {
+                    resolve();
+                }
             });
         });
 
@@ -128,8 +93,6 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
             ballotMode,
             initCensus,
             metadataURI,
-            orgId,
-            processId,
             encryptionKey,
             BigInt(initStateRoot)
         );
@@ -156,7 +119,6 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
 
         // initial on‐chain read
         const stored = await procService.getProcess(processId);
-        expect(stored.organizationId.toLowerCase()).toBe(orgId.toLowerCase());
         expect(stored.status).toBe(BigInt(ProcessStatus.READY));
         expect(stored.duration).toBe(BigInt(initDuration));
         expect(stored.metadataURI).toBe(metadataURI);
@@ -169,7 +131,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         );
 
         //
-        // 4) UPDATE CENSUS & WAIT CensusUpdated
+        // 3) UPDATE CENSUS & WAIT CensusUpdated
         //
         const newCensus: Census = {
             ...initCensus,
@@ -213,7 +175,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         expect(afterC.census.maxVotes).toBe(BigInt(newCensus.maxVotes));
 
         //
-        // 5) UPDATE DURATION & WAIT ProcessDurationChanged
+        // 4) UPDATE DURATION & WAIT ProcessDurationChanged
         //
         // compute a new end time 10 minutes from now
         const now = Math.floor(Date.now() / 1000);
@@ -253,13 +215,13 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         expect(afterD.duration).toBe(BigInt(newDuration));
 
         //
-        // 6) END PROCESS & WAIT ProcessStatusChanged
+        // 5) END PROCESS & WAIT ProcessStatusChanged
         //
         const ended = new Promise<void>((resolve) => {
-            procService.onProcessStatusChanged((id: string, status: bigint) => {
+            procService.onProcessStatusChanged((id: string, oldStatus: bigint, newStatus: bigint) => {
                 if (
                     id.toLowerCase() === processId.toLowerCase() &&
-                    status === BigInt(ProcessStatus.ENDED)
+                    newStatus === BigInt(ProcessStatus.ENDED)
                 ) resolve();
             });
         });
