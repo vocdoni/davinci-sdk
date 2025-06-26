@@ -18,10 +18,11 @@ export class SetResultError          extends Error {}
 
 // Event callback types
 type ProcessCreatedCallback      = (processID: string, creator: string) => void;
-type StatusChangedCallback       = (processID: string, newStatus: bigint) => void;
+type StatusChangedCallback       = (processID: string, oldStatus: bigint, newStatus: bigint) => void;
 type CensusUpdatedCallback      = (processID: string, root: string, uri: string, maxVotes: bigint) => void;
 type DurationChangedCallback     = (processID: string, duration: bigint) => void;
-type StateRootUpdatedCallback    = (processID: string, newStateRoot: bigint) => void;
+type StateRootUpdatedCallback    = (processID: string, sender: string, newStateRoot: bigint) => void;
+type ProcessResultsSetCallback   = (processID: string, sender: string, result: bigint[]) => void;
 
 export enum ProcessStatus {
     READY   = 0,
@@ -51,7 +52,48 @@ export class ProcessRegistryService extends SmartContractService {
     }
 
     async getChainID(): Promise<string> {
-        return this.contract.chainID();
+        const chainId = await this.contract.chainID();
+        return chainId.toString();
+    }
+
+    async getNextProcessId(): Promise<string> {
+        return this.contract.getNextProcessId();
+    }
+
+    async getProcessEndTime(processID: string): Promise<bigint> {
+        return this.contract.getProcessEndTime(processID);
+    }
+
+    async getRVerifierVKeyHash(): Promise<string> {
+        return this.contract.getRVerifierVKeyHash();
+    }
+
+    async getSTVerifierVKeyHash(): Promise<string> {
+        return this.contract.getSTVerifierVKeyHash();
+    }
+
+    async getMaxCensusOrigin(): Promise<bigint> {
+        return this.contract.MAX_CENSUS_ORIGIN();
+    }
+
+    async getMaxStatus(): Promise<bigint> {
+        return this.contract.MAX_STATUS();
+    }
+
+    async getProcessNonce(address: string): Promise<bigint> {
+        return this.contract.processNonce(address);
+    }
+
+    async getProcessDirect(processID: string) {
+        return this.contract.processes(processID);
+    }
+
+    async getRVerifier(): Promise<string> {
+        return this.contract.rVerifier();
+    }
+
+    async getSTVerifier(): Promise<string> {
+        return this.contract.stVerifier();
     }
 
     // ─── WRITES ────────────────────────────────────────────────────────
@@ -63,8 +105,6 @@ export class ProcessRegistryService extends SmartContractService {
         ballotMode: BallotMode,
         census: Census,
         metadata: string,
-        organizationId: string,
-        processID: string,
         encryptionKey: EncryptionKey,
         initStateRoot: bigint
     ) {
@@ -84,8 +124,6 @@ export class ProcessRegistryService extends SmartContractService {
                 ballotMode,
                 contractCensus,
                 metadata,
-                organizationId,
-                processID,
                 encryptionKey,
                 initStateRoot
             ).catch(e => { throw new CreateProcessError(e.message) }),
@@ -182,7 +220,7 @@ export class ProcessRegistryService extends SmartContractService {
     onProcessStatusChanged(cb: StatusChangedCallback): void {
         this.contract.on(
             this.contract.filters.ProcessStatusChanged(),
-            this.normalizeListener<[string, bigint]>(cb)
+            this.normalizeListener<[string, bigint, bigint]>(cb)
         );
     }
 
@@ -203,7 +241,14 @@ export class ProcessRegistryService extends SmartContractService {
     onStateRootUpdated(cb: StateRootUpdatedCallback): void {
         this.contract.on(
             this.contract.filters.ProcessStateRootUpdated(),
-            this.normalizeListener<[string, bigint]>(cb)
+            this.normalizeListener<[string, string, bigint]>(cb)
+        );
+    }
+
+    onProcessResultsSet(cb: ProcessResultsSetCallback): void {
+        this.contract.on(
+            this.contract.filters.ProcessResultsSet(),
+            this.normalizeListener<[string, string, bigint[]]>(cb)
         );
     }
 
