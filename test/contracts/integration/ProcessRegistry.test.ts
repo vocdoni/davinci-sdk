@@ -108,11 +108,9 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                     expect(event.response).toEqual({ success: true });
                     break;
                 case 'reverted':
-                    fail('Transaction should not revert');
-                    break;
+                    throw new Error('Transaction should not revert');
                 case 'failed':
-                    fail('Transaction should not fail');
-                    break;
+                    throw new Error('Transaction should not fail');
             }
         }
         await procCreated;
@@ -161,11 +159,9 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                     expect(event.response).toEqual({ success: true });
                     break;
                 case 'reverted':
-                    fail('Transaction should not revert');
-                    break;
+                    throw new Error('Transaction should not revert');
                 case 'failed':
-                    fail('Transaction should not fail');
-                    break;
+                    throw new Error('Transaction should not fail');
             }
         }
         await censusUpdated;
@@ -202,11 +198,9 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                     expect(event.response).toEqual({ success: true });
                     break;
                 case 'reverted':
-                    fail('Transaction should not revert');
-                    break;
+                    throw new Error('Transaction should not revert');
                 case 'failed':
-                    fail('Transaction should not fail');
-                    break;
+                    throw new Error('Transaction should not fail');
             }
         }
         await durationChanged;
@@ -238,11 +232,9 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                     expect(event.response).toEqual({ success: true });
                     break;
                 case 'reverted':
-                    fail('Transaction should not revert');
-                    break;
+                    throw new Error('Transaction should not revert');
                 case 'failed':
-                    fail('Transaction should not fail');
-                    break;
+                    throw new Error('Transaction should not fail');
             }
         }
         await ended;

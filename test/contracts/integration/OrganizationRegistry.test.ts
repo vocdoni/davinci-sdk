@@ -64,12 +64,10 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
           break;
 
         case 'reverted':
-          fail('Transaction should not revert');
-          break;
+          throw new Error('Transaction should not revert');
 
         case 'failed':
-          fail('Transaction should not fail');
-          break;
+          throw new Error('Transaction should not fail');
       }
     }
   });
@@ -95,7 +93,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
       if (event.status === 'failed') {
         expect(event.error).toBeInstanceOf(CreateOrganizationError);
       } else {
-        fail(`Expected failed status but got ${event.status}`);
+        throw new Error(`Expected failed status but got ${event.status}`);
       }
     }
 
@@ -108,6 +106,12 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     const org = await service.getOrganization(admin);
     expect(org.name).toBe('');
     expect(org.metadataURI).toBe('');
+  });
+
+  it('should get organization count', async () => {
+    const initialCount = await service.getOrganizationCount();
+    expect(typeof initialCount).toBe('number');
+    expect(initialCount).toBeGreaterThanOrEqual(0);
   });
 
   afterAll(() => {

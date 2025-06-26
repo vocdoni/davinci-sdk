@@ -56,8 +56,8 @@ export class ProcessRegistryService extends SmartContractService {
         return chainId.toString();
     }
 
-    async getNextProcessId(): Promise<string> {
-        return this.contract.getNextProcessId();
+    async getNextProcessId(organizationId: string): Promise<string> {
+        return this.contract.getNextProcessId(organizationId);
     }
 
     async getProcessEndTime(processID: string): Promise<bigint> {

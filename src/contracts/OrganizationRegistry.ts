@@ -1,6 +1,6 @@
 import {
-  IOrganizationRegistry__factory,
-  type IOrganizationRegistry,
+  OrganizationRegistry__factory,
+  type OrganizationRegistry,
 } from "@vocdoni/davinci-contracts";
 import { SmartContractService } from "./SmartContractService";
 import type { ContractRunner } from "ethers";
@@ -25,11 +25,11 @@ export interface OrganizationInfo {
 }
 
 export class OrganizationRegistryService extends SmartContractService {
-  private contract: IOrganizationRegistry;
+  private contract: OrganizationRegistry;
 
   constructor(contractAddress: string, runner: ContractRunner) {
     super();
-    this.contract = IOrganizationRegistry__factory.connect(
+    this.contract = OrganizationRegistry__factory.connect(
       contractAddress,
       runner,
     );
@@ -46,6 +46,11 @@ export class OrganizationRegistryService extends SmartContractService {
 
   async isAdministrator(id: string, address: string): Promise<boolean> {
     return this.contract.isAdministrator(id, address);
+  }
+
+  async getOrganizationCount(): Promise<number> {
+    const count = await this.contract.organizationCount();
+    return Number(count);
   }
 
   createOrganization(
