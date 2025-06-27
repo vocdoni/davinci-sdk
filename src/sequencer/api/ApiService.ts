@@ -121,12 +121,12 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    submitVote(vote: VoteRequest): Promise<string> {
-        return this.request<{ voteId: string }>({
+    async submitVote(vote: VoteRequest): Promise<void> {
+        await this.request({
             method: "POST",
             url: "/votes",
             data: vote,
-        }).then(res => res.voteId);
+        });
     }
 
     getVoteStatus(
