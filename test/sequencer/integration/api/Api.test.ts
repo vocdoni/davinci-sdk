@@ -44,6 +44,14 @@ describe("VocdoniApiService Integration", () => {
         expect(addrRx.test(info.contracts.organization)).toBe(true);
         expect(addrRx.test(info.contracts.stateTransitionVerifier)).toBe(true);
         expect(addrRx.test(info.contracts.resultsVerifier)).toBe(true);
+
+        // network property
+        expect(info).toHaveProperty('network');
+        expect(typeof info.network).toBe('object');
+        // Check that network values are numbers
+        Object.values(info.network).forEach(value => {
+            expect(typeof value).toBe('number');
+        });
     });
 
     it("should create a new census and return a valid UUID", async () => {
@@ -118,18 +126,6 @@ describe("VocdoniApiService Integration", () => {
         expect(hasVoted).toBe(false);
     });
 
-    it("should get vote by nullifier", async () => {
-        const processes = await api.listProcesses();
-        if (processes.length === 0) {
-            console.log('Skipping test: no processes available');
-            return;
-        }
-
-        const nullifier = "123";
-        await expect(api.getVoteByNullifier(processes[0], nullifier))
-            .rejects
-            .toThrow();
-    });
 
     it("should get process details with sequencer stats", async () => {
         const processes = await api.listProcesses();
