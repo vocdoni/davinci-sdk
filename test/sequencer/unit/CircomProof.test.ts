@@ -38,9 +38,7 @@ describe('CircomProof caching', () => {
         pk: ['1', '2'],
         k: '1',
         cipherfields: ['1'],
-        nullifier: '1',
-        commitment: '1',
-        secret: '1',
+        vote_id: '1',
         inputs_hash: '1'
     };
 

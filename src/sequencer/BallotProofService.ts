@@ -14,7 +14,6 @@ export interface BallotProofMode {
 export interface BallotProofInputs {
     address: string;
     processID: string;
-    secret: string;
     encryptionKey: [string, string];
     k: string;
     weight: string;
@@ -28,16 +27,14 @@ export interface BallotProofCiphertext {
 }
 
 export interface BallotProofOutput {
-    processID: string;
+    processId: string;
     address: string;
-    commitment: string;
-    nullifier: string;
     ballot: {
         curveType: string;
         ciphertexts: BallotProofCiphertext[];
     };
-    ballotInputHash: string;
-    voteID: string;
+    ballotInputsHash: string;
+    voteId: string;
     circomInputs: ProofInputs;
 }
 
