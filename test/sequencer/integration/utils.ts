@@ -1,5 +1,4 @@
 import { Wallet, JsonRpcProvider } from "ethers";
-import { Chain } from "@ethereumjs/common";
 
 // Create mock provider and wallet
 export const mockProvider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
@@ -13,7 +12,8 @@ export const generateMockCensusParticipants = (count: number) => {
     }));
 };
 
-export const generateMockProcessRequest = (censusRoot: string) => ({
+export const generateMockProcessRequest = (processId: string, censusRoot: string) => ({
+    processId,
     censusRoot,
     ballotMode: {
         maxCount: 1,
@@ -24,9 +24,7 @@ export const generateMockProcessRequest = (censusRoot: string) => ({
         costExponent: 0,
         maxTotalCost: "10",
         minTotalCost: "0"
-    },
-    nonce: 0,
-    chainId: Chain.Sepolia
+    }
 });
 
 // UUID validator

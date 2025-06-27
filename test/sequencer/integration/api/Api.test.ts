@@ -3,7 +3,7 @@ import { resolve } from "path";
 
 // Load environment variables from test/.env
 config({ path: resolve(__dirname, '../../../.env') });
-import { VocdoniApiService } from "../../../../src/sequencer/api";
+import { VocdoniApiService, createProcessSignatureMessage, signProcessCreation } from "../../../../src/sequencer/api";
 import { mockProvider, mockWallet, generateMockCensusParticipants, generateMockProcessRequest, isValidUUID, isValidHex } from "../utils";
 import { getElectionMetadataTemplate } from "../../../../src/core/types";
 
@@ -140,7 +140,7 @@ describe("VocdoniApiService Integration", () => {
 
         const process = await api.getProcess(processes[0]);
         expect(typeof process.voteCount).toBe('string');
-        expect(typeof process.voteOverwriteCount).toBe('string');
+        expect(typeof process.voteOverwrittenCount).toBe('string');
         expect(typeof process.isAcceptingVotes).toBe('boolean');
         expect(process).toHaveProperty('sequencerStats');
         const { sequencerStats } = process;
@@ -155,20 +155,25 @@ describe("VocdoniApiService Integration", () => {
     });
 
     it("should create a process and validate the response", async () => {
-        const nonce = await mockProvider.getTransactionCount(mockWallet.address, "latest") + 1;
         const censusRoot = await api.getCensusRoot(censusId);
-        const payload = generateMockProcessRequest(censusRoot);
         
-        const message = `${payload.chainId}${nonce}`;
-        const signature = await mockWallet.signMessage(message);
+        // Mock process ID (32 bytes hex)
+        const processId = "0x00aa36a7000000000000000000000000000000000000dead0000000000000000";
+        
+        const payload = generateMockProcessRequest(processId, censusRoot);
+        
+        // Use the new signature format
+        const signature = await signProcessCreation(processId, mockWallet);
 
         const fullPayload = { ...payload, signature };
         const response = await api.createProcess(fullPayload);
 
         expect(isValidHex(response.processId, 64)).toBe(true);
+        expect(response.processId).toBe(processId);
         expect(Array.isArray(response.encryptionPubKey)).toBe(true);
         expect(response.encryptionPubKey.length).toBe(2);
         expect(isValidHex(response.stateRoot, 64)).toBe(true);
+        expect(response.ballotMode).toEqual(payload.ballotMode);
     });
 
     describe("Metadata operations", () => {
@@ -196,6 +201,33 @@ describe("VocdoniApiService Integration", () => {
 
     it("should delete the census", async () => {
         await expect(api.deleteCensus(censusId)).resolves.toBeUndefined();
+    });
+
+    describe("Helper functions", () => {
+        it("should create correct signature message", () => {
+            const processId = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            const expectedMessage = "I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            
+            const message = createProcessSignatureMessage(processId);
+            expect(message).toBe(expectedMessage);
+        });
+
+        it("should handle processId without 0x prefix", () => {
+            const processId = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            const expectedMessage = "I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            
+            const message = createProcessSignatureMessage(processId);
+            expect(message).toBe(expectedMessage);
+        });
+
+        it("should sign process creation message", async () => {
+            const processId = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            const signature = await signProcessCreation(processId, mockWallet);
+            
+            expect(typeof signature).toBe('string');
+            expect(signature.startsWith('0x')).toBe(true);
+            expect(signature.length).toBeGreaterThan(100); // Signatures are typically 132 characters
+        });
     });
 
     describe("Sequencer statistics", () => {

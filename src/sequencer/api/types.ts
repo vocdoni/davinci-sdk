@@ -1,10 +1,9 @@
 import { BallotMode, Census, EncryptionKey } from '../../core/types';
 
 export interface CreateProcessRequest {
+    processId: string;
     censusRoot: string;
     ballotMode: BallotMode;
-    nonce: number;
-    chainId: number;
     signature: string;
 }
 
@@ -12,6 +11,7 @@ export interface CreateProcessResponse {
     processId: string;
     encryptionPubKey: [string, string];
     stateRoot: string;
+    ballotMode: BallotMode;
 }
 
 export interface GetProcessResponse {
@@ -49,7 +49,7 @@ export interface GetProcessResponse {
         };
     };
     voteCount: string;
-    voteOverwriteCount: string;
+    voteOverwrittenCount: string;
     isAcceptingVotes: boolean;
     sequencerStats: {
         stateTransitionCount: number;
