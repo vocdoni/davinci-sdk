@@ -139,15 +139,6 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    getVoteByNullifier(
-        processId: string,
-        nullifier: string
-    ): Promise<VoteBallot> {
-        return this.request<VoteBallot>({
-            method: "GET",
-            url: `/votes/${processId}/nullifier/${nullifier}`,
-        });
-    }
 
     async hasAddressVoted(
         processId: string,

@@ -136,6 +136,9 @@ export interface InfoResponse {
         stateTransitionVerifier: string;
         resultsVerifier: string;
     };
+    network: {
+        [key: string]: number;
+    };
 }
 
 export enum VoteStatus {
