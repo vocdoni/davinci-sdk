@@ -1,7 +1,7 @@
-import { createRequire } from 'module';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import resolve from '@rollup/plugin-node-resolve';
+import { createRequire } from 'module';
 import dts from 'rollup-plugin-dts';
 import esbuild from 'rollup-plugin-esbuild';
 import nodePolyfills from 'rollup-plugin-polyfill-node';
@@ -12,7 +12,7 @@ const pkg = require('./package.json');
 const createBundle = (config, options) => ({
   ...config,
   input: options.input,
-  external: Object.keys(pkg.dependencies || {}).filter(dep => 
+  external: Object.keys(pkg.dependencies || {}).filter(dep =>
     options.includeSnarkjs ? true : dep !== 'snarkjs'
   ),
 });
@@ -49,7 +49,35 @@ export default [
     input: 'src/index.ts',
     includeSnarkjs: true
   }),
-  
+  // Sequencer bundle
+  createBundle({
+    plugins: [
+      json(),
+      commonjs(),
+      resolve({ browser: true }),
+      nodePolyfills(),
+      esbuild({ target: 'esnext' })
+    ],
+    output: createOutput('sequencer', { umdName: 'Sequencer' })
+  }, {
+    input: 'src/sequencer/index.ts',
+    includeSnarkjs: true
+  }),
+  // Contracts bundle
+  createBundle({
+    plugins: [
+      json(),
+      commonjs(),
+      resolve({ browser: true }),
+      nodePolyfills(),
+      esbuild({ target: 'esnext' })
+    ],
+    output: createOutput('contracts', { umdName: 'Contracts' })
+  }, {
+    input: 'src/contracts/index.ts',
+    includeSnarkjs: true
+  }),
+
   // Main types bundle
   createBundle({
     plugins: [dts()],

@@ -13,6 +13,7 @@ import {
     VoteStatusResponse,
     WorkersResponse,
 } from "./types";
+import { validateProcessId } from "./helpers";
 import { ElectionMetadata } from "../../core";
 
 function isUUId(str: string): boolean {
@@ -33,6 +34,11 @@ export class VocdoniApiService extends BaseService {
     }
 
     createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
+        // Validate processId format
+        if (!validateProcessId(body.processId)) {
+            throw new Error("Invalid processId format. Must be a 64-character hex string (32 bytes)");
+        }
+
         return this.request({
             method: "POST",
             url: "/processes",
@@ -115,12 +121,12 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    submitVote(vote: VoteRequest): Promise<string> {
-        return this.request<{ voteId: string }>({
+    async submitVote(vote: VoteRequest): Promise<void> {
+        await this.request({
             method: "POST",
             url: "/votes",
             data: vote,
-        }).then(res => res.voteId);
+        });
     }
 
     getVoteStatus(
@@ -133,15 +139,6 @@ export class VocdoniApiService extends BaseService {
         });
     }
 
-    getVoteByNullifier(
-        processId: string,
-        nullifier: string
-    ): Promise<VoteBallot> {
-        return this.request<VoteBallot>({
-            method: "GET",
-            url: `/votes/${processId}/nullifier/${nullifier}`,
-        });
-    }
 
     async hasAddressVoted(
         processId: string,

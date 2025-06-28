@@ -13,7 +13,6 @@ describe("BallotProofService Integration", () => {
     const example: BallotProofInputs = {
         address: "40aA6F90Dd3731eD10d6aA544200ACC647144669",
         processID: "00aa36a7a62e32147e9c1ea76da552be6e0636f1984143af0000000000000073",
-        secret: "881f648d417540772883ea70e3592d36",
         encryptionKey: [
             '16985072905689916868240833730094117015196415915747588732795365373862001032972',
             '9426525542650791158046003409934506209718927941267507663165051158916505773203'
@@ -47,12 +46,10 @@ describe("BallotProofService Integration", () => {
     it("should produce a complete BallotOutput with all fields typed correctly", async () => {
         const out = await service.proofInputs(example);
         // --- top‐level strings ---
-        expect(typeof out.processID).toBe("string");
+        expect(typeof out.processId).toBe("string");
         expect(typeof out.address).toBe("string");
-        expect(typeof out.commitment).toBe("string");
-        expect(typeof out.nullifier).toBe("string");
-        expect(typeof out.ballotInputHash).toBe("string");
-        expect(typeof out.voteID).toBe("string");
+        expect(typeof out.ballotInputsHash).toBe("string");
+        expect(typeof out.voteId).toBe("string");
 
         expect(typeof out.ballot.curveType).toBe("string");
         expect(Array.isArray(out.ballot.ciphertexts)).toBe(true);
@@ -78,6 +75,9 @@ describe("BallotProofService Integration", () => {
         expect(ci.address).toBe(BigInt(hexAddr).toString());
 
         expect(ci.k).toBe(example.k);
+
+        // Check for vote_id in circom inputs (new field)
+        expect(typeof ci.vote_id).toBe("string");
 
         const fieldsArr = ci.fieldValues ?? ci.fields;
         expect(Array.isArray(fieldsArr)).toBe(true);

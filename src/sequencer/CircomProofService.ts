@@ -17,9 +17,7 @@ export interface ProofInputs {
     pk: [string, string];
     k: string;
     cipherfields: string[];
-    nullifier: string;
-    commitment: string;
-    secret: string;
+    vote_id: string;
     inputs_hash: string;
 }
 

@@ -1,10 +1,9 @@
 import { BallotMode, Census, EncryptionKey } from '../../core/types';
 
 export interface CreateProcessRequest {
+    processId: string;
     censusRoot: string;
     ballotMode: BallotMode;
-    nonce: number;
-    chainId: number;
     signature: string;
 }
 
@@ -12,6 +11,7 @@ export interface CreateProcessResponse {
     processId: string;
     encryptionPubKey: [string, string];
     stateRoot: string;
+    ballotMode: BallotMode;
 }
 
 export interface GetProcessResponse {
@@ -49,7 +49,7 @@ export interface GetProcessResponse {
         };
     };
     voteCount: string;
-    voteOverwriteCount: string;
+    voteOverwrittenCount: string;
     isAcceptingVotes: boolean;
     sequencerStats: {
         stateTransitionCount: number;
@@ -101,11 +101,7 @@ export interface VoteProof {
 export interface VoteRequest {
     /** The `processId` you obtained when creating the process. */
     processId: string;
-    /** The Poseidon commitment over your vote. */
-    commitment: string;
-    /** The nullifier to prevent double‐voting. */
-    nullifier: string;
-    /** Your Merkle‐proof that you’re in the census. */
+    /** Your Merkle‐proof that you're in the census. */
     censusProof: CensusProof;
     /** Your encrypted ballot. */
     ballot: VoteBallot;
@@ -115,8 +111,10 @@ export interface VoteRequest {
     ballotInputsHash: string;
     /** Your Ethereum address (hex-prefixed). */
     address: string;
-    /** Signature over the raw bytes of the voteID. */
+    /** Signature over the raw bytes of the voteId. */
     signature: string;
+    /** The vote ID (hex-prefixed). */
+    voteId: string;
 }
 
 export interface InfoResponse {
@@ -135,6 +133,9 @@ export interface InfoResponse {
         organization: string;
         stateTransitionVerifier: string;
         resultsVerifier: string;
+    };
+    network: {
+        [key: string]: number;
     };
 }
 

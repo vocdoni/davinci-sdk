@@ -8,7 +8,6 @@ import { dirname } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-import { Chain } from "@ethereumjs/common";
 import {
     VocdoniApiService,
     VoteBallot,
@@ -17,13 +16,13 @@ import {
     Groth16Proof,
     ProofInputs as Groth16ProofInputs,
     BallotProof,
-    BallotProofInputs
+    BallotProofInputs,
+    signProcessCreation
 } from "../../../src/sequencer";
 import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
 import {
     SmartContractService,
     ProcessRegistryService,
-    OrganizationRegistryService,
     ProcessStatus,
     deployedAddresses as addresses
 } from "../../../src/contracts";
@@ -44,10 +43,6 @@ const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 
 const PROCESS_REGISTRY_ADDR      = addresses.processRegistry.sepolia;
-const ORGANIZATION_REGISTRY_ADDR = addresses.organizationRegistry.sepolia;
-
-//const PROCESS_REGISTRY_ADDR      = "0xBC1A75100023add2E798f16790704372E2a36085";
-//const ORGANIZATION_REGISTRY_ADDR = "0x4102a669FAAD42e6202b2c7bF5d6C5aB0F722217";
 
 // Ballot mode configuration for two questions with four options each (0-3)
 const BALLOT_MODE: ApiBallotMode = {
@@ -94,25 +89,6 @@ function makeTestParticipants(): TestParticipant[] {
     }));
 }
 
-// ────────────────────────────────────────────────────────────
-//   STEP 0: Create Organization on‐chain
-// ────────────────────────────────────────────────────────────
-async function step0_createOrganization(wallet: Wallet): Promise<string> {
-    step(0, "Create a new Organization on-chain");
-    const orgService = new OrganizationRegistryService(
-        ORGANIZATION_REGISTRY_ADDR,
-        wallet
-    );
-    const orgId = Wallet.createRandom().address;
-    const orgName = `Org-${Date.now()}`;
-    const orgMeta = `ipfs://org-meta-${Date.now()}`;
-
-    await SmartContractService.executeTx(
-        orgService.createOrganization(orgId, orgName, orgMeta, [wallet.address])
-    );
-    success(`Organization created: ${orgId}`);
-    return orgId;
-}
 
 // ────────────────────────────────────────────────────────────
 //   STEP 1: Ping the HTTP API
@@ -320,41 +296,34 @@ async function step8_createProcess(
     censusSize: number
 ): Promise<Pick<ApiFlowResult, "processId" | "encryptionPubKey" | "stateRoot">> {
     step(8, "Create process via Sequencer API");
-    const chainId = Chain.Sepolia;
-    const nonce   = await provider.getTransactionCount(wallet.address);
-    const signature = await wallet.signMessage(`${chainId}${nonce}`);
-    const { processId, encryptionPubKey, stateRoot } =
-        await api.createProcess({ censusRoot, ballotMode: BALLOT_MODE, nonce, chainId, signature });
-    console.log("   processId:", processId);
+    
+    // Get the next process ID from the smart contract using wallet address as organizationId
+    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+    const processId = await registry.getNextProcessId(wallet.address);
+    
+    console.log("   nextProcessId from contract:", processId);
+    
+    // Use the new signature format
+    const signature = await signProcessCreation(processId, wallet);
+    
+    const { processId: returnedProcessId, encryptionPubKey, stateRoot } =
+        await api.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature });
+    
+    console.log("   processId:", returnedProcessId);
     console.log("   pubKey:", encryptionPubKey);
     console.log("   stateRoot:", stateRoot);
     success("Process created via sequencer");
-    return { processId, encryptionPubKey, stateRoot };
+    return { processId: returnedProcessId, encryptionPubKey, stateRoot };
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 9: Check Admin on‐chain
+//   STEP 9: Submit newProcess on‐chain (simplified without organization)
 // ────────────────────────────────────────────────────────────
-async function step9_checkAdmin(wallet: Wallet, orgId: string) {
-    step(9, "Verify admin rights on OrganizationRegistry");
-    const svc = new OrganizationRegistryService(
-        ORGANIZATION_REGISTRY_ADDR,
-        wallet
-    );
-    const isAdmin = await svc.isAdministrator(orgId, wallet.address);
-    if (!isAdmin) throw new Error("Caller is not an organization admin");
-    success("Admin rights confirmed");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 10: Submit newProcess on‐chain
-// ────────────────────────────────────────────────────────────
-async function step10_newProcessOnChain(
+async function step9_newProcessOnChain(
     wallet: Wallet,
-    orgId: string,
     args: ApiFlowResult
 ) {
-    step(10, "Submit newProcess on‐chain");
+    step(9, "Submit newProcess on‐chain");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     await SmartContractService.executeTx(
         registry.newProcess(
@@ -369,8 +338,6 @@ async function step10_newProcessOnChain(
                 censusURI: API_URL + `/censuses/${args.censusRoot}`
             } as Census,
             args.metadataUri,
-            orgId,
-            args.processId,
             { x: args.encryptionPubKey[0], y: args.encryptionPubKey[1] } as EncryptionKey,
             BigInt(args.stateRoot)
         )
@@ -379,10 +346,10 @@ async function step10_newProcessOnChain(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 11: Fetch on‐chain Process
+//   STEP 10: Fetch on‐chain Process
 // ────────────────────────────────────────────────────────────
-async function step11_fetchOnChain(wallet: Wallet, processId: string) {
-    step(11, "Fetch on‐chain process");
+async function step10_fetchOnChain(wallet: Wallet, processId: string) {
+    step(10, "Fetch on‐chain process");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     const stored = await registry.getProcess(processId);
     console.log(
@@ -394,9 +361,9 @@ async function step11_fetchOnChain(wallet: Wallet, processId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 12: Generate zk‐SNARK inputs (Go/WASM) for each voter
+//   STEP 11: Generate zk‐SNARK inputs (Go/WASM) for each voter
 // ────────────────────────────────────────────────────────────
-async function step12_generateProofInputs(
+async function step11_generateProofInputs(
     wasmExecUrl: string,
     wasmUrl: string,
     participants: TestParticipant[],
@@ -409,7 +376,7 @@ async function step12_generateProofInputs(
     out: BallotProofOutput;
     circomInputs: Groth16ProofInputs;
 }>> {
-    step(12, "Generate zk‐SNARK inputs for each participant");
+    step(11, "Generate zk‐SNARK inputs for each participant");
     const sdk = new BallotProof({ wasmExecUrl, wasmUrl });
     await sdk.init();
 
@@ -444,7 +411,6 @@ async function step12_generateProofInputs(
         const inputs: BallotProofInputs = {
             address:       p.key.replace(/^0x/, ""),
             processID:     processId.replace(/^0x/, ""),
-            secret:        p.secret.substring(0, 12),
             encryptionKey: encryptionPubKey,
             k:             kStr,
             ballotMode,
@@ -453,10 +419,10 @@ async function step12_generateProofInputs(
         };
 
         const out = await sdk.proofInputs(inputs);
-        console.log(`   • ${p.key} → voteID=${out.voteID}`);
+        console.log(`   • ${p.key} → voteId=${out.voteId}`);
         list.push({
             key:          p.key,
-            voteID:       out.voteID,
+            voteID:       out.voteId,
             out,
             circomInputs: out.circomInputs as Groth16ProofInputs
         });
@@ -467,15 +433,15 @@ async function step12_generateProofInputs(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 13: Run fullProve + verify for each input
+//   STEP 12: Run fullProve + verify for each input
 // ────────────────────────────────────────────────────────────
-async function step13_runGroth16Proofs(
+async function step12_runGroth16Proofs(
     circuitUrl: string,
     provingKeyUrl: string,
     verificationKeyUrl: string,
     list: Array<{ key: string; voteID: string; circomInputs: Groth16ProofInputs }>
 ): Promise<Array<{ key: string; voteID: string; proof: Groth16Proof; publicSignals: string[] }>> {
-    step(13, "Run snarkjs.fullProve + verify for each input");
+    step(12, "Run snarkjs.fullProve + verify for each input");
     const pg = new CircomProof({
         wasmUrl: circuitUrl,
         zkeyUrl: provingKeyUrl,
@@ -497,13 +463,13 @@ async function step13_runGroth16Proofs(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 14: Wait for process to be ready
+//   STEP 13: Wait for process to be ready
 // ────────────────────────────────────────────────────────────
-async function step14_waitForProcess(
+async function step13_waitForProcess(
     api: VocdoniApiService,
     processId: string
 ) {
-    step(14, "Wait for process to be ready");
+    step(13, "Wait for process to be ready");
     
     while (true) {
         const process = await api.getProcess(processId);
@@ -518,9 +484,9 @@ async function step14_waitForProcess(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 15: Submit one vote per participant
+//   STEP 14: Submit one vote per participant
 // ────────────────────────────────────────────────────────────
-export async function step15_submitVotes(
+export async function step14_submitVotes(
     api: VocdoniApiService,
     wallet: Wallet,
     processId: string,
@@ -529,7 +495,7 @@ export async function step15_submitVotes(
     listProofInputs: Array<{ key: string; voteID: string; out: BallotProofOutput; circomInputs: Groth16ProofInputs }>,
     proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>
 ): Promise<string[]> {
-    step(15, "Submit votes for each participant");
+    step(14, "Submit votes for each participant");
     const voteIds: string[] = [];
 
     for (let i = 0; i < participants.length; i++) {
@@ -554,19 +520,18 @@ export async function step15_submitVotes(
         // 4) Build and submit
         const voteRequest = {
             processId,
-            commitment:      out.commitment,
-            nullifier:       out.nullifier,
             censusProof,
             ballot:          voteBallot,
             ballotProof:     { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
-            ballotInputsHash: out.ballotInputHash,
+            ballotInputsHash: out.ballotInputsHash,
             address:         participantWallet.address,
             signature,
+            voteId:          voteID,
         };
 
-        const voteId = await api.submitVote(voteRequest);
-        success(`  [${i + 1}/${participants.length}] voteId = ${voteId}`);
-        voteIds.push(voteId);
+        await api.submitVote(voteRequest);
+        success(`  [${i + 1}/${participants.length}] vote submitted successfully`);
+        voteIds.push(voteID);
 
         // throttle
         await new Promise((r) => setTimeout(r, 200));
@@ -575,35 +540,35 @@ export async function step15_submitVotes(
     return voteIds;
 }
 
-async function step16_checkVoteIds<T>(
-    a: T[],
-    b: T[],
-    label: string
-) {
-    step(16, "Check same voteIDs");
-
-    console.log(chalk.yellow("\n→ expected voteIDs:"), a);
-    console.log(chalk.yellow("→ returned voteIDs:"), b);
-
-    if (a.length !== b.length) {
-        throw new Error(`${label}: length mismatch (${a.length} vs ${b.length})`);
-    }
-    for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) {
-            throw new Error(`${label}: element ${i} differs: ${a[i]} vs ${b[i]}`);
-        }
-    }
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 17: Wait for votes to be processed
-// ────────────────────────────────────────────────────────────
-async function step17_waitForVotesProcessed(
+async function step15_checkVotes(
     api: VocdoniApiService,
     processId: string,
     voteIds: string[]
 ) {
-    step(17, "Wait for votes to be settled");
+    step(15, "Check vote status for all submitted votes");
+
+    for (let i = 0; i < voteIds.length; i++) {
+        const voteId = voteIds[i];
+        try {
+            const status = await api.getVoteStatus(processId, voteId);
+            success(`  [${i + 1}/${voteIds.length}] Vote ${voteId} status: ${status.status}`);
+        } catch (error) {
+            throw new Error(`Failed to get status for vote ${voteId}: ${error}`);
+        }
+    }
+    
+    success("All vote statuses retrieved successfully");
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 16: Wait for votes to be processed
+// ────────────────────────────────────────────────────────────
+async function step16_waitForVotesProcessed(
+    api: VocdoniApiService,
+    processId: string,
+    voteIds: string[]
+) {
+    step(16, "Wait for votes to be settled");
     
     while (true) {
         let allSettled = true;
@@ -629,15 +594,15 @@ async function step17_waitForVotesProcessed(
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 18: Verify votes
+//   STEP 17: Verify votes
 // ────────────────────────────────────────────────────────────
-async function step18_verifyVotes(
+async function step17_verifyVotes(
     api: VocdoniApiService,
     processId: string,
     participants: TestParticipant[],
     listProofInputs: Array<{ out: BallotProofOutput }>
 ) {
-    step(18, "Verify votes");
+    step(17, "Verify votes");
     
     // Check that participants have voted
     for (let i = 0; i < participants.length; i++) {
@@ -648,24 +613,15 @@ async function step18_verifyVotes(
         success(`  [${i + 1}/${participants.length}] Verified participant ${participants[i].key} has voted`);
     }
 
-    // Try to get votes by nullifier
-    for (let i = 0; i < listProofInputs.length; i++) {
-        const { out } = listProofInputs[i];
-        try {
-            const ballot = await api.getVoteByNullifier(processId, out.nullifier);
-            success(`  [${i + 1}/${listProofInputs.length}] Retrieved vote for nullifier ${out.nullifier}`);
-        } catch (error) {
-            console.error(`Failed to get vote for nullifier ${out.nullifier}:`, error);
-            throw error;
-        }
-    }
+    // Note: Nullifier-based verification removed in new version
+    success("Vote verification completed using hasAddressVoted");
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 19: End Process
+//   STEP 18: End Process
 // ────────────────────────────────────────────────────────────
-async function step19_endProcess(wallet: Wallet, processId: string, expectedVoteCount: number) {
-    step(19, "End the voting process");
+async function step18_endProcess(wallet: Wallet, processId: string, expectedVoteCount: number) {
+    step(18, "End the voting process");
     
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     
@@ -690,25 +646,25 @@ async function step19_endProcess(wallet: Wallet, processId: string, expectedVote
     );
     success("Process ended successfully");
     
-    // Wait for another script to move the process to RESULTS state
-    info("Waiting for process to be in RESULTS state...");
+    // Wait for results to be set
+    info("Waiting for process results to be set...");
     const resultsReady = new Promise<void>((resolve) => {
-        registry.onProcessStatusChanged((id: string, status: bigint) => {
-            if (
-                id.toLowerCase() === processId.toLowerCase() &&
-                status === BigInt(ProcessStatus.RESULTS)
-            ) resolve();
+        registry.onProcessResultsSet((id: string, sender: string, result: bigint[]) => {
+            if (id.toLowerCase() === processId.toLowerCase()) {
+                console.log(`Results set by ${sender} with ${result.length} values`);
+                resolve();
+            }
         });
     });
     await resultsReady;
-    success("Process is now in RESULTS state");
+    success("Process results have been set");
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 20: Show Final Results
+//   STEP 19: Show Final Results
 // ────────────────────────────────────────────────────────────
-async function step20_showResults(wallet: Wallet, processId: string) {
-    step(20, "Show final election results");
+async function step19_showResults(wallet: Wallet, processId: string) {
+    step(19, "Show final election results");
     
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
     const process = await registry.getProcess(processId);
@@ -737,9 +693,6 @@ async function run() {
 
     const { api, provider, wallet } = initClients();
 
-    // 0) on‐chain organization
-    const orgId = await step0_createOrganization(wallet);
-
     await step1_ping(api);
     const info    = await step2_fetchInfo(api);
     const censusId         = await step3_createCensus(api);
@@ -751,9 +704,8 @@ async function run() {
     const { processId, encryptionPubKey, stateRoot } =
         await step8_createProcess(api, provider, wallet, censusRoot, censusSize);
 
-    // 9–11) on‐chain process registry
-    await step9_checkAdmin(wallet, orgId);
-    await step10_newProcessOnChain(wallet, orgId, {
+    // 9–10) on‐chain process registry (simplified without organization)
+    await step9_newProcessOnChain(wallet, {
         censusId,
         participants,
         censusRoot,
@@ -763,9 +715,9 @@ async function run() {
         stateRoot,
         metadataUri
     });
-    await step11_fetchOnChain(wallet, processId);
+    await step10_fetchOnChain(wallet, processId);
 
-    const listProofInputs = await step12_generateProofInputs(
+    const listProofInputs = await step11_generateProofInputs(
         info.ballotProofWasmHelperExecJsUrl,
         info.ballotProofWasmHelperUrl,
         participants,
@@ -774,7 +726,7 @@ async function run() {
         BALLOT_MODE
     );
 
-    const proofs = await step13_runGroth16Proofs(
+    const proofs = await step12_runGroth16Proofs(
         info.circuitUrl,
         info.provingKeyUrl,
         info.verificationKeyUrl,
@@ -782,9 +734,9 @@ async function run() {
     );
 
     // Wait for process to be ready
-    await step14_waitForProcess(api, processId);
+    await step13_waitForProcess(api, processId);
 
-    const voteIds = await step15_submitVotes(
+    const voteIds = await step14_submitVotes(
         api,
         wallet,
         processId,
@@ -796,23 +748,19 @@ async function run() {
 
     console.log(chalk.bold.cyan("\nVote IDs:"), voteIds);
 
-    await step16_checkVoteIds(
-        listProofInputs.map((x) => x.voteID),
-        voteIds,
-        "voteID mismatch!"
-    );
+    await step15_checkVotes(api, processId, voteIds);
 
     // Wait for votes to be processed
-    await step17_waitForVotesProcessed(api, processId, voteIds);
+    await step16_waitForVotesProcessed(api, processId, voteIds);
 
     // Verify votes
-    await step18_verifyVotes(api, processId, participants, listProofInputs);
+    await step17_verifyVotes(api, processId, participants, listProofInputs);
 
     // End the process
-    await step19_endProcess(wallet, processId, participants.length);
+    await step18_endProcess(wallet, processId, participants.length);
 
     // Show final results
-    await step20_showResults(wallet, processId);
+    await step19_showResults(wallet, processId);
 
     console.log(chalk.bold.green("\n✅ All done!\n"));
     process.exit(0);
