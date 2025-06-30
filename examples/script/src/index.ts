@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 
 import { config } from "dotenv";
-import { JsonRpcProvider, Wallet } from "ethers";
+import { JsonRpcProvider, Wallet, isAddress } from "ethers";
 import chalk from "chalk";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -42,7 +42,16 @@ const API_URL                    = process.env.API_URL;
 const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 
-const PROCESS_REGISTRY_ADDR      = addresses.processRegistry.sepolia;
+// ────────────────────────────────────────────────────────────
+//   LOGGING HELPERS
+// ────────────────────────────────────────────────────────────
+const info    = (msg: string) => console.log(chalk.cyan("ℹ"), msg);
+const success = (msg: string) => console.log(chalk.green("✔"), msg);
+const step    = (n: number, msg: string) =>
+    console.log(chalk.yellow.bold(`\n[Step ${n}]`), chalk.white(msg));
+
+const PROCESS_REGISTRY_ADDR      = getProcessRegistryAddress();
+const ORGANIZATION_REGISTRY_ADDR = getOrganizationRegistryAddress();
 
 // Ballot mode configuration for two questions with four options each (0-3)
 const BALLOT_MODE: ApiBallotMode = {
@@ -57,12 +66,33 @@ const BALLOT_MODE: ApiBallotMode = {
 };
 
 // ────────────────────────────────────────────────────────────
-//   LOGGING HELPERS
+//   ADDRESS HELPERS
 // ────────────────────────────────────────────────────────────
-const info    = (msg: string) => console.log(chalk.cyan("ℹ"), msg);
-const success = (msg: string) => console.log(chalk.green("✔"), msg);
-const step    = (n: number, msg: string) =>
-    console.log(chalk.yellow.bold(`\n[Step ${n}]`), chalk.white(msg));
+/**
+ * Gets the process registry address from environment variables with fallback to deployed addresses
+ */
+function getProcessRegistryAddress(): string {
+    const envAddress = process.env.PROCESS_REGISTRY_ADDRESS;
+    if (envAddress && isAddress(envAddress)) {
+        info(`Using PROCESS_REGISTRY_ADDRESS from environment: ${envAddress}`);
+        return envAddress;
+    }
+    info(`Using default process registry address: ${addresses.processRegistry.sepolia}`);
+    return addresses.processRegistry.sepolia;
+}
+
+/**
+ * Gets the organization registry address from environment variables with fallback to deployed addresses
+ */
+function getOrganizationRegistryAddress(): string {
+    const envAddress = process.env.ORGANIZATION_REGISTRY_ADDRESS;
+    if (envAddress && isAddress(envAddress)) {
+        info(`Using ORGANIZATION_REGISTRY_ADDRESS from environment: ${envAddress}`);
+        return envAddress;
+    }
+    info(`Using default organization registry address: ${addresses.organizationRegistry.sepolia}`);
+    return addresses.organizationRegistry.sepolia;
+}
 
 // ────────────────────────────────────────────────────────────
 //   BOOTSTRAP CLIENTS
