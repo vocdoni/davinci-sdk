@@ -7,7 +7,6 @@ import ConnectWalletScreen from '@/components/ConnectWalletScreen';
 import StepIndicator from '@/components/StepIndicator';
 import { ThemeProvider, createTheme, Box } from '@mui/material';
 import { Wallet, JsonRpcSigner } from 'ethers';
-import CreateOrganizationScreen from '@/components/CreateOrganizationScreen';
 import CensusCreationScreen from '@/components/CensusCreationScreen';
 import CreateElectionScreen from '@/components/CreateElectionScreen';
 import CheckElectionScreen from '@/components/CheckElectionScreen';
@@ -44,7 +43,6 @@ const theme = createTheme({
 const STEPS = [
   'Welcome',
   'Connect Wallet',
-  'Create Organization',
   'Create Census',
   'Create Election',
   'Check Election Status',
@@ -56,7 +54,6 @@ const STEPS = [
 enum Step {
   Welcome,
   ConnectWallet,
-  CreateOrganization,
   CreateCensus,
   CreateElection,
   CheckElectionStatus,
@@ -88,12 +85,6 @@ export default function Home() {
         return <WelcomeScreen onNext={handleNext} />;
       case Step.ConnectWallet:
         return <ConnectWalletScreen onNext={handleNext} onBack={handleBack} onWalletConnected={handleWalletConnected} />;
-      case Step.CreateOrganization:
-        return wallet ? (
-          <CreateOrganizationScreen onNext={handleNext} onBack={handleBack} wallet={wallet} />
-        ) : (
-          <WelcomeScreen onNext={handleNext} />
-        );
       case Step.CreateCensus:
         return <CensusCreationScreen 
           onNext={(id) => {
