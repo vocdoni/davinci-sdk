@@ -296,26 +296,22 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         ciphertexts: out.ballot.ciphertexts,
       };
 
-      const sigBytes = Uint8Array.from(
-        out.voteID.replace(/^0x/, "")
-          .match(/.{1,2}/g)!
-          .map(byte => parseInt(byte, 16))
-      );
+      const sigBytes = Uint8Array.from(Buffer.from(out.voteId.replace(/^0x/, ""), "hex"));
       const signature = await wallet.signMessage(sigBytes);
 
       const voteRequest = {
         processId: details.processId,
-        commitment: out.commitment,
-        nullifier: out.nullifier,
         censusProof,
         ballot: voteBallot,
         ballotProof: { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
-        ballotInputsHash: out.ballotInputHash,
+        ballotInputsHash: out.ballotInputsHash,
         address: selectedAddress,
         signature,
+        voteId: out.voteId,
       };
 
-      const voteId = await api.submitVote(voteRequest);
+      await api.submitVote(voteRequest);
+      const voteId = out.voteId;
       setVoteStatus(prev => ({ ...prev, voteSubmitted: true }));
       setActiveStep(4);
 

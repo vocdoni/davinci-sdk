@@ -26,6 +26,7 @@ import {
   ProcessStatus,
   Census,
   EncryptionKey,
+  signProcessCreation,
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
 import { getProcessRegistryAddress } from '../utils/contractAddresses';
@@ -173,12 +174,6 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
 
   const handleCreateElection = async () => {
     try {
-      const organizationId = localStorage.getItem('organizationId');
-      if (!organizationId) {
-        setError('Organization ID not found. Please create an organization first.');
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
       setProgress(0);
@@ -200,28 +195,29 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       const censusRoot = await api.getCensusRoot(censusId);
       const censusSize = await api.getCensusSize(censusId);
 
-      // Step 3: Create process via Sequencer API
+      // Step 3: Get next process ID from contract using wallet address as organizationId
       setProgress(50);
-      const chainId = 11155111; // Sepolia chain ID
-      const address = await wallet.getAddress();
-      const nonce = await (wallet as any).provider.getTransactionCount(address);
-      const signature = await wallet.signMessage(`${chainId}${nonce}`);
-
-      const { processId, encryptionPubKey, stateRoot } = await api.createProcess({
-        censusRoot,
-        ballotMode: BALLOT_MODE,
-        nonce,
-        chainId,
-        signature,
-      });
-
-      // Step 4: Submit process on-chain
-      setProgress(70);
       const registry = new ProcessRegistryService(
         getProcessRegistryAddress(),
         wallet
       );
+      
+      const address = await wallet.getAddress();
+      const processId = await registry.getNextProcessId(address);
+      
+      // Step 4: Create process via Sequencer API with new signature method
+      setProgress(60);
+      const signature = await signProcessCreation(processId, wallet as Wallet);
+      
+      const { processId: returnedProcessId, encryptionPubKey, stateRoot } = await api.createProcess({
+        processId,
+        censusRoot,
+        ballotMode: BALLOT_MODE,
+        signature,
+      });
 
+      // Step 5: Submit process on-chain (8 parameters like the script)
+      setProgress(70);
       await SmartContractService.executeTx(
         registry.newProcess(
           ProcessStatus.READY,
@@ -232,11 +228,9 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
             censusOrigin: 1,
             maxVotes: censusSize.toString(),
             censusRoot: censusRoot,
-            censusURI: censusId
+            censusURI: (process.env.API_URL || '') + `/censuses/${censusRoot}`,
           } as Census,
           metadataUrl,
-          organizationId,
-          processId,
           { x: encryptionPubKey[0], y: encryptionPubKey[1] } as EncryptionKey,
           BigInt(stateRoot)
         )
@@ -253,6 +247,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
         metadataUrl,
         censusRoot,
         censusSize,
+        censusId,
       }));
 
     } catch (err) {

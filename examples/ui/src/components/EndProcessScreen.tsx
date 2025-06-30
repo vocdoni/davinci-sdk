@@ -79,15 +79,27 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
         }
       }
 
-      // Listen for process status change to RESULTS
-      registry.onProcessStatusChanged((id: string, status: bigint) => {
-        if (
-          id.toLowerCase() === details.processId.toLowerCase() &&
-          status === BigInt(ProcessStatus.RESULTS)
-        ) {
-          setProcessState(prev => ({ ...prev, resultsReady: true }));
-        }
+      // Wait for results to be set
+      setProcessState(prev => ({
+        ...prev,
+        txStatus: 'Waiting for process results to be set...'
+      }));
+
+      const resultsReady = new Promise<void>((resolve) => {
+        registry.onProcessResultsSet((id: string, sender: string, result: bigint[]) => {
+          if (id.toLowerCase() === details.processId.toLowerCase()) {
+            console.log(`Results set by ${sender} with ${result.length} values`);
+            setProcessState(prev => ({
+              ...prev,
+              txStatus: 'Process results have been set',
+              resultsReady: true
+            }));
+            resolve();
+          }
+        });
       });
+      
+      await resultsReady;
 
     } catch (err) {
       setProcessState(prev => ({
