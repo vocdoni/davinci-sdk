@@ -76,6 +76,13 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
     navigator.clipboard.writeText(address);
   };
 
+  const handleCopyPrivateKey = (address: string) => {
+    const wallet = walletMap[address];
+    if (wallet) {
+      navigator.clipboard.writeText(wallet.privateKey);
+    }
+  };
+
   const handleCreateCensus = async () => {
     if (addresses.length === 0) {
       setError('Add at least one address to create a census');
@@ -207,6 +214,25 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
                         </IconButton>
                       </Tooltip>
                     </Box>
+                  }
+                  secondary={
+                    walletMap[address] && (
+                      <>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                          <span style={{ wordBreak: 'break-all', fontSize: '0.7rem', color: 'rgba(0, 0, 0, 0.6)' }}>
+                            Private Key: {walletMap[address].privateKey}
+                          </span>
+                          <Tooltip title="Copy private key">
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleCopyPrivateKey(address)}
+                            >
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </span>
+                      </>
+                    )
                   }
                 />
               </ListItem>

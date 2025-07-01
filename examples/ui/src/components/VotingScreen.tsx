@@ -40,6 +40,7 @@ import {
   IQuestion,
   MultiLanguage,
   InfoResponse,
+  BallotProofInputs,
 } from '@vocdoni/davinci-sdk';
 import { Wallet, HDNodeWallet } from 'ethers';
 import { useWallets } from '@/context/WalletContext';
@@ -221,7 +222,6 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       if (!wallet) {
         throw new Error('Wallet not found for selected address');
       }
-      const secret = wallet.privateKey.substring(0, 12);
       const kHex = Array.from(crypto.getRandomValues(new Uint8Array(8)))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
@@ -253,12 +253,9 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       // Flatten all arrays into one, preserving order
       const fieldValues = questionArrays.flat();
 
-      const inputs = {
-        address: selectedAddress.replace(/^0x/, ""),
-        processID: details.processId.replace(/^0x/, ""),
-        secret,
-        encryptionKey: details.encryptionPubKey,
-        k: kStr,
+      const inputs: BallotProofInputs = {
+        address: selectedAddress,
+        processID: details.processId,
         ballotMode: {
           maxCount: questions.length,
           maxValue,
@@ -269,8 +266,10 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
           maxTotalCost,
           minTotalCost: "0",
         },
-        weight: participants.find(p => p.key === selectedAddress)?.weight || "1",
+        encryptionKey: [details.encryptionPubKey[0], details.encryptionPubKey[1]],
+        k: kStr,
         fieldValues,
+        weight: participants.find(p => p.key === selectedAddress)?.weight || "1",
       };
 
       const out = await sdk.proofInputs(inputs);
@@ -296,16 +295,19 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         ciphertexts: out.ballot.ciphertexts,
       };
 
-      const sigBytes = Uint8Array.from(Buffer.from(out.voteId.replace(/^0x/, ""), "hex"));
-      const signature = await wallet.signMessage(sigBytes);
+      const hexStringToUint8Array = (hexString: string): Uint8Array => {
+        return Uint8Array.from(Buffer.from(hexString.replace(/^0x/, ""), "hex"));
+      };
+
+      const signature = await wallet.signMessage(hexStringToUint8Array(out.voteId));
 
       const voteRequest = {
-        processId: details.processId,
-        censusProof,
-        ballot: voteBallot,
-        ballotProof: { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
-        ballotInputsHash: out.ballotInputsHash,
         address: selectedAddress,
+        ballot: voteBallot,
+        ballotInputsHash: out.ballotInputsHash,
+        ballotProof: proof,
+        censusProof,
+        processId: details.processId,
         signature,
         voteId: out.voteId,
       };
