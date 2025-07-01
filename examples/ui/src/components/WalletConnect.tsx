@@ -63,12 +63,15 @@ export default function WalletConnect({ onWalletConnected }: WalletConnectProps)
       setLoading(true);
       setError('');
 
-      if (!privateKey.match(/^[0-9a-fA-F]{64}$/)) {
-        throw new Error('Invalid private key format');
+      // Clean private key - remove 0x prefix if present
+      const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
+      
+      if (!cleanPrivateKey.match(/^[0-9a-fA-F]{64}$/)) {
+        throw new Error('Invalid private key format. Must be 64 hex characters (with or without 0x prefix)');
       }
 
       const provider = new JsonRpcProvider(process.env.RPC_URL);
-      const wallet = new Wallet(privateKey, provider);
+      const wallet = new Wallet(cleanPrivateKey, provider);
       const address = await wallet.getAddress();
       const balance = await provider.getBalance(address);
 

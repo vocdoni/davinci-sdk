@@ -18,6 +18,8 @@ const nextConfig = {
     PROCESS_REGISTRY_ADDRESS: process.env.PROCESS_REGISTRY_ADDRESS,
     EXPLORER_URL: process.env.EXPLORER_URL,
   },
+  // Skip static generation for dynamic routes
+  skipTrailingSlashRedirect: true,
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
