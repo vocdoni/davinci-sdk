@@ -631,8 +631,10 @@ export default function ProcessDetailClient() {
       const fieldValues = questionArrays.flat();
 
       const inputs: BallotProofInputs = {
-        address: walletAddress,
-        processID: processData.id,
+        address: walletAddress.replace(/^0x/, ""),
+        processID: processData.id.replace(/^0x/, ""),
+        encryptionKey: [processData.encryptionKey.x, processData.encryptionKey.y],
+        k: kStr,
         ballotMode: {
           maxCount: questions.length,
           maxValue,
@@ -643,11 +645,8 @@ export default function ProcessDetailClient() {
           maxTotalCost,
           minTotalCost: "0",
         },
-        encryptionKey: [processData.encryptionKey.x, processData.encryptionKey.y],
-        k: kStr,
-        fieldValues,
         weight: "1",
-        secret: "0",
+        fieldValues,
       };
 
       const out = await sdk.proofInputs(inputs);
