@@ -17,6 +17,8 @@ import {
   IconButton,
   Tooltip,
   Grid,
+  Pagination,
+  Skeleton,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -83,39 +85,69 @@ const getStatusColor = (status: number) => {
   }
 };
 
+const PAGE_SIZE = 15;
+
 export default function ProcessesPage() {
   const router = useRouter();
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProcesses, setTotalProcesses] = useState(0);
+  const [allProcessIds, setAllProcessIds] = useState<string[]>([]);
 
-  const loadProcesses = async () => {
+  const loadAllProcessIds = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
       const api = new VocdoniApiService(process.env.API_URL || '');
       
-      // Get list of process IDs
+      // Get list of process IDs (lightweight operation)
       const processIds = await api.listProcesses();
       
-      // Reverse the order to get most recent first (assuming API returns oldest first)
+      // Reverse the order to get most recent first
       const reversedProcessIds = [...processIds].reverse();
       
-      // Get detailed information for each process
-      const processDetails: ProcessInfo[] = [];
+      setAllProcessIds(reversedProcessIds);
+      setTotalProcesses(reversedProcessIds.length);
       
-      for (const processId of reversedProcessIds) {
+      // Load first page
+      await loadPage(1, reversedProcessIds);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load processes');
+      console.error('Error loading processes:', err);
+      setIsLoading(false);
+    }
+  };
+
+  const loadPage = async (page: number, processIds?: string[]) => {
+    try {
+      const idsToUse = processIds || allProcessIds;
+      if (idsToUse.length === 0) return;
+
+      setIsLoadingPage(true);
+      setError(null);
+      
+      const api = new VocdoniApiService(process.env.API_URL || '');
+      
+      // Calculate pagination
+      const startIndex = (page - 1) * PAGE_SIZE;
+      const endIndex = startIndex + PAGE_SIZE;
+      const pageProcessIds = idsToUse.slice(startIndex, endIndex);
+      
+      // Load processes in parallel for better performance
+      const processPromises = pageProcessIds.map(async (processId) => {
         try {
           const processData: GetProcessResponse = await api.getProcess(processId);
           
-          // Fetch metadata from metadataURI if available
+          // Load metadata separately
           let title = 'Untitled Process';
           let description = 'No description available';
           
           if (processData.metadataURI) {
             try {
-              // Extract hash from metadata URI
               const metadataHash = processData.metadataURI.split('/').pop();
               if (metadataHash) {
                 const metadata = await api.getMetadata(metadataHash);
@@ -130,7 +162,7 @@ export default function ProcessesPage() {
             }
           }
           
-          processDetails.push({
+          return {
             id: processData.id,
             title,
             description,
@@ -138,11 +170,10 @@ export default function ProcessesPage() {
             voteCount: processData.voteCount,
             startTime: processData.startTime,
             isAcceptingVotes: processData.isAcceptingVotes,
-          });
+          };
         } catch (err) {
           console.warn(`Failed to load process ${processId}:`, err);
-          // Add basic info even if we can't get full details
-          processDetails.push({
+          return {
             id: processId,
             title: 'Process ' + processId.slice(0, 8) + '...',
             description: 'Unable to load process details',
@@ -150,24 +181,38 @@ export default function ProcessesPage() {
             voteCount: '0',
             startTime: 0,
             isAcceptingVotes: false,
-          });
+          };
         }
-      }
+      });
+      
+      // Execute all requests in parallel
+      const processDetails = await Promise.all(processPromises);
       
       // Sort by start time (newest first)
       processDetails.sort((a, b) => b.startTime - a.startTime);
       
       setProcesses(processDetails);
+      setCurrentPage(page);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load processes');
-      console.error('Error loading processes:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load page');
+      console.error('Error loading page:', err);
     } finally {
       setIsLoading(false);
+      setIsLoadingPage(false);
     }
   };
 
+  const handlePageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
+    loadPage(page);
+  };
+
+  const handleRefresh = () => {
+    setCurrentPage(1);
+    loadAllProcessIds();
+  };
+
   useEffect(() => {
-    loadProcesses();
+    loadAllProcessIds();
   }, []);
 
   const formatDate = (timestamp: number | string) => {
@@ -202,7 +247,7 @@ export default function ProcessesPage() {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={loadProcesses}
+              onClick={handleRefresh}
               disabled={isLoading}
             >
               Refresh
@@ -234,88 +279,122 @@ export default function ProcessesPage() {
               </CardContent>
             </Card>
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
-              {processes.map((process) => (
-                <Box key={process.id}>
-                  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Typography variant="h6" component="h2" sx={{ flexGrow: 1, mr: 1 }}>
-                          {process.title}
-                        </Typography>
-                        <Chip
-                          label={getStatusText(process.status)}
-                          color={getStatusColor(process.status) as any}
-                          size="small"
-                        />
-                      </Box>
+            <>
+              {/* Page Info */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalProcesses)} of {totalProcesses} processes
+                </Typography>
+                {isLoadingPage && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2" color="text.secondary">
+                      Loading...
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
 
-                      <Typography variant="body2" color="text.secondary" paragraph>
-                        {process.description}
-                      </Typography>
-
-                      <List dense>
-                        <ListItem disablePadding>
-                          <ListItemText
-                            primary="Process ID"
-                            secondary={`${process.id.slice(0, 8)}...${process.id.slice(-8)}`}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                            secondaryTypographyProps={{ variant: 'body2', fontFamily: 'monospace' }}
+              {/* Processes Grid */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3, mb: 4 }}>
+                {processes.map((process) => (
+                  <Box key={process.id}>
+                    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                      <CardContent sx={{ flexGrow: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                          <Typography variant="h6" component="h2" sx={{ flexGrow: 1, mr: 1 }}>
+                            {process.title}
+                          </Typography>
+                          <Chip
+                            label={getStatusText(process.status)}
+                            color={getStatusColor(process.status) as any}
+                            size="small"
                           />
-                        </ListItem>
-                        <ListItem disablePadding>
-                          <ListItemText
-                            primary="Votes"
-                            secondary={process.voteCount}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                            secondaryTypographyProps={{ variant: 'body2' }}
-                          />
-                        </ListItem>
-                        <ListItem disablePadding>
-                          <ListItemText
-                            primary="Start Time"
-                            secondary={formatDate(process.startTime)}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                            secondaryTypographyProps={{ variant: 'body2' }}
-                          />
-                        </ListItem>
-                        <ListItem disablePadding>
-                          <ListItemText
-                            primary="Accepting Votes"
-                            secondary={process.isAcceptingVotes ? 'Yes' : 'No'}
-                            primaryTypographyProps={{ variant: 'caption' }}
-                            secondaryTypographyProps={{ variant: 'body2' }}
-                          />
-                        </ListItem>
-                      </List>
-                    </CardContent>
-
-                    <Box sx={{ p: 2, pt: 0 }}>
-                      <Tooltip title="View process details">
-                        <Box
-                          onClick={() => router.push(`/process-detail?id=${process.id}`)}
-                          sx={{ 
-                            border: 1, 
-                            borderColor: 'divider',
-                            borderRadius: 1,
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            py: 1,
-                            cursor: 'pointer',
-                            '&:hover': {
-                              backgroundColor: 'action.hover'
-                            }
-                          }}
-                        >
-                          <VisibilityIcon fontSize="small" />
                         </Box>
-                      </Tooltip>
-                    </Box>
-                  </Card>
+
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          {process.description}
+                        </Typography>
+
+                        <List dense>
+                          <ListItem disablePadding>
+                            <ListItemText
+                              primary="Process ID"
+                              secondary={`${process.id.slice(0, 8)}...${process.id.slice(-8)}`}
+                              primaryTypographyProps={{ variant: 'caption' }}
+                              secondaryTypographyProps={{ variant: 'body2', fontFamily: 'monospace' }}
+                            />
+                          </ListItem>
+                          <ListItem disablePadding>
+                            <ListItemText
+                              primary="Votes"
+                              secondary={process.voteCount}
+                              primaryTypographyProps={{ variant: 'caption' }}
+                              secondaryTypographyProps={{ variant: 'body2' }}
+                            />
+                          </ListItem>
+                          <ListItem disablePadding>
+                            <ListItemText
+                              primary="Start Time"
+                              secondary={formatDate(process.startTime)}
+                              primaryTypographyProps={{ variant: 'caption' }}
+                              secondaryTypographyProps={{ variant: 'body2' }}
+                            />
+                          </ListItem>
+                          <ListItem disablePadding>
+                            <ListItemText
+                              primary="Accepting Votes"
+                              secondary={process.isAcceptingVotes ? 'Yes' : 'No'}
+                              primaryTypographyProps={{ variant: 'caption' }}
+                              secondaryTypographyProps={{ variant: 'body2' }}
+                            />
+                          </ListItem>
+                        </List>
+                      </CardContent>
+
+                      <Box sx={{ p: 2, pt: 0 }}>
+                        <Tooltip title="View process details">
+                          <Box
+                            onClick={() => router.push(`/process-detail?id=${process.id}`)}
+                            sx={{ 
+                              border: 1, 
+                              borderColor: 'divider',
+                              borderRadius: 1,
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              py: 1,
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: 'action.hover'
+                              }
+                            }}
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </Box>
+                        </Tooltip>
+                      </Box>
+                    </Card>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Pagination Controls */}
+              {totalProcesses > PAGE_SIZE && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                  <Pagination
+                    count={Math.ceil(totalProcesses / PAGE_SIZE)}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                    color="primary"
+                    size="large"
+                    showFirstButton
+                    showLastButton
+                    disabled={isLoadingPage}
+                  />
                 </Box>
-              ))}
-            </Box>
+              )}
+            </>
           )}
         </Box>
       </Layout>
