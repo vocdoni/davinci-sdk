@@ -676,7 +676,7 @@ export default function ProcessDetailClient() {
         return Uint8Array.from(Buffer.from(hexString.replace(/^0x/, ""), "hex"));
       };
 
-      const signature = await wallet.signMessage(hexStringToUint8Array(out.voteID));
+      const signature = await wallet.signMessage(hexStringToUint8Array(out.voteId));
 
       const voteRequest = {
         processId: processData.id,
@@ -686,11 +686,11 @@ export default function ProcessDetailClient() {
         ballotInputsHash: out.ballotInputHash,
         address: walletAddress,
         signature,
-        voteId: out.voteID,
+        voteId: out.voteId,
       };
 
       await api.submitVote(voteRequest);
-      const voteId = out.voteID;
+      const voteId = out.voteId;
       setVoteStatus(prev => ({ ...prev, voteSubmitted: true }));
       setActiveStep(4);
 
