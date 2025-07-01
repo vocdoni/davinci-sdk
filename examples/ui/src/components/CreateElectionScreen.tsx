@@ -32,6 +32,7 @@ import {
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
 import { getProcessRegistryAddress } from '../utils/contractAddresses';
+import { getTransactionUrl } from '../utils/explorerUrl';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -471,13 +472,13 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
                 </Box>
                 <Box sx={{ mt: 1 }}>
                   <Link
-                    href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                    href={getTransactionUrl(txHash)}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
                     sx={{ display: 'inline-block' }}
                   >
-                    View transaction status on Etherscan
+                    View transaction status
                   </Link>
                 </Box>
               </Box>
@@ -499,7 +500,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
                   Election created successfully!
                 </Typography>
                 <Link
-                  href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                  href={getTransactionUrl(txHash!)}
                   target="_blank"
                   rel="noopener noreferrer"
                   color="primary"

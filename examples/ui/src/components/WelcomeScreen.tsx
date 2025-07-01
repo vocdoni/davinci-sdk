@@ -19,6 +19,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
 import { getContractAddresses } from '../utils/contractAddresses';
+import { getAddressUrl } from '../utils/explorerUrl';
 
 interface WelcomeScreenProps {
   onNext: () => void;
@@ -139,8 +140,8 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
               <ListItemText 
                 primary="Organization Registry Contract" 
                 secondary={
-                  <Link 
-                    href={`https://sepolia.etherscan.io/address/${contractAddresses.organizationRegistry}`}
+                  <Link
+                    href={getAddressUrl(contractAddresses.organizationRegistry)}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
@@ -172,7 +173,7 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
                 primary="Process Registry Contract" 
                 secondary={
                   <Link 
-                    href={`https://sepolia.etherscan.io/address/${contractAddresses.processRegistry}`}
+                    href={getAddressUrl(contractAddresses.processRegistry)}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
