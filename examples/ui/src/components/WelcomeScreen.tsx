@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Button,
@@ -13,10 +14,12 @@ import {
   Alert,
   Link,
   Tooltip,
+  Divider,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import ListIcon from '@mui/icons-material/List';
 import { VocdoniApiService } from '@vocdoni/davinci-sdk';
 import { getContractAddresses } from '../utils/contractAddresses';
 import { getAddressUrl } from '../utils/explorerUrl';
@@ -26,6 +29,7 @@ interface WelcomeScreenProps {
 }
 
 export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
+  const router = useRouter();
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
@@ -196,23 +200,42 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
         </Alert>
       ) : null}
 
-      <Button
-        variant="contained"
-        color="primary"
-        size="large"
-        disabled={
-          !isConnected || 
-          isLoading || 
-          Boolean(apiAddresses && (
-            apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
-            apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
-          ))
-        }
-        onClick={onNext}
-        endIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
-      >
-        {isLoading ? 'Checking Connection...' : 'Next'}
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          size="large"
+          startIcon={<ListIcon />}
+          disabled={!isConnected || isLoading}
+          onClick={() => router.push('/processes')}
+          sx={{ minWidth: 200 }}
+        >
+          View Existing Processes
+        </Button>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          disabled={
+            !isConnected || 
+            isLoading || 
+            Boolean(apiAddresses && (
+              apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
+              apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
+            ))
+          }
+          onClick={onNext}
+          endIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
+          sx={{ minWidth: 200 }}
+        >
+          {isLoading ? 'Checking Connection...' : 'Create New Process'}
+        </Button>
+      </Box>
+
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+        Browse existing voting processes on the network or start creating a new one
+      </Typography>
     </Box>
   );
 }
