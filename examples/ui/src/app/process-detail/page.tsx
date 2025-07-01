@@ -409,7 +409,7 @@ export default function ProcessDetailPage() {
             // Merge metadata into process data (keep original structure)
             processWithMetadata = {
               ...processResponse,
-              metadata: metadata
+              metadata: metadata as any
             };
             
             const mappedQuestions: Question[] = (metadata.questions || []).map(q => ({
@@ -419,7 +419,7 @@ export default function ProcessDetailPage() {
                 title: c.title || { default: '' },
                 value: c.value
               }))
-            }));
+            })) as Question[];
             setQuestions(mappedQuestions);
             
             // Initialize answers
@@ -440,7 +440,7 @@ export default function ProcessDetailPage() {
                 title: c.title || { default: '' },
                 value: c.value
               }))
-            }));
+            })) as Question[];
             setQuestions(mappedQuestions);
           }
         }
