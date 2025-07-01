@@ -680,16 +680,14 @@ export default function ProcessDetailClient() {
       const signature = await wallet.signMessage(hexStringToUint8Array(out.voteID));
 
       const voteRequest = {
-        address: walletAddress,
-        ballot: voteBallot,
-        ballotInputsHash: out.ballotInputHash,
-        ballotProof: proof,
-        censusProof,
         processId: processData.id,
+        censusProof,
+        ballot: voteBallot,
+        ballotProof: { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
+        ballotInputsHash: out.ballotInputHash,
+        address: walletAddress,
         signature,
         voteId: out.voteID,
-        commitment: out.commitment,
-        nullifier: out.nullifier,
       };
 
       await api.submitVote(voteRequest);
