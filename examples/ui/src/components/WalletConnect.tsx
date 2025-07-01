@@ -14,6 +14,7 @@ import {
   Tab,
 } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { getAddressUrl } from '../utils/explorerUrl';
 
 interface WalletConnectProps {
   onWalletConnected: (wallet: Wallet | JsonRpcSigner) => void;
@@ -155,7 +156,7 @@ export default function WalletConnect({ onWalletConnected }: WalletConnectProps)
             <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
               Address:{' '}
               <Link
-                href={`https://sepolia.etherscan.io/address/${address}`}
+                href={getAddressUrl(address)}
                 target="_blank"
                 rel="noopener noreferrer"
               >

@@ -23,6 +23,7 @@ import {
 } from '@vocdoni/davinci-sdk';
 import { Wallet, JsonRpcSigner } from 'ethers';
 import { getProcessRegistryAddress } from '../utils/contractAddresses';
+import { getTransactionUrl } from '../utils/explorerUrl';
 
 interface EndProcessScreenProps {
   onBack: () => void;
@@ -182,12 +183,12 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
                     {processState.txStatus}
                   </Typography>
                   <Link
-                    href={`https://sepolia.etherscan.io/tx/${processState.txHash}`}
+                    href={getTransactionUrl(processState.txHash)}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
                   >
-                    View on Etherscan
+                    View on Explorer
                   </Link>
                 </Box>
               )}
