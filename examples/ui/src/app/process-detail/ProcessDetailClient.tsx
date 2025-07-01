@@ -683,7 +683,7 @@ export default function ProcessDetailClient() {
         censusProof,
         ballot: voteBallot,
         ballotProof: { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
-        ballotInputsHash: out.ballotInputHash,
+        ballotInputsHash: out.ballotInputsHash,
         address: walletAddress,
         signature,
         voteId: out.voteId,
