@@ -1,4 +1,5 @@
 import { useWallets } from '@/context/WalletContext'
+import { hexStringToUint8Array } from '@/utils/hexStringToUint8Array'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import PendingIcon from '@mui/icons-material/Pending'
@@ -284,10 +285,6 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       const voteBallot: VoteBallot = {
         curveType: out.ballot.curveType,
         ciphertexts: out.ballot.ciphertexts,
-      }
-
-      const hexStringToUint8Array = (hexString: string): Uint8Array => {
-        return Uint8Array.from(Buffer.from(hexString.replace(/^0x/, ''), 'hex'))
       }
 
       const signature = await wallet.signMessage(hexStringToUint8Array(out.voteId))
