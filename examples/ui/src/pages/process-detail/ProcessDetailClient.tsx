@@ -1,4 +1,5 @@
 import Layout from '@/components/layout/Layout'
+import { hexStringToUint8Array } from '@/utils/hexStringToUint8Array'
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
@@ -687,10 +688,6 @@ export default function ProcessDetailClient() {
       const voteBallot: VoteBallot = {
         curveType: out.ballot.curveType,
         ciphertexts: out.ballot.ciphertexts,
-      }
-
-      const hexStringToUint8Array = (hexString: string): Uint8Array => {
-        return Uint8Array.from(Buffer.from(hexString.replace(/^0x/, ''), 'hex'))
       }
 
       const signature = await wallet.signMessage(hexStringToUint8Array(out.voteId))
