@@ -225,16 +225,16 @@
   dependencies:
     undici-types "~6.21.0"
 
-"@vocdoni/davinci-contracts@0.0.5":
-  version "0.0.5"
-  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.5.tgz#c30926116e1ad817d33e382b26312e3308c62c4e"
-  integrity sha512-8uVE78hJUEQpmY5QIe2M4voDXbonfgOlv2Iqng3ko5jkpGmXBpyoa7RzEpjDAAdLPyTAknfgIC/C/bgtKya6FA==
+"@vocdoni/davinci-contracts@0.0.12":
+  version "0.0.12"
+  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.12.tgz#336b9a4752b5b9af4ff01273a9b324a5c09ce202"
+  integrity sha512-NB060CKjgaqTdtx5AaFs8+3WG/GgpGXhM+wpC679XwPI65t9BOhI+eQAbtne2TKWYYyU4fPQ+cIXR6KvKAp/mg==
 
 "@vocdoni/davinci-sdk@file:../..":
-  version "0.0.1"
+  version "0.0.2"
   dependencies:
     "@ethereumjs/common" "^4.4.0"
-    "@vocdoni/davinci-contracts" "0.0.5"
+    "@vocdoni/davinci-contracts" "0.0.12"
     axios "^1.8.4"
     ethers "^6.7.1"
     snarkjs "^0.7.5"
