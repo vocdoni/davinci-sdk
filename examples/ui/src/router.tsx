@@ -3,19 +3,24 @@ import Home from './pages/Home'
 import ProcessDetailPage from './pages/process-detail'
 import ProcessesPage from './pages/processes'
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
+    {
+      path: '/',
+      Component: Home,
+    },
+    {
+      path: '/processes',
+      Component: ProcessesPage,
+    },
+    {
+      path: '/process-detail/:id',
+      Component: ProcessDetailPage,
+    },
+  ],
   {
-    path: '/',
-    Component: Home,
-  },
-  {
-    path: '/processes',
-    Component: ProcessesPage,
-  },
-  {
-    path: '/process-detail/:id',
-    Component: ProcessDetailPage,
-  },
-])
+    basename: import.meta.env.BASE_URL,
+  }
+)
 
 export const Router = () => <RouterProvider router={router} />
