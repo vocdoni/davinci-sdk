@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22.12.0'
           
       - name: Clean yarn cache
         run: yarn cache clean
@@ -48,7 +48,7 @@ jobs:
           cd examples/ui
           yarn install
         
-      - name: Build with Next.js
+      - name: Build with Vite
         run: |
           cd examples/ui
           yarn build
@@ -56,11 +56,14 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           RPC_URL: ${{ secrets.SEPOLIA_RPC }}
           ESLINT_NO_DEV_ERRORS: true
+
+      - name: Copy index.html to 404.html for SPA fallback
+        run: cp examples/ui/dist/index.html examples/ui/dist/404.html
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./examples/ui/out
+          path: ./examples/ui/dist
 
   # Deployment job
   deploy:
