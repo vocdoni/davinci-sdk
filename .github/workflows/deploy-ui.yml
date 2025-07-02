@@ -53,6 +53,7 @@ jobs:
           cd examples/ui
           yarn build
         env:
+          NODE_ENV: production
           API_URL: ${{ secrets.API_URL }}
           RPC_URL: ${{ secrets.SEPOLIA_RPC }}
           ESLINT_NO_DEV_ERRORS: true
