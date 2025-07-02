@@ -1,10 +1,10 @@
-import { deployedAddresses } from '@vocdoni/davinci-sdk';
+import { deployedAddresses } from '@vocdoni/davinci-sdk'
 
 /**
  * Validates if a string is a valid Ethereum address
  */
 function isValidAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
+  return /^0x[a-fA-F0-9]{40}$/.test(address)
 }
 
 /**
@@ -12,13 +12,13 @@ function isValidAddress(address: string): boolean {
  * Uses environment variable if set and valid, otherwise falls back to deployed addresses
  */
 export function getOrganizationRegistryAddress(): string {
-  const envAddress = process.env.ORGANIZATION_REGISTRY_ADDRESS;
-  
+  const envAddress = import.meta.env.ORGANIZATION_REGISTRY_ADDRESS
+
   if (envAddress && isValidAddress(envAddress)) {
-    return envAddress;
+    return envAddress
   }
-  
-  return deployedAddresses.organizationRegistry.sepolia;
+
+  return deployedAddresses.organizationRegistry.sepolia
 }
 
 /**
@@ -26,13 +26,13 @@ export function getOrganizationRegistryAddress(): string {
  * Uses environment variable if set and valid, otherwise falls back to deployed addresses
  */
 export function getProcessRegistryAddress(): string {
-  const envAddress = process.env.PROCESS_REGISTRY_ADDRESS;
-  
+  const envAddress = import.meta.env.PROCESS_REGISTRY_ADDRESS
+
   if (envAddress && isValidAddress(envAddress)) {
-    return envAddress;
+    return envAddress
   }
-  
-  return deployedAddresses.processRegistry.sepolia;
+
+  return deployedAddresses.processRegistry.sepolia
 }
 
 /**
@@ -42,5 +42,5 @@ export function getContractAddresses() {
   return {
     organizationRegistry: getOrganizationRegistryAddress(),
     processRegistry: getProcessRegistryAddress(),
-  };
+  }
 }

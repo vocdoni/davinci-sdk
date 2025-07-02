@@ -1,104 +1,102 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ErrorIcon from '@mui/icons-material/Error'
+import ListIcon from '@mui/icons-material/List'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
-  Typography,
+  Link,
   List,
   ListItem,
-  ListItemText,
   ListItemIcon,
-  Alert,
-  Link,
+  ListItemText,
   Tooltip,
-  Divider,
-} from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
-import ListIcon from '@mui/icons-material/List';
-import { VocdoniApiService } from '@vocdoni/davinci-sdk';
-import { getContractAddresses } from '../utils/contractAddresses';
-import { getAddressUrl } from '../utils/explorerUrl';
+  Typography,
+} from '@mui/material'
+import { VocdoniApiService } from '@vocdoni/davinci-sdk'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { getContractAddresses } from '../utils/contractAddresses'
+import { getAddressUrl } from '../utils/explorerUrl'
 
 interface WelcomeScreenProps {
-  onNext: () => void;
+  onNext: () => void
 }
 
 export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
-  const router = useRouter();
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
+  const navigate = useNavigate()
+  const [isConnected, setIsConnected] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string>('')
   const [apiAddresses, setApiAddresses] = useState<{
-    process: string;
-    organization: string;
-  } | null>(null);
+    process: string
+    organization: string
+  } | null>(null)
 
   // Get contract addresses (from env vars or fallback to deployed addresses)
-  const contractAddresses = getContractAddresses();
+  const contractAddresses = getContractAddresses()
 
   useEffect(() => {
-    checkConnection();
-  }, []);
+    checkConnection()
+  }, [])
 
   const checkConnection = async () => {
     try {
-      setIsLoading(true);
-      setError('');
-      const api = new VocdoniApiService(process.env.API_URL || '');
-      await api.ping();
-      const info = await api.getInfo();
+      setIsLoading(true)
+      setError('')
+      const api = new VocdoniApiService(import.meta.env.API_URL)
+      await api.ping()
+      const info = await api.getInfo()
       setApiAddresses({
         process: info.contracts.process.toLowerCase(),
-        organization: info.contracts.organization.toLowerCase()
-      });
-      setIsConnected(true);
+        organization: info.contracts.organization.toLowerCase(),
+      })
+      setIsConnected(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect to API');
-      setIsConnected(false);
+      setError(err instanceof Error ? err.message : 'Failed to connect to API')
+      setIsConnected(false)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', textAlign: 'center' }}>
-      <Typography variant="h4" component="h1" gutterBottom>
+      <Typography variant='h4' component='h1' gutterBottom>
         Welcome to DAVINCI Demo
       </Typography>
 
-      <Typography variant="h6" color="primary" gutterBottom sx={{ fontStyle: 'italic' }}>
+      <Typography variant='h6' color='primary' gutterBottom sx={{ fontStyle: 'italic' }}>
         Decentralized Autonomous Vote Integrity Network with Cryptographic Inference
       </Typography>
-      
-      <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
-        DAVINCI is a voting protocol designed for mass adoption, privacy, and security. 
-        It enables high-frequency, low-cost elections while ensuring transparency, 
-        censorship resistance, anticoercion and integrity.
+
+      <Typography variant='body1' color='text.secondary' paragraph sx={{ mb: 4 }}>
+        DAVINCI is a voting protocol designed for mass adoption, privacy, and security. It enables high-frequency,
+        low-cost elections while ensuring transparency, censorship resistance, anticoercion and integrity.
       </Typography>
 
       <Card sx={{ mb: 4 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant='h6' gutterBottom>
             Connection Status
           </Typography>
-          
+
           {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
               <CircularProgress />
             </Box>
           ) : error ? (
             <Box>
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity='error' sx={{ mb: 2 }}>
                 {error}
               </Alert>
               <Button
-                variant="outlined"
-                color="primary"
+                variant='outlined'
+                color='primary'
                 onClick={checkConnection}
                 startIcon={<RefreshIcon />}
                 disabled={isLoading}
@@ -107,48 +105,47 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
               </Button>
             </Box>
           ) : isConnected ? (
-            <Alert severity="success" sx={{ mb: 2 }}>
+            <Alert severity='success' sx={{ mb: 2 }}>
               Connected to Vocdoni API
             </Alert>
           ) : null}
 
-          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          <Typography variant='h6' gutterBottom sx={{ mt: 3 }}>
             Network Information
           </Typography>
-          
+
           <List>
             <ListItem>
-              <ListItemText 
-                primary="Network" 
-                secondary="Sepolia Testnet" 
-              />
+              <ListItemText primary='Network' secondary='Sepolia Testnet' />
             </ListItem>
             <ListItem>
-              <Tooltip title={
-                apiAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ?
-                "Contract address verified" :
-                "Contract address mismatch between SDK and API"
-              }>
+              <Tooltip
+                title={
+                  apiAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase()
+                    ? 'Contract address verified'
+                    : 'Contract address mismatch between SDK and API'
+                }
+              >
                 <ListItemIcon>
                   {apiAddresses ? (
                     apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ? (
-                      <CheckCircleIcon color="success" />
+                      <CheckCircleIcon color='success' />
                     ) : (
-                      <ErrorIcon color="error" />
+                      <ErrorIcon color='error' />
                     )
                   ) : (
                     <CircularProgress size={24} />
                   )}
                 </ListItemIcon>
               </Tooltip>
-              <ListItemText 
-                primary="Organization Registry Contract" 
+              <ListItemText
+                primary='Organization Registry Contract'
                 secondary={
                   <Link
                     href={getAddressUrl(contractAddresses.organizationRegistry)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    color="primary"
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    color='primary'
                   >
                     {contractAddresses.organizationRegistry}
                   </Link>
@@ -156,31 +153,33 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
               />
             </ListItem>
             <ListItem>
-              <Tooltip title={
-                apiAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ?
-                "Contract address verified" :
-                "Contract address mismatch between SDK and API"
-              }>
+              <Tooltip
+                title={
+                  apiAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase()
+                    ? 'Contract address verified'
+                    : 'Contract address mismatch between SDK and API'
+                }
+              >
                 <ListItemIcon>
                   {apiAddresses ? (
                     apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ? (
-                      <CheckCircleIcon color="success" />
+                      <CheckCircleIcon color='success' />
                     ) : (
-                      <ErrorIcon color="error" />
+                      <ErrorIcon color='error' />
                     )
                   ) : (
                     <CircularProgress size={24} />
                   )}
                 </ListItemIcon>
               </Tooltip>
-              <ListItemText 
-                primary="Process Registry Contract" 
+              <ListItemText
+                primary='Process Registry Contract'
                 secondary={
-                  <Link 
+                  <Link
                     href={getAddressUrl(contractAddresses.processRegistry)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    color="primary"
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    color='primary'
                   >
                     {contractAddresses.processRegistry}
                   </Link>
@@ -191,51 +190,51 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
         </CardContent>
       </Card>
 
-      {apiAddresses && (
-        apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
-        apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
-      ) ? (
-        <Alert severity="error" sx={{ mb: 2 }}>
+      {apiAddresses &&
+      (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
+        apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()) ? (
+        <Alert severity='error' sx={{ mb: 2 }}>
           Contract addresses mismatch between SDK and API. Please check the configuration.
         </Alert>
       ) : null}
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
         <Button
-          variant="outlined"
-          color="primary"
-          size="large"
+          variant='outlined'
+          color='primary'
+          size='large'
           startIcon={<ListIcon />}
           disabled={!isConnected || isLoading}
-          onClick={() => router.push('/processes')}
+          onClick={() => navigate('/processes')}
           sx={{ minWidth: 200 }}
         >
           View Existing Processes
         </Button>
-        
+
         <Button
-          variant="contained"
-          color="primary"
-          size="large"
+          variant='contained'
+          color='primary'
+          size='large'
           disabled={
-            !isConnected || 
-            isLoading || 
-            Boolean(apiAddresses && (
-              apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
-              apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()
-            ))
+            !isConnected ||
+            isLoading ||
+            Boolean(
+              apiAddresses &&
+                (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
+                  apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase())
+            )
           }
           onClick={onNext}
-          endIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
+          endIcon={isLoading ? <CircularProgress size={20} color='inherit' /> : null}
           sx={{ minWidth: 200 }}
         >
           {isLoading ? 'Checking Connection...' : 'Create New Process'}
         </Button>
       </Box>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+      <Typography variant='body2' color='text.secondary' sx={{ mt: 2 }}>
         Browse existing voting processes on the network or start creating a new one
       </Typography>
     </Box>
-  );
+  )
 }

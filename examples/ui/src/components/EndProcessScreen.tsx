@@ -1,42 +1,37 @@
-import { useState, useEffect } from 'react';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import PendingIcon from '@mui/icons-material/Pending'
 import {
+  Alert,
   Box,
   Button,
-  Typography,
   Card,
   CardContent,
-  Alert,
   CircularProgress,
+  Link,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  Link,
-} from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PendingIcon from '@mui/icons-material/Pending';
-import { 
-  ProcessRegistryService,
-  ProcessStatus,
-  SmartContractService,
-  TxStatus
-} from '@vocdoni/davinci-sdk';
-import { Wallet, JsonRpcSigner } from 'ethers';
-import { getProcessRegistryAddress } from '../utils/contractAddresses';
-import { getTransactionUrl } from '../utils/explorerUrl';
+  Typography,
+} from '@mui/material'
+import { ProcessRegistryService, ProcessStatus, TxStatus } from '@vocdoni/davinci-sdk'
+import { JsonRpcSigner, Wallet } from 'ethers'
+import { useState } from 'react'
+import { getProcessRegistryAddress } from '../utils/contractAddresses'
+import { getTransactionUrl } from '../utils/explorerUrl'
 
 interface EndProcessScreenProps {
-  onBack: () => void;
-  onNext: () => void;
-  wallet: Wallet | JsonRpcSigner;
+  onBack: () => void
+  onNext: () => void
+  wallet: Wallet | JsonRpcSigner
 }
 
 interface ProcessState {
-  processEnded: boolean;
-  resultsReady: boolean;
-  error: string | null;
-  txHash: string | null;
-  txStatus: string;
+  processEnded: boolean
+  resultsReady: boolean
+  error: string | null
+  txHash: string | null
+  txStatus: string
 }
 
 export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessScreenProps) {
@@ -45,88 +40,84 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
     resultsReady: false,
     error: null,
     txHash: null,
-    txStatus: ''
-  });
-  const [isLoading, setIsLoading] = useState(false);
+    txStatus: '',
+  })
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleEndProcess = async () => {
     try {
-      setIsLoading(true);
-      const detailsStr = localStorage.getItem('electionDetails');
-      if (!detailsStr) throw new Error('Election details not found');
-      const details = JSON.parse(detailsStr);
+      setIsLoading(true)
+      const detailsStr = localStorage.getItem('electionDetails')
+      if (!detailsStr) throw new Error('Election details not found')
+      const details = JSON.parse(detailsStr)
 
-      const registry = new ProcessRegistryService(
-        getProcessRegistryAddress(),
-        wallet
-      );
+      const registry = new ProcessRegistryService(getProcessRegistryAddress(), wallet)
 
       // End the process
       for await (const status of registry.setProcessStatus(details.processId, ProcessStatus.ENDED)) {
         if (status.status === TxStatus.Pending) {
-          setProcessState(prev => ({
+          setProcessState((prev) => ({
             ...prev,
             txStatus: 'Transaction pending...',
-            txHash: status.hash
-          }));
+            txHash: status.hash,
+          }))
         } else if (status.status === TxStatus.Completed) {
-          setProcessState(prev => ({
+          setProcessState((prev) => ({
             ...prev,
             txStatus: 'Transaction confirmed!',
-            processEnded: true
-          }));
+            processEnded: true,
+          }))
         } else if (status.status === TxStatus.Failed || status.status === TxStatus.Reverted) {
-          throw new Error(`Transaction ${status.status.toLowerCase()}`);
+          throw new Error(`Transaction ${status.status.toLowerCase()}`)
         }
       }
 
       // Wait for results to be set
-      setProcessState(prev => ({
+      setProcessState((prev) => ({
         ...prev,
-        txStatus: 'Waiting for process results to be set...'
-      }));
+        txStatus: 'Waiting for process results to be set...',
+      }))
 
       const resultsReady = new Promise<void>((resolve) => {
         registry.onProcessResultsSet((id: string, sender: string, result: bigint[]) => {
           if (id.toLowerCase() === details.processId.toLowerCase()) {
-            console.log(`Results set by ${sender} with ${result.length} values`);
-            setProcessState(prev => ({
+            console.log(`Results set by ${sender} with ${result.length} values`)
+            setProcessState((prev) => ({
               ...prev,
               txStatus: 'Process results have been set',
-              resultsReady: true
-            }));
-            resolve();
+              resultsReady: true,
+            }))
+            resolve()
           }
-        });
-      });
-      
-      await resultsReady;
+        })
+      })
 
+      await resultsReady
     } catch (err) {
-      setProcessState(prev => ({
+      setProcessState((prev) => ({
         ...prev,
-        error: err instanceof Error ? err.message : 'Failed to end process'
-      }));
-      console.error('Error ending process:', err);
+        error: err instanceof Error ? err.message : 'Failed to end process',
+      }))
+      console.error('Error ending process:', err)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', textAlign: 'center' }}>
-      <Typography variant="h4" component="h1" gutterBottom>
+      <Typography variant='h4' component='h1' gutterBottom>
         End Process & Check Results
       </Typography>
 
-      <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 4 }}>
+      <Typography variant='body1' color='text.secondary' paragraph sx={{ mb: 4 }}>
         End the voting process and wait for results to be available.
       </Typography>
 
       <Card sx={{ mb: 4 }}>
         <CardContent>
           {processState.error ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity='error' sx={{ mb: 2 }}>
               {processState.error}
             </Alert>
           ) : (
@@ -135,21 +126,21 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
                 <ListItem>
                   <ListItemIcon>
                     {processState.processEnded ? (
-                      <CheckCircleIcon color="success" />
+                      <CheckCircleIcon color='success' />
                     ) : isLoading ? (
                       <CircularProgress size={24} />
                     ) : (
-                      <PendingIcon color="action" />
+                      <PendingIcon color='action' />
                     )}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary="End Process"
+                  <ListItemText
+                    primary='End Process'
                     secondary={
-                      processState.processEnded 
-                        ? "Process ended successfully" 
-                        : isLoading 
-                        ? processState.txStatus || "Ending process..." 
-                        : "Process needs to be ended"
+                      processState.processEnded
+                        ? 'Process ended successfully'
+                        : isLoading
+                          ? processState.txStatus || 'Ending process...'
+                          : 'Process needs to be ended'
                     }
                   />
                 </ListItem>
@@ -157,21 +148,21 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
                 <ListItem>
                   <ListItemIcon>
                     {processState.resultsReady ? (
-                      <CheckCircleIcon color="success" />
+                      <CheckCircleIcon color='success' />
                     ) : processState.processEnded ? (
                       <CircularProgress size={24} />
                     ) : (
-                      <PendingIcon color="action" />
+                      <PendingIcon color='action' />
                     )}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary="Results Status"
+                  <ListItemText
+                    primary='Results Status'
                     secondary={
-                      processState.resultsReady 
-                        ? "Results are ready" 
-                        : processState.processEnded 
-                        ? "Waiting for results..." 
-                        : "End process first"
+                      processState.resultsReady
+                        ? 'Results are ready'
+                        : processState.processEnded
+                          ? 'Waiting for results...'
+                          : 'End process first'
                     }
                   />
                 </ListItem>
@@ -179,14 +170,14 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
 
               {processState.txHash && (
                 <Box sx={{ mt: 2, mb: 3, textAlign: 'center' }}>
-                  <Typography variant="body1" color="text.secondary" gutterBottom>
+                  <Typography variant='body1' color='text.secondary' gutterBottom>
                     {processState.txStatus}
                   </Typography>
                   <Link
                     href={getTransactionUrl(processState.txHash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    color="primary"
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    color='primary'
                   >
                     View on Explorer
                   </Link>
@@ -195,8 +186,8 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
 
               <Button
                 fullWidth
-                variant="contained"
-                color="primary"
+                variant='contained'
+                color='primary'
                 onClick={handleEndProcess}
                 disabled={isLoading || processState.processEnded}
                 sx={{ mt: 2 }}
@@ -209,21 +200,13 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
       </Card>
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-        <Button
-          variant="outlined"
-          onClick={onBack}
-          disabled={isLoading}
-        >
+        <Button variant='outlined' onClick={onBack} disabled={isLoading}>
           Back
         </Button>
-        <Button
-          variant="contained"
-          onClick={onNext}
-          disabled={!processState.resultsReady}
-        >
+        <Button variant='contained' onClick={onNext} disabled={!processState.resultsReady}>
           Next
         </Button>
       </Box>
     </Box>
-  );
+  )
 }
