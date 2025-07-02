@@ -1,8 +1,8 @@
-import { Box, Stepper, Step, StepLabel } from '@mui/material';
+import { Box, Step, StepLabel, Stepper } from '@mui/material'
 
 interface StepIndicatorProps {
-  activeStep: number;
-  steps: readonly string[];
+  activeStep: number
+  steps: readonly string[]
 }
 
 export default function StepIndicator({ activeStep, steps }: StepIndicatorProps) {
@@ -16,5 +16,5 @@ export default function StepIndicator({ activeStep, steps }: StepIndicatorProps)
         ))}
       </Stepper>
     </Box>
-  );
+  )
 }

@@ -1,223 +1,223 @@
-import { useState } from 'react';
+import AddIcon from '@mui/icons-material/Add'
+import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
 import {
+  Alert,
   Box,
   Button,
-  Typography,
   Card,
   CardContent,
-  TextField,
-  Alert,
   CircularProgress,
+  Divider,
+  IconButton,
   List,
   ListItem,
   ListItemText,
-  IconButton,
-  Divider,
   Paper,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import { 
-  VocdoniApiService, 
+  TextField,
+  Typography,
+} from '@mui/material'
+import {
   getElectionMetadataTemplate,
   ProcessRegistryService,
-  SmartContractService,
   ProcessStatus,
-  Census,
-  EncryptionKey,
   signProcessCreation,
-} from '@vocdoni/davinci-sdk';
-import { Wallet, JsonRpcSigner } from 'ethers';
-import { getProcessRegistryAddress } from '../utils/contractAddresses';
+  SmartContractService,
+  VocdoniApiService,
+  type Census,
+  type EncryptionKey,
+} from '@vocdoni/davinci-sdk'
+import { JsonRpcSigner, Wallet } from 'ethers'
+import { useState } from 'react'
+import { getProcessRegistryAddress } from '../utils/contractAddresses'
 
 interface ConfigureVoteScreenProps {
-  onBack: () => void;
-  onNext: () => void;
-  wallet: Wallet | JsonRpcSigner;
-  censusId: string;
+  onBack: () => void
+  onNext: () => void
+  wallet: Wallet | JsonRpcSigner
+  censusId: string
 }
 
 interface Question {
-  title: { default: string };
-  description: { default: string };
-  choices: Array<{ title: { default: string }; value: number }>;
+  title: { default: string }
+  description: { default: string }
+  choices: Array<{ title: { default: string }; value: number }>
 }
 
 // Ballot mode configuration
 const BALLOT_MODE = {
   maxCount: 1,
-  maxValue: "3",
-  minValue: "0",
+  maxValue: '3',
+  minValue: '0',
   forceUniqueness: false,
   costFromWeight: false,
   costExponent: 0,
-  maxTotalCost: "3",
-  minTotalCost: "0",
-};
+  maxTotalCost: '3',
+  minTotalCost: '0',
+}
 
 export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }: ConfigureVoteScreenProps) {
-  const [title, setTitle] = useState('Test Election');
-  const [description, setDescription] = useState('This is a test election created via the UI');
+  const [title, setTitle] = useState('Test Election')
+  const [description, setDescription] = useState('This is a test election created via the UI')
   const [questions, setQuestions] = useState<Question[]>([
     {
-      title: { default: "What is your favorite programming language?" },
-      description: { default: "Choose your preferred programming language" },
+      title: { default: 'What is your favorite programming language?' },
+      description: { default: 'Choose your preferred programming language' },
       choices: [
-        { title: { default: "JavaScript" }, value: 0 },
-        { title: { default: "Python" }, value: 1 },
-        { title: { default: "Java" }, value: 2 },
-        { title: { default: "Go" }, value: 3 },
+        { title: { default: 'JavaScript' }, value: 0 },
+        { title: { default: 'Python' }, value: 1 },
+        { title: { default: 'Java' }, value: 2 },
+        { title: { default: 'Go' }, value: 3 },
       ],
     },
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [electionCreated, setElectionCreated] = useState(false);
+  ])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [electionCreated, setElectionCreated] = useState(false)
 
   // Question editing states
-  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
-  const [newQuestionTitle, setNewQuestionTitle] = useState('');
-  const [newQuestionDescription, setNewQuestionDescription] = useState('');
-  const [newChoices, setNewChoices] = useState<Record<number, string>>({});
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null)
+  const [newQuestionTitle, setNewQuestionTitle] = useState('')
+  const [newQuestionDescription, setNewQuestionDescription] = useState('')
+  const [newChoices, setNewChoices] = useState<Record<number, string>>({})
 
   const handleAddQuestion = () => {
     setQuestions([
       ...questions,
       {
-        title: { default: "" },
-        description: { default: "" },
+        title: { default: '' },
+        description: { default: '' },
         choices: [],
       },
-    ]);
-    setEditingQuestionIndex(questions.length);
-    setNewQuestionTitle("");
-    setNewQuestionDescription("");
-  };
+    ])
+    setEditingQuestionIndex(questions.length)
+    setNewQuestionTitle('')
+    setNewQuestionDescription('')
+  }
 
   const handleRemoveQuestion = (index: number) => {
     // Check if this is the only valid question (has title and at least 2 choices)
-    const isValidQuestion = (q: Question) => 
-      q.title.default.trim() !== '' && 
-      q.description.default.trim() !== '' && 
-      q.choices.length >= 2;
+    const isValidQuestion = (q: Question) =>
+      q.title.default.trim() !== '' && q.description.default.trim() !== '' && q.choices.length >= 2
 
-    const validQuestions = questions.filter(isValidQuestion);
+    const validQuestions = questions.filter(isValidQuestion)
     if (validQuestions.length === 1 && isValidQuestion(questions[index])) {
-      setError('Cannot remove the last valid question');
-      return;
+      setError('Cannot remove the last valid question')
+      return
     }
 
-    setQuestions(questions.filter((_, i) => i !== index));
+    setQuestions(questions.filter((_, i) => i !== index))
     if (editingQuestionIndex === index) {
-      setEditingQuestionIndex(null);
+      setEditingQuestionIndex(null)
     }
-    setError(null);
-  };
+    setError(null)
+  }
 
   const handleEditQuestion = (index: number) => {
-    setEditingQuestionIndex(index);
-    setNewQuestionTitle(questions[index].title.default);
-    setNewQuestionDescription(questions[index].description.default);
-  };
+    setEditingQuestionIndex(index)
+    setNewQuestionTitle(questions[index].title.default)
+    setNewQuestionDescription(questions[index].description.default)
+  }
 
   const handleSaveQuestion = () => {
-    if (editingQuestionIndex === null) return;
+    if (editingQuestionIndex === null) return
 
-    const updatedQuestions = [...questions];
+    const updatedQuestions = [...questions]
     updatedQuestions[editingQuestionIndex] = {
       ...updatedQuestions[editingQuestionIndex],
       title: { default: newQuestionTitle },
       description: { default: newQuestionDescription },
-    };
-    setQuestions(updatedQuestions);
-    setEditingQuestionIndex(null);
-  };
+    }
+    setQuestions(updatedQuestions)
+    setEditingQuestionIndex(null)
+  }
 
   const handleAddChoice = (questionIndex: number) => {
-    const choiceText = newChoices[questionIndex] || '';
-    if (!choiceText.trim()) return;
+    const choiceText = newChoices[questionIndex] || ''
+    if (!choiceText.trim()) return
 
-    setQuestions(questions.map((question, index) => {
-      if (index === questionIndex) {
-        return {
-          ...question,
-          choices: [
-            ...question.choices,
-            { title: { default: choiceText }, value: question.choices.length },
-          ],
-        };
-      }
-      return question;
-    }));
-    setNewChoices(prev => ({ ...prev, [questionIndex]: '' }));
-  };
+    setQuestions(
+      questions.map((question, index) => {
+        if (index === questionIndex) {
+          return {
+            ...question,
+            choices: [...question.choices, { title: { default: choiceText }, value: question.choices.length }],
+          }
+        }
+        return question
+      })
+    )
+    setNewChoices((prev) => ({ ...prev, [questionIndex]: '' }))
+  }
 
   const handleRemoveChoice = (questionIndex: number, choiceIndex: number) => {
-    setQuestions(questions.map((question, index) => {
-      if (index === questionIndex) {
-        const newChoices = question.choices.filter((_, i) => i !== choiceIndex);
-        // Update values to maintain sequential order
-        const updatedChoices = newChoices.map((choice, i) => ({
-          ...choice,
-          value: i,
-        }));
-        return {
-          ...question,
-          choices: updatedChoices,
-        };
-      }
-      return question;
-    }));
-  };
+    setQuestions(
+      questions.map((question, index) => {
+        if (index === questionIndex) {
+          const newChoices = question.choices.filter((_, i) => i !== choiceIndex)
+          // Update values to maintain sequential order
+          const updatedChoices = newChoices.map((choice, i) => ({
+            ...choice,
+            value: i,
+          }))
+          return {
+            ...question,
+            choices: updatedChoices,
+          }
+        }
+        return question
+      })
+    )
+  }
 
   const handleCreateElection = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      setProgress(0);
+      setIsLoading(true)
+      setError(null)
+      setProgress(0)
 
-      const api = new VocdoniApiService(process.env.API_URL || '');
+      const api = new VocdoniApiService(import.meta.env.API_URL)
 
       // Step 1: Push metadata
-      setProgress(20);
-      const metadata = getElectionMetadataTemplate();
-      metadata.title.default = title;
-      metadata.description.default = description;
-      metadata.questions = questions;
+      setProgress(20)
+      const metadata = getElectionMetadataTemplate()
+      metadata.title.default = title
+      metadata.description.default = description
+      metadata.questions = questions
 
-      const metadataHash = await api.pushMetadata(metadata);
-      const metadataUrl = api.getMetadataUrl(metadataHash);
-      
+      const metadataHash = await api.pushMetadata(metadata)
+      const metadataUrl = api.getMetadataUrl(metadataHash)
+
       // Step 2: Get census root & size
-      setProgress(40);
-      const censusRoot = await api.getCensusRoot(censusId);
-      const censusSize = await api.getCensusSize(censusId);
+      setProgress(40)
+      const censusRoot = await api.getCensusRoot(censusId)
+      const censusSize = await api.getCensusSize(censusId)
 
       // Step 3: Get next process ID from contract using wallet address as organizationId
-      setProgress(50);
-      const registry = new ProcessRegistryService(
-        getProcessRegistryAddress(),
-        wallet
-      );
-      
-      const address = await wallet.getAddress();
-      const processId = await registry.getNextProcessId(address);
-      
+      setProgress(50)
+      const registry = new ProcessRegistryService(getProcessRegistryAddress(), wallet)
+
+      const address = await wallet.getAddress()
+      const processId = await registry.getNextProcessId(address)
+
       // Step 4: Create process via Sequencer API with new signature method
-      setProgress(60);
-      const signature = await signProcessCreation(processId, wallet as Wallet);
-      
-      const { processId: returnedProcessId, encryptionPubKey, stateRoot } = await api.createProcess({
+      setProgress(60)
+      const signature = await signProcessCreation(processId, wallet as Wallet)
+
+      const {
+        processId: returnedProcessId,
+        encryptionPubKey,
+        stateRoot,
+      } = await api.createProcess({
         processId,
         censusRoot,
         ballotMode: BALLOT_MODE,
         signature,
-      });
+      })
 
       // Step 5: Submit process on-chain (8 parameters like the script)
-      setProgress(70);
+      setProgress(70)
       await SmartContractService.executeTx(
         registry.newProcess(
           ProcessStatus.READY,
@@ -228,46 +228,48 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
             censusOrigin: 1,
             maxVotes: censusSize.toString(),
             censusRoot: censusRoot,
-            censusURI: (process.env.API_URL || '') + `/censuses/${censusRoot}`,
+            censusURI: import.meta.env.API_URL + `/censuses/${censusRoot}`,
           } as Census,
           metadataUrl,
           { x: encryptionPubKey[0], y: encryptionPubKey[1] } as EncryptionKey,
           BigInt(stateRoot)
         )
-      );
+      )
 
-      setProgress(100);
-      setElectionCreated(true);
+      setProgress(100)
+      setElectionCreated(true)
 
       // Store the process details for the next step
-      localStorage.setItem('electionDetails', JSON.stringify({
-        processId,
-        encryptionPubKey,
-        stateRoot,
-        metadataUrl,
-        censusRoot,
-        censusSize,
-        censusId,
-      }));
-
+      localStorage.setItem(
+        'electionDetails',
+        JSON.stringify({
+          processId,
+          encryptionPubKey,
+          stateRoot,
+          metadataUrl,
+          censusRoot,
+          censusSize,
+          censusId,
+        })
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create election');
-      console.error('Error creating election:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create election')
+      console.error('Error creating election:', err)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', textAlign: 'center' }}>
-      <Typography variant="h4" component="h1" gutterBottom>
+      <Typography variant='h4' component='h1' gutterBottom>
         Configure Election
       </Typography>
 
-      <Typography variant="body1" color="text.secondary" paragraph>
+      <Typography variant='body1' color='text.secondary' paragraph>
         Configure your election details and create it on the Vocdoni network.
       </Typography>
-      <Typography variant="body2" color="text.secondary" paragraph sx={{ mb: 4 }}>
+      <Typography variant='body2' color='text.secondary' paragraph sx={{ mb: 4 }}>
         Each question must have at least 2 choices. You can add more questions to your election.
       </Typography>
 
@@ -275,8 +277,8 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
         <CardContent>
           <TextField
             fullWidth
-            label="Election Title"
-            variant="outlined"
+            label='Election Title'
+            variant='outlined'
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={isLoading || electionCreated}
@@ -286,8 +288,8 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
 
           <TextField
             fullWidth
-            label="Election Description"
-            variant="outlined"
+            label='Election Description'
+            variant='outlined'
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={isLoading || electionCreated}
@@ -299,9 +301,9 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
           <Divider sx={{ my: 3 }} />
 
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">Questions</Typography>
+            <Typography variant='h6'>Questions</Typography>
             <Button
-              variant="outlined"
+              variant='outlined'
               startIcon={<AddIcon />}
               onClick={handleAddQuestion}
               disabled={isLoading || electionCreated}
@@ -316,36 +318,42 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
                 <Box sx={{ mb: 2 }}>
                   <TextField
                     fullWidth
-                    label="Question Title"
+                    label='Question Title'
                     value={newQuestionTitle}
                     onChange={(e) => setNewQuestionTitle(e.target.value)}
                     sx={{ mb: 2 }}
                   />
                   <TextField
                     fullWidth
-                    label="Question Description"
+                    label='Question Description'
                     value={newQuestionDescription}
                     onChange={(e) => setNewQuestionDescription(e.target.value)}
                     sx={{ mb: 2 }}
                   />
-                  <Button variant="contained" onClick={handleSaveQuestion}>
+                  <Button variant='contained' onClick={handleSaveQuestion}>
                     Save Question
                   </Button>
                 </Box>
               ) : (
                 <Box sx={{ mb: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="subtitle1">{question.title.default}</Typography>
+                    <Typography variant='subtitle1'>{question.title.default}</Typography>
                     <Box>
-                      <IconButton onClick={() => handleEditQuestion(questionIndex)} disabled={isLoading || electionCreated}>
+                      <IconButton
+                        onClick={() => handleEditQuestion(questionIndex)}
+                        disabled={isLoading || electionCreated}
+                      >
                         <EditIcon />
                       </IconButton>
-                      <IconButton onClick={() => handleRemoveQuestion(questionIndex)} disabled={isLoading || electionCreated}>
+                      <IconButton
+                        onClick={() => handleRemoveQuestion(questionIndex)}
+                        disabled={isLoading || electionCreated}
+                      >
                         <DeleteIcon />
                       </IconButton>
                     </Box>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant='body2' color='text.secondary'>
                     {question.description.default}
                   </Typography>
                 </Box>
@@ -358,7 +366,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
                     secondaryAction={
                       !electionCreated && (
                         <IconButton
-                          edge="end"
+                          edge='end'
                           onClick={() => handleRemoveChoice(questionIndex, choiceIndex)}
                           disabled={question.choices.length <= 1}
                         >
@@ -375,20 +383,20 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
               <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
                 <TextField
                   fullWidth
-                  size="small"
-                  label="New Choice"
+                  size='small'
+                  label='New Choice'
                   value={newChoices[questionIndex] || ''}
                   onChange={(e) => {
-                    setNewChoices(prev => ({
+                    setNewChoices((prev) => ({
                       ...prev,
-                      [questionIndex]: e.target.value
-                    }));
-                    setError(null);  // Clear error when user types
+                      [questionIndex]: e.target.value,
+                    }))
+                    setError(null) // Clear error when user types
                   }}
                   disabled={isLoading || electionCreated}
                 />
                 <Button
-                  variant="contained"
+                  variant='contained'
                   onClick={() => handleAddChoice(questionIndex)}
                   disabled={!(newChoices[questionIndex] || '').trim() || isLoading || electionCreated}
                   startIcon={<AddIcon />}
@@ -400,22 +408,22 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
           ))}
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity='error' sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
 
           {isLoading && (
             <Box sx={{ mb: 2, textAlign: 'center' }}>
-              <CircularProgress variant="determinate" value={progress} sx={{ mb: 1 }} />
-              <Typography variant="body2" color="text.secondary">
+              <CircularProgress variant='determinate' value={progress} sx={{ mb: 1 }} />
+              <Typography variant='body2' color='text.secondary'>
                 Creating election... {progress}%
               </Typography>
             </Box>
           )}
 
           {electionCreated && (
-            <Alert severity="success" sx={{ mb: 2 }}>
+            <Alert severity='success' sx={{ mb: 2 }}>
               Election created successfully!
             </Alert>
           )}
@@ -423,14 +431,14 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
           {!electionCreated && (
             <Button
               fullWidth
-              variant="contained"
-              color="primary"
+              variant='contained'
+              color='primary'
               onClick={handleCreateElection}
               disabled={
-                isLoading || 
-                !title.trim() || 
-                questions.some(q => q.choices.length < 2 && q.title.default.trim() !== '') ||  // Each non-empty question must have 2+ choices
-                questions.some(q => q.title.default.trim() !== '' && !q.description.default.trim())  // Each question must have description
+                isLoading ||
+                !title.trim() ||
+                questions.some((q) => q.choices.length < 2 && q.title.default.trim() !== '') || // Each non-empty question must have 2+ choices
+                questions.some((q) => q.title.default.trim() !== '' && !q.description.default.trim()) // Each question must have description
               }
             >
               Create Election
@@ -440,21 +448,13 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       </Card>
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-        <Button
-          variant="outlined"
-          onClick={onBack}
-          disabled={isLoading}
-        >
+        <Button variant='outlined' onClick={onBack} disabled={isLoading}>
           Back
         </Button>
-        <Button
-          variant="contained"
-          onClick={onNext}
-          disabled={!electionCreated}
-        >
+        <Button variant='contained' onClick={onNext} disabled={!electionCreated}>
           Next
         </Button>
       </Box>
     </Box>
-  );
+  )
 }
