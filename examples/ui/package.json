@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "preinstall": "cd ../.. && yarn pack && mv vocdoni-davinci-sdk-v*.tgz examples/ui/davinci-sdk.tgz",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
