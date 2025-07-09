@@ -1,7 +1,5 @@
-import {BaseService} from "./BaseService";
+import {BaseService} from "../core/api";
 import {
-    CensusParticipant,
-    CensusProof,
     CreateProcessRequest,
     CreateProcessResponse,
     GetProcessResponse,
@@ -12,19 +10,15 @@ import {
     VoteRequest, 
     VoteStatusResponse,
     WorkersResponse,
-} from "./types";
-import { validateProcessId } from "./helpers";
-import { ElectionMetadata } from "../../core";
-
-function isUUId(str: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
-}
+} from "./api/types";
+import { validateProcessId } from "./api/helpers";
+import { ElectionMetadata } from "../core";
 
 function isHexString(str: string): boolean {
     return /^0x[0-9a-f]{64}$/i.test(str);
 }
 
-export class VocdoniApiService extends BaseService {
+export class VocdoniSequencerService extends BaseService {
     constructor(baseURL: string) {
         super(baseURL);
     }
@@ -60,67 +54,6 @@ export class VocdoniApiService extends BaseService {
         }).then(res => res.processes);
     }
 
-    createCensus(): Promise<string> {
-        return this.request<{ census: string }>({
-            method: "POST",
-            url: "/censuses"
-        }).then(res => res.census);
-    }
-
-    async addParticipants(censusId: string, participants: CensusParticipant[]): Promise<void> {
-        if (!isUUId(censusId)) throw new Error("Invalid census ID format");
-
-        await this.request({
-            method: "POST",
-            url: `/censuses/${censusId}/participants`,
-            data: { participants }
-        });
-    }
-
-    getParticipants(censusId: string): Promise<CensusParticipant[]> {
-        if (!isUUId(censusId)) throw new Error("Invalid census ID format");
-
-        return this.request<{ participants: CensusParticipant[] }>({
-            method: "GET",
-            url: `/censuses/${censusId}/participants`
-        }).then(res => res.participants);
-    }
-
-    getCensusRoot(censusId: string): Promise<string> {
-        if (!isUUId(censusId)) throw new Error("Invalid census ID format");
-
-        return this.request<{ root: string }>({
-            method: "GET",
-            url: `/censuses/${censusId}/root`
-        }).then(res => res.root);
-    }
-
-    getCensusSize(censusId: string): Promise<number> {
-        if (!isUUId(censusId)) throw new Error("Invalid census ID format");
-
-        return this.request<{ size: number }>({
-            method: "GET",
-            url: `/censuses/${censusId}/size`
-        }).then(res => res.size);
-    }
-
-    async deleteCensus(censusId: string): Promise<void> {
-        if (!isUUId(censusId)) throw new Error("Invalid census ID format");
-
-        await this.request({
-            method: "DELETE",
-            url: `/censuses/${censusId}`
-        });
-    }
-
-    getCensusProof(censusRoot: string, key: string): Promise<CensusProof> {
-        return this.request<CensusProof>({
-            method: "GET",
-            url: `/censuses/${censusRoot}/proof`,
-            params: {key}
-        });
-    }
-
     async submitVote(vote: VoteRequest): Promise<void> {
         await this.request({
             method: "POST",
@@ -138,7 +71,6 @@ export class VocdoniApiService extends BaseService {
             url: `/votes/${processId}/voteId/${voteId}`,
         });
     }
-
 
     async hasAddressVoted(
         processId: string,

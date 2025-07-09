@@ -2,24 +2,38 @@ import { config } from "dotenv";
 import { resolve } from "path";
 
 // Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../../.env') });
-import { VocdoniApiService, createProcessSignatureMessage, signProcessCreation } from "../../../../src/sequencer/api";
-import { mockProvider, mockWallet, generateMockCensusParticipants, generateMockProcessRequest, isValidUUID, isValidHex } from "../utils";
-import { getElectionMetadataTemplate } from "../../../../src/core/types";
+config({ path: resolve(__dirname, '../../.env') });
+import { VocdoniSequencerService } from "../../../src/sequencer/SequencerService";
+import { VocdoniCensusService } from "../../../src/census";
+import { createProcessSignatureMessage, signProcessCreation } from "../../../src/sequencer/api";
+import { mockProvider, mockWallet, generateMockCensusParticipants, generateMockProcessRequest, isValidUUID, isValidHex } from "./utils";
+import { getElectionMetadataTemplate } from "../../../src/core/types";
 
-const api = new VocdoniApiService(process.env.API_URL!);
+const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+const censusService = new VocdoniCensusService(process.env.CENSUS_API_URL!);
 let censusId: string;
 
 // Generate test participants
 const testParticipants = generateMockCensusParticipants(5);
 
-describe("VocdoniApiService Integration", () => {
+describe("VocdoniSequencerService Integration", () => {
+    beforeAll(async () => {
+        // Create a census for testing process creation
+        censusId = await censusService.createCensus();
+        await censusService.addParticipants(censusId, testParticipants);
+    });
+
+    afterAll(async () => {
+        // Clean up the census
+        await censusService.deleteCensus(censusId);
+    });
+
     it("should ping the API", async () => {
-        await expect(api.ping()).resolves.toBeUndefined();
+        await expect(sequencerService.ping()).resolves.toBeUndefined();
     });
 
     it("should fetch info and return valid URLs and hex hashes", async () => {
-        const info = await api.getInfo();
+        const info = await sequencerService.getInfo();
 
         const urlRx = /^https?:\/\/[^\s]+$/i;
         const hexRx = /^(?:0x)?[0-9a-fA-F]{64}$/;
@@ -54,67 +68,17 @@ describe("VocdoniApiService Integration", () => {
         });
     });
 
-    it("should create a new census and return a valid UUID", async () => {
-        censusId = await api.createCensus();
-        expect(typeof censusId).toBe("string");
-        expect(isValidUUID(censusId)).toBe(true);
-    });
-
-    it("should add participants to the census", async () => {
-        await expect(api.addParticipants(censusId, testParticipants)).resolves.toBeUndefined();
-    });
-
-    it("should retrieve the census participants", async () => {
-        const participants = await api.getParticipants(censusId);
-
-        expect(Array.isArray(participants)).toBe(true);
-        expect(participants.length).toBe(testParticipants.length);
-
-        // Create a lookup map from the response
-        const responseMap = new Map(
-            participants.map(p => [p.key.toLowerCase(), p.weight])
-        );
-
-        // Assert each expected participant exists with the correct weight
-        for (const expected of testParticipants) {
-            const actualWeight = responseMap.get(expected.key.toLowerCase());
-            expect(actualWeight).toBeDefined();
-            expect(actualWeight).toBe(expected.weight);
-        }
-    });
-
-    it("should fetch the census root", async () => {
-        const root = await api.getCensusRoot(censusId);
-        expect(typeof root).toBe("string");
-        expect(isValidHex(root, 64)).toBe(true);
-    });
-
-    it("should fetch the census size", async () => {
-        const size = await api.getCensusSize(censusId);
-        expect(typeof size).toBe("number");
-        expect(size).toBe(testParticipants.length);
-    });
-
-    it("should fetch a Merkle proof for a participant", async () => {
-        const root = await api.getCensusRoot(censusId);
-        const proof = await api.getCensusProof(root, testParticipants[0].key);
-        expect(proof).toHaveProperty("root");
-        expect(proof).toHaveProperty("key");
-        expect(proof).toHaveProperty("siblings");
-        expect(proof).toHaveProperty("weight");
-    });
-
     it("should list all processes", async () => {
-        const processes = await api.listProcesses();
+        const processes = await sequencerService.listProcesses();
         expect(Array.isArray(processes)).toBe(true);
         // Each process ID should be a valid hex string
-        processes.forEach(processId => {
+        processes.forEach((processId: string) => {
             expect(isValidHex(processId, 64)).toBe(true);
         });
     });
 
     it("should check if an address has voted", async () => {
-        const processes = await api.listProcesses();
+        const processes = await sequencerService.listProcesses();
         if (processes.length === 0) {
             console.log('Skipping test: no processes available');
             return;
@@ -122,19 +86,18 @@ describe("VocdoniApiService Integration", () => {
 
         // First check with a random address that hasn't voted
         const randomAddress = mockWallet.address;
-        const hasVoted = await api.hasAddressVoted(processes[0], randomAddress);
+        const hasVoted = await sequencerService.hasAddressVoted(processes[0], randomAddress);
         expect(hasVoted).toBe(false);
     });
 
-
     it("should get process details with sequencer stats", async () => {
-        const processes = await api.listProcesses();
+        const processes = await sequencerService.listProcesses();
         if (processes.length === 0) {
             console.log('Skipping test: no processes available');
             return;
         }
 
-        const process = await api.getProcess(processes[0]);
+        const process = await sequencerService.getProcess(processes[0]);
         expect(typeof process.voteCount).toBe('string');
         expect(typeof process.voteOverwrittenCount).toBe('string');
         expect(typeof process.isAcceptingVotes).toBe('boolean');
@@ -151,7 +114,7 @@ describe("VocdoniApiService Integration", () => {
     });
 
     it("should create a process and validate the response", async () => {
-        const censusRoot = await api.getCensusRoot(censusId);
+        const censusRoot = await censusService.getCensusRoot(censusId);
         
         // Mock process ID (32 bytes hex)
         const processId = "0x00aa36a7000000000000000000000000000000000000dead0000000000000000";
@@ -162,7 +125,7 @@ describe("VocdoniApiService Integration", () => {
         const signature = await signProcessCreation(processId, mockWallet);
 
         const fullPayload = { ...payload, signature };
-        const response = await api.createProcess(fullPayload);
+        const response = await sequencerService.createProcess(fullPayload);
 
         expect(isValidHex(response.processId, 64)).toBe(true);
         expect(response.processId).toBe(processId);
@@ -179,24 +142,20 @@ describe("VocdoniApiService Integration", () => {
         testMetadata.description.default = "This is a test election";
 
         it("should push metadata and return a valid hex hash", async () => {
-            const hash = await api.pushMetadata(testMetadata);
+            const hash = await sequencerService.pushMetadata(testMetadata);
             expect(isValidHex(hash, 64)).toBe(true);
             metadataHash = hash;
         });
 
         it("should retrieve metadata using the hash", async () => {
-            const metadata = await api.getMetadata(metadataHash);
+            const metadata = await sequencerService.getMetadata(metadataHash);
             expect(metadata).toEqual(testMetadata);
         });
 
         it("should throw error for invalid hash format", () => {
-            expect(() => api.getMetadata("invalid-hash"))
+            expect(() => sequencerService.getMetadata("invalid-hash"))
                 .toThrow("Invalid metadata hash format");
         });
-    });
-
-    it("should delete the census", async () => {
-        await expect(api.deleteCensus(censusId)).resolves.toBeUndefined();
     });
 
     describe("Helper functions", () => {
@@ -228,7 +187,7 @@ describe("VocdoniApiService Integration", () => {
 
     describe("Sequencer statistics", () => {
         it("should get sequencer stats", async () => {
-            const stats = await api.getStats();
+            const stats = await sequencerService.getStats();
             
             expect(typeof stats.activeProcesses).toBe('number');
             expect(typeof stats.pendingVotes).toBe('number');
@@ -243,12 +202,12 @@ describe("VocdoniApiService Integration", () => {
         });
 
         it("should get workers stats", async () => {
-            const response = await api.getWorkers();
+            const response = await sequencerService.getWorkers();
             
             expect(Array.isArray(response.workers)).toBe(true);
             
             // Check each worker's structure
-            response.workers.forEach(worker => {
+            response.workers.forEach((worker: any) => {
                 expect(typeof worker.address).toBe('string');
                 expect(typeof worker.successCount).toBe('number');
                 expect(typeof worker.failedCount).toBe('number');

@@ -1,5 +1,5 @@
 import { Groth16Proof, CircomProof, ProofInputs } from '../../../src/sequencer';
-import { VocdoniApiService } from '../../../src/sequencer/api';
+import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
@@ -75,10 +75,10 @@ describe("CircomProofService Integration", () => {
     let service: CircomProof;
     let proof: Groth16Proof;
     let publicSignals: string[];
-    let api: VocdoniApiService;
+    let api: VocdoniSequencerService;
 
     beforeAll(async () => {
-        api = new VocdoniApiService(process.env.API_URL!);
+        api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
         const info = await api.getInfo();
         
         service = new CircomProof({

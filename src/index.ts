@@ -6,3 +6,6 @@ export * from './contracts';
 
 // Export sequencer module
 export * from './sequencer';
+
+// Export census module
+export * from './census';
