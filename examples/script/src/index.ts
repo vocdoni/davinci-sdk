@@ -18,7 +18,7 @@ import {
     BallotProof,
     BallotProofInputs,
     signProcessCreation
-} from "../../../src/sequencer";
+} from "../../../src";
 import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
 import {
     SmartContractService,
@@ -34,11 +34,13 @@ config();
 // ────────────────────────────────────────────────────────────
 //   CONFIG / CONSTANTS
 // ────────────────────────────────────────────────────────────
-if (!process.env.API_URL) throw new Error("API_URL environment variable is required");
+if (!process.env.SEQUENCER_API_URL) throw new Error("SEQUENCER_API_URL environment variable is required");
+if (!process.env.CENSUS_API_URL) throw new Error("CENSUS_API_URL environment variable is required");
 if (!process.env.SEPOLIA_RPC) throw new Error("SEPOLIA_RPC environment variable is required");
 if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY environment variable is required");
 
-const API_URL                    = process.env.API_URL;
+const SEQUENCER_API_URL          = process.env.SEQUENCER_API_URL;
+const CENSUS_API_URL             = process.env.CENSUS_API_URL;
 const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 
@@ -100,7 +102,10 @@ function getOrganizationRegistryAddress(): string {
 function initClients() {
     const provider = new JsonRpcProvider(RPC_URL);
     const wallet   = new Wallet(PRIVATE_KEY, provider);
-    const api      = new VocdoniApiService(API_URL);
+    const api      = new VocdoniApiService({
+        sequencerURL: SEQUENCER_API_URL,
+        censusURL: CENSUS_API_URL
+    });
     return { api, provider, wallet };
 }
 
@@ -125,7 +130,7 @@ function makeTestParticipants(): TestParticipant[] {
 // ────────────────────────────────────────────────────────────
 async function step1_ping(api: VocdoniApiService) {
     step(1, "Ping the HTTP API");
-    await api.ping();
+    await api.sequencer.ping();
     success("API reachable");
 }
 
@@ -142,7 +147,7 @@ interface InfoResp {
 }
 async function step2_fetchInfo(api: VocdoniApiService): Promise<InfoResp> {
     step(2, "Fetch zk‐circuit & on‐chain contract info");
-    const info = await api.getInfo();
+    const info = await api.sequencer.getInfo();
     console.log("   circuitUrl:", info.circuitUrl);
     console.log("   contracts:", JSON.stringify(info.contracts, null, 2));
     return {
@@ -160,7 +165,7 @@ async function step2_fetchInfo(api: VocdoniApiService): Promise<InfoResp> {
 // ────────────────────────────────────────────────────────────
 async function step3_createCensus(api: VocdoniApiService): Promise<string> {
     step(3, "Create a new census");
-    const censusId = await api.createCensus();
+    const censusId = await api.census.createCensus();
     success(`censusId = ${censusId}`);
     return censusId;
 }
@@ -171,7 +176,7 @@ async function step3_createCensus(api: VocdoniApiService): Promise<string> {
 async function step4_addParticipants(api: VocdoniApiService, censusId: string) {
     step(4, "Add participants to census");
     const participants = makeTestParticipants();
-    await api.addParticipants(censusId, participants.map((p: TestParticipant) => ({
+    await api.census.addParticipants(censusId, participants.map((p: TestParticipant) => ({
         key:    p.key,
         weight: p.weight
     })));
@@ -180,25 +185,28 @@ async function step4_addParticipants(api: VocdoniApiService, censusId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 5: Verify Participants
+//   STEP 5: Publish Census
 // ────────────────────────────────────────────────────────────
-async function step5_verifyParticipants(api: VocdoniApiService, censusId: string) {
-    step(5, "Verify participants were stored");
-    const got = await api.getParticipants(censusId);
-    console.log("   got:", got.map((p) => `${p.key}(${p.weight})`).join(", "));
+async function step5_publishCensus(api: VocdoniApiService, censusId: string) {
+    step(5, "Publish census");
+    
+    const publishResult = await api.census.publishCensus(censusId);
+    console.log("   census published with root:", publishResult.root);
+    success("Census published successfully");
+    
+    return publishResult;
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 6: Fetch Census Root & Size
+//   STEP 6: Fetch Census Size
 // ────────────────────────────────────────────────────────────
-async function step6_fetchRootSize(api: VocdoniApiService, censusId: string) {
-    step(6, "Fetch census root & size");
-    const root = await api.getCensusRoot(censusId);
-    const size = await api.getCensusSize(censusId);
-    console.log(`   root = ${root}`);
+async function step6_fetchCensusSize(api: VocdoniApiService, censusRoot: string) {
+    step(6, "Fetch census size using census root");
+    const size = await api.census.getCensusSize(censusRoot);
+    console.log(`   root = ${censusRoot}`);
     console.log(`   size = ${size}`);
     success("Census ready");
-    return { censusRoot: root, censusSize: size };
+    return { censusRoot, censusSize: size };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -292,13 +300,13 @@ async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
         },
     ];
     
-    const hash = await api.pushMetadata(metadata);
-    const metadataUrl = api.getMetadataUrl(hash);
+    const hash = await api.sequencer.pushMetadata(metadata);
+    const metadataUrl = api.sequencer.getMetadataUrl(hash);
     console.log("   metadata hash:", hash);
     console.log("   metadata url:", metadataUrl);
     
     // Verify metadata was stored correctly
-    const storedMetadata = await api.getMetadata(hash);
+    const storedMetadata = await api.sequencer.getMetadata(hash);
     console.log("   metadata stored successfully:", storedMetadata.title.default);
     success("Metadata pushed to storage");
     return metadataUrl;
@@ -337,7 +345,7 @@ async function step8_createProcess(
     const signature = await signProcessCreation(processId, wallet);
     
     const { processId: returnedProcessId, encryptionPubKey, stateRoot } =
-        await api.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature });
+        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature });
     
     console.log("   processId:", returnedProcessId);
     console.log("   pubKey:", encryptionPubKey);
@@ -365,7 +373,7 @@ async function step9_newProcessOnChain(
                 censusOrigin: 1,
                 maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
-                censusURI: API_URL + `/censuses/${args.censusRoot}`
+                censusURI: CENSUS_API_URL + `/censuses/${args.censusRoot}`
             } as Census,
             args.metadataUri,
             { x: args.encryptionPubKey[0], y: args.encryptionPubKey[1] } as EncryptionKey,
@@ -502,7 +510,7 @@ async function step13_waitForProcess(
     step(13, "Wait for process to be ready");
     
     while (true) {
-        const process = await api.getProcess(processId);
+        const process = await api.sequencer.getProcess(processId);
         if (process.isAcceptingVotes) {
             success("Process is ready to accept votes");
             break;
@@ -534,7 +542,7 @@ export async function step14_submitVotes(
         const { proof }       = proofs[i];
 
         // 1) Merkle proof
-        const censusProof = await api.getCensusProof(censusRoot, p.key);
+        const censusProof = await api.census.getCensusProof(censusRoot, p.key);
 
         // 2) Map ciphertexts → VoteBallot shape
         const voteBallot: VoteBallot = {
@@ -559,7 +567,7 @@ export async function step14_submitVotes(
             voteId:          voteID,
         };
 
-        await api.submitVote(voteRequest);
+        await api.sequencer.submitVote(voteRequest);
         success(`  [${i + 1}/${participants.length}] vote submitted successfully`);
         voteIds.push(voteID);
 
@@ -580,7 +588,7 @@ async function step15_checkVotes(
     for (let i = 0; i < voteIds.length; i++) {
         const voteId = voteIds[i];
         try {
-            const status = await api.getVoteStatus(processId, voteId);
+            const status = await api.sequencer.getVoteStatus(processId, voteId);
             success(`  [${i + 1}/${voteIds.length}] Vote ${voteId} status: ${status.status}`);
         } catch (error) {
             throw new Error(`Failed to get status for vote ${voteId}: ${error}`);
@@ -605,7 +613,7 @@ async function step16_waitForVotesProcessed(
         let settledCount = 0;
 
         for (let i = 0; i < voteIds.length; i++) {
-            const status = await api.getVoteStatus(processId, voteIds[i]);
+            const status = await api.sequencer.getVoteStatus(processId, voteIds[i]);
             if (status.status === "settled") {
                 settledCount++;
             } else {
@@ -636,7 +644,7 @@ async function step17_verifyVotes(
     
     // Check that participants have voted
     for (let i = 0; i < participants.length; i++) {
-        const hasVoted = await api.hasAddressVoted(processId, participants[i].key);
+        const hasVoted = await api.sequencer.hasAddressVoted(processId, participants[i].key);
         if (!hasVoted) {
             throw new Error(`Expected participant ${participants[i].key} to have voted`);
         }
@@ -727,8 +735,8 @@ async function run() {
     const info    = await step2_fetchInfo(api);
     const censusId         = await step3_createCensus(api);
     const participants     = await step4_addParticipants(api, censusId);
-    await step5_verifyParticipants(api, censusId);
-    const { censusRoot, censusSize } = await step6_fetchRootSize(api, censusId);
+    const publishResult    = await step5_publishCensus(api, censusId);
+    const { censusRoot, censusSize } = await step6_fetchCensusSize(api, publishResult.root);
 
     const metadataUri = await step7_pushMetadata(api);
     const { processId, encryptionPubKey, stateRoot } =
