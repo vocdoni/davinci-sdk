@@ -1,4 +1,4 @@
-import { BaseService } from "../core/api";
+import { BaseService } from "../core/api/BaseService";
 import { 
     CensusParticipant, 
     CensusProof, 
