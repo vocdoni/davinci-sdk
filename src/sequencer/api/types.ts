@@ -1,4 +1,5 @@
 import { BallotMode, Census, EncryptionKey } from '../../core/types';
+import { CensusProof } from '../../census/types';
 
 export interface CreateProcessRequest {
     processId: string;
@@ -63,23 +64,6 @@ export interface GetProcessResponse {
     };
 }
 
-export interface CensusParticipant {
-    key: string;
-    weight?: string;
-}
-
-export interface CensusProof {
-    /** The Merkle root (hex-prefixed). */
-    root: string;
-    /** The voter’s address (hex-prefixed). */
-    key: string;
-    /** The leaf value (hex-prefixed weight). */
-    value: string;
-    /** The serialized sibling path (hex-prefixed). */
-    siblings: string;
-    /** The weight as a decimal string. */
-    weight: string;
-}
 
 export interface VoteCiphertext {
     c1: [string, string];
@@ -167,7 +151,7 @@ export interface SequencerStats {
 }
 
 export interface WorkerStats {
-    address: string;
+    name: string;
     successCount: number;
     failedCount: number;
 }

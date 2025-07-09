@@ -1,5 +1,5 @@
 import { BallotProof, BallotProofInputs } from "../../../src/sequencer";
-import { VocdoniApiService } from "../../../src/sequencer/api";
+import { VocdoniSequencerService } from "../../../src/sequencer/SequencerService";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -8,7 +8,7 @@ config({ path: resolve(__dirname, '../../.env') });
 
 describe("BallotProofService Integration", () => {
     let service: BallotProof;
-    let api: VocdoniApiService;
+    let api: VocdoniSequencerService;
 
     const example: BallotProofInputs = {
         address: "40aA6F90Dd3731eD10d6aA544200ACC647144669",
@@ -33,7 +33,7 @@ describe("BallotProofService Integration", () => {
     };
 
     beforeAll(async () => {
-        api = new VocdoniApiService(process.env.API_URL!);
+        api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
         const info = await api.getInfo();
         
         service = new BallotProof({
