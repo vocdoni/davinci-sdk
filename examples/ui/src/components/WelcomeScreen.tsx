@@ -48,9 +48,12 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
     try {
       setIsLoading(true)
       setError('')
-      const api = new VocdoniApiService(import.meta.env.API_URL)
-      await api.ping()
-      const info = await api.getInfo()
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
+      await api.sequencer.ping()
+      const info = await api.sequencer.getInfo()
       setApiAddresses({
         process: info.contracts.process.toLowerCase(),
         organization: info.contracts.organization.toLowerCase(),

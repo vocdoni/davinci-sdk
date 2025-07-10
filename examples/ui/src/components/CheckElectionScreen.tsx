@@ -52,14 +52,17 @@ export default function CheckElectionScreen({ onBack, onNext }: CheckElectionScr
         const details: ElectionDetails = JSON.parse(detailsStr)
         setCheckStatus((prev) => ({ ...prev, detailsLoaded: true }))
 
-        const api = new VocdoniApiService(import.meta.env.API_URL)
+        const api = new VocdoniApiService({
+          sequencerURL: import.meta.env.SEQUENCER_API_URL,
+          censusURL: import.meta.env.CENSUS_API_URL
+        })
 
         // Start polling for process status and update wait time
         const startTime = Date.now()
         const pollInterval = setInterval(async () => {
           setWaitTime(Math.floor((Date.now() - startTime) / 1000))
           try {
-            const process = await api.getProcess(details.processId)
+            const process = await api.sequencer.getProcess(details.processId)
             setCheckStatus((prev) => ({ ...prev, processExists: true }))
 
             if (process.isAcceptingVotes) {

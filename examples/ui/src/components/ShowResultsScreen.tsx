@@ -51,8 +51,11 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
         const electionProcess = await registry.getProcess(details.processId)
 
         // Get metadata for question and choice labels
-        const api = new VocdoniApiService(import.meta.env.API_URL)
-        const metadata = await api.getMetadata(details.metadataUrl.split('/').pop() || '')
+        const api = new VocdoniApiService({
+          sequencerURL: import.meta.env.SEQUENCER_API_URL,
+          censusURL: import.meta.env.CENSUS_API_URL
+        })
+        const metadata = await api.sequencer.getMetadata(details.metadataUrl.split('/').pop() || '')
 
         // Map results to questions and choices
         const questions = metadata.questions.map((question, questionIndex) => {

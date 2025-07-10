@@ -177,7 +177,10 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       setError(null)
       setProgress(0)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Step 1: Push metadata
       setProgress(20)
@@ -186,13 +189,13 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       metadata.description.default = description
       metadata.questions = questions
 
-      const metadataHash = await api.pushMetadata(metadata)
-      const metadataUrl = api.getMetadataUrl(metadataHash)
+      const metadataHash = await api.sequencer.pushMetadata(metadata)
+      const metadataUrl = api.sequencer.getMetadataUrl(metadataHash)
 
       // Step 2: Get census root & size
       setProgress(40)
-      const censusRoot = await api.getCensusRoot(censusId)
-      const censusSize = await api.getCensusSize(censusId)
+      const censusRoot = await api.census.getCensusRoot(censusId)
+      const censusSize = await api.census.getCensusSize(censusId)
 
       // Step 3: Get next process ID from contract using wallet address as organizationId
       setProgress(50)
@@ -209,7 +212,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
         processId: returnedProcessId,
         encryptionPubKey,
         stateRoot,
-      } = await api.createProcess({
+      } = await api.sequencer.createProcess({
         processId,
         censusRoot,
         ballotMode: BALLOT_MODE,

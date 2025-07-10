@@ -111,10 +111,13 @@ export default function ProcessesPage() {
       setIsLoading(true)
       setError(null)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Get list of process IDs (lightweight operation)
-      const processIds = await api.listProcesses()
+      const processIds = await api.sequencer.listProcesses()
 
       // Reverse the order to get most recent first
       const reversedProcessIds = [...processIds].reverse()
@@ -139,7 +142,10 @@ export default function ProcessesPage() {
       setIsLoadingPage(true)
       setError(null)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Calculate pagination
       const startIndex = (page - 1) * PAGE_SIZE
@@ -149,7 +155,7 @@ export default function ProcessesPage() {
       // Load processes in parallel for better performance
       const processPromises = pageProcessIds.map(async (processId) => {
         try {
-          const processData: GetProcessResponse = await api.getProcess(processId)
+          const processData: GetProcessResponse = await api.sequencer.getProcess(processId)
 
           // Load metadata separately
           let title = 'Untitled Process'
@@ -159,7 +165,7 @@ export default function ProcessesPage() {
             try {
               const metadataHash = processData.metadataURI.split('/').pop()
               if (metadataHash) {
-                const metadata = await api.getMetadata(metadataHash)
+                const metadata = await api.sequencer.getMetadata(metadataHash)
                 title = metadata.title?.default || title
                 description = metadata.description?.default || description
               }

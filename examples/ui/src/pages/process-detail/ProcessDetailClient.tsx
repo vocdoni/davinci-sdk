@@ -378,8 +378,11 @@ export default function ProcessDetailClient() {
     if (submittedVote && trackingVote && processId) {
       const checkVoteStatus = async () => {
         try {
-          const api = new VocdoniApiService(import.meta.env.API_URL)
-          const status = await api.getVoteStatus(processId, submittedVote.voteId)
+          const api = new VocdoniApiService({
+            sequencerURL: import.meta.env.SEQUENCER_API_URL,
+            censusURL: import.meta.env.CENSUS_API_URL
+          })
+          const status = await api.sequencer.getVoteStatus(processId, submittedVote.voteId)
 
           setSubmittedVote((prev) =>
             prev
@@ -410,10 +413,13 @@ export default function ProcessDetailClient() {
       setIsLoading(true)
       setError(null)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Get process details
-      const processResponse = await api.getProcess(processId)
+      const processResponse = await api.sequencer.getProcess(processId)
 
       // Load metadata from metadataURI if available
       let processWithMetadata = processResponse
@@ -421,7 +427,7 @@ export default function ProcessDetailClient() {
         try {
           const metadataHash = processResponse.metadataURI.split('/').pop()
           if (metadataHash) {
-            const metadata = await api.getMetadata(metadataHash)
+            const metadata = await api.sequencer.getMetadata(metadataHash)
             // Merge metadata into process data (keep original structure)
             processWithMetadata = {
               ...processResponse,
@@ -491,10 +497,13 @@ export default function ProcessDetailClient() {
 
     try {
       setCheckingEligibility(true)
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Try to get census proof for this address
-      await api.getCensusProof(processData.census.censusRoot, address)
+      await api.census.getCensusProof(processData.census.censusRoot, address)
       setCanUserVote(true)
     } catch (err) {
       console.warn('User not eligible to vote:', err)
@@ -606,10 +615,13 @@ export default function ProcessDetailClient() {
       }
       const timer = setInterval(updateWaitTime, 1000)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Step 1: Get census proof
-      const censusProof = await api.getCensusProof(processData.census.censusRoot, walletAddress)
+      const censusProof = await api.census.getCensusProof(processData.census.censusRoot, walletAddress)
       setVoteStatus((prev) => ({ ...prev, censusProofGenerated: true }))
       setActiveStep(1)
 
@@ -620,7 +632,7 @@ export default function ProcessDetailClient() {
       const kStr = BigInt('0x' + kHex).toString()
 
       // Get WASM URLs from API info
-      const info = await api.getInfo()
+      const info = await api.sequencer.getInfo()
       const urls = getCircuitUrls(info)
       const sdk = new BallotProof({
         wasmExecUrl: urls.ballotProofExec,
@@ -703,7 +715,7 @@ export default function ProcessDetailClient() {
         voteId: out.voteId,
       }
 
-      await api.submitVote(voteRequest)
+      await api.sequencer.submitVote(voteRequest)
       const voteId = out.voteId
       setVoteStatus((prev) => ({ ...prev, voteSubmitted: true }))
       setActiveStep(4)
@@ -728,7 +740,7 @@ export default function ProcessDetailClient() {
       const checkVoteStatus = async () => {
         let isDone = false
         while (!isDone) {
-          const voteStatus = await api.getVoteStatus(processData.id, voteId)
+          const voteStatus = await api.sequencer.getVoteStatus(processData.id, voteId)
           setSubmittedVote((prev) =>
             prev
               ? {

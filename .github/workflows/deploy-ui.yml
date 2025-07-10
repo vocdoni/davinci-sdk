@@ -54,8 +54,9 @@ jobs:
           yarn build
         env:
           NODE_ENV: production
-          API_URL: ${{ secrets.API_URL }}
-          RPC_URL: ${{ secrets.SEPOLIA_RPC }}
+          SEQUENCER_API_URL: ${{ secrets.SEQUENCER_API_URL }}
+          CENSUS_API_URL: ${{ secrets.CENSUS_API_URL }}
+          RPC_URL: ${{ secrets.RPC_URL }}
           ESLINT_NO_DEV_ERRORS: true
 
       - name: Copy index.html to 404.html for SPA fallback
