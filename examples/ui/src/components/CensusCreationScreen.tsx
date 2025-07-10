@@ -93,11 +93,14 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       setError(null)
       setProgress(0)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
 
       // Create census
       setProgress(20)
-      const newCensusId = await api.createCensus()
+      const newCensusId = await api.census.createCensus()
       setCensusId(newCensusId)
 
       // Add voters in batches
@@ -106,7 +109,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
         const batch = addresses.slice(i, i + batchSize)
 
         // Add participants using addresses
-        await api.addParticipants(
+        await api.census.addParticipants(
           newCensusId,
           batch.map((address) => ({
             key: address,
@@ -116,12 +119,18 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
         setProgress(40 + Math.floor((i / addresses.length) * 40))
       }
 
-      // Verify participants were stored
-      setProgress(80)
-      const storedParticipants = await api.getParticipants(newCensusId)
-      if (storedParticipants.length !== addresses.length) {
-        throw new Error('Not all participants were stored in the census')
-      }
+      // Publish the census and store root & size locally
+      setProgress(90)
+      const publishResult = await api.census.publishCensus(newCensusId)
+      const censusRoot = publishResult.root
+      const censusSize = await api.census.getCensusSize(censusRoot)
+      
+      // Store census details locally for the next screen
+      localStorage.setItem('censusDetails', JSON.stringify({
+        censusId: newCensusId,
+        censusRoot,
+        censusSize
+      }))
 
       setProgress(100)
       setCensusCreated(true)

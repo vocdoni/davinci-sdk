@@ -88,7 +88,7 @@ const VOTE_STEPS = ['Generate Census Proof', 'Generate ZK Inputs', 'Generate & V
 export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [participants, setParticipants] = useState<Array<{ key: string; weight: string | undefined }>>([])
+  // Removed participants state - weights are now extracted from census proofs during voting
   const [addresses, setAddresses] = useState<string[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [questions, setQuestions] = useState<Question[]>([])
@@ -115,19 +115,18 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         }
         const details: ElectionDetails = JSON.parse(detailsStr)
 
-        const api = new VocdoniApiService(import.meta.env.API_URL)
+        const api = new VocdoniApiService({
+          sequencerURL: import.meta.env.SEQUENCER_API_URL,
+          censusURL: import.meta.env.CENSUS_API_URL
+        })
 
-        // Get census participants for their weights
-        const censusParticipants = await api.getParticipants(details.censusId)
-        setParticipants(censusParticipants.map((p) => ({ key: p.key, weight: p.weight })))
-
-        // Use addresses from our stored wallets
+        // Use addresses from our stored wallets (weights will be extracted from census proofs during voting)
         setAddresses(Object.keys(walletMap))
 
         // Get election metadata and map to our Question interface
         // Extract hash from the metadata URL
         const hash = details.metadataUrl.split('/').pop() || ''
-        const metadata = await api.getMetadata(hash)
+        const metadata = await api.sequencer.getMetadata(hash)
         setQuestions(
           metadata.questions.map((q) => ({
             ...q,
@@ -164,8 +163,11 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
 
       for (let i = 0; i < updatedVotes.length; i++) {
         if (updatedVotes[i].status === 'pending') {
-          const api = new VocdoniApiService(import.meta.env.API_URL)
-          const status = await api.getVoteStatus(processId, updatedVotes[i].voteId)
+          const api = new VocdoniApiService({
+            sequencerURL: import.meta.env.SEQUENCER_API_URL,
+            censusURL: import.meta.env.CENSUS_API_URL
+          })
+          const status = await api.sequencer.getVoteStatus(processId, updatedVotes[i].voteId)
 
           updatedVotes[i].status = status.status as Vote['status']
 
@@ -198,11 +200,15 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       }
       const timer = setInterval(updateWaitTime, 1000)
 
-      const api = new VocdoniApiService(import.meta.env.API_URL)
+      const api = new VocdoniApiService({
+        sequencerURL: import.meta.env.SEQUENCER_API_URL,
+        censusURL: import.meta.env.CENSUS_API_URL
+      })
       const details: ElectionDetails = JSON.parse(localStorage.getItem('electionDetails')!)
 
-      // Step 1: Get census proof
-      const censusProof = await api.getCensusProof(details.censusRoot, selectedAddress)
+      // Step 1: Get census proof and extract weight from it
+      const censusProof = await api.census.getCensusProof(details.censusRoot, selectedAddress)
+      const weight = censusProof.weight || '1' // Extract weight from census proof
       setVoteStatus((prev) => ({ ...prev, censusProofGenerated: true }))
       setActiveStep(1)
 
@@ -217,7 +223,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       const kStr = BigInt('0x' + kHex).toString()
 
       // Get WASM URLs from API info
-      const info = await api.getInfo()
+      const info = await api.sequencer.getInfo()
       const urls = getCircuitUrls(info)
       const sdk = new BallotProof({
         wasmExecUrl: urls.ballotProofExec,
@@ -261,7 +267,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         encryptionKey: [details.encryptionPubKey[0], details.encryptionPubKey[1]],
         k: kStr,
         fieldValues,
-        weight: participants.find((p) => p.key === selectedAddress)?.weight || '1',
+        weight, // Use weight extracted from census proof
       }
 
       const out = await sdk.proofInputs(inputs)
@@ -300,7 +306,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         voteId: out.voteId,
       }
 
-      await api.submitVote(voteRequest)
+      await api.sequencer.submitVote(voteRequest)
       const voteId = out.voteId
       setVoteStatus((prev) => ({ ...prev, voteSubmitted: true }))
       setActiveStep(4)
@@ -325,7 +331,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       const checkVoteStatus = async () => {
         let isDone = false
         while (!isDone) {
-          const voteStatus = await api.getVoteStatus(details.processId, voteId)
+          const voteStatus = await api.sequencer.getVoteStatus(details.processId, voteId)
           setSubmittedVotes((prev) => {
             const updated = prev.map((v) =>
               v.voteId === voteId
