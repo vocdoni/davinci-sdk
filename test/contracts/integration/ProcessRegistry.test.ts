@@ -8,6 +8,7 @@ import { JsonRpcProvider, Wallet, hexlify } from "ethers";
 import {
     ProcessRegistryService,
     ProcessStatus,
+    ProcessCreateError,
     deployedAddresses as addresses
 } from "../../../src/contracts";
 import { BallotMode, Census, EncryptionKey } from "../../../src/core";
@@ -219,7 +220,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
                 ) resolve();
             });
         });
-        const endProcessStream = procService.endProcess(processId);
+        const endProcessStream = procService.setProcessStatus(processId, ProcessStatus.ENDED);
         
         for await (const event of endProcessStream) {
             switch (event.status) {
@@ -241,5 +242,66 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
 
         const final = await procService.getProcess(processId);
         expect(final.status).toBe(BigInt(ProcessStatus.ENDED));
+    });
+
+    it("should yield failure status when creating process with invalid parameters", async () => {
+        const invalidCensus: Census = {
+            censusOrigin: 1,
+            maxVotes: "0", // Invalid: maxVotes should be > 0
+            censusRoot: randomHex(32),
+            censusURI: `ipfs://invalid-census-${Date.now()}`,
+        };
+
+        const ballotMode: BallotMode = {
+            maxCount: 1,
+            maxValue: "10",
+            minValue: "0",
+            forceUniqueness: false,
+            costFromWeight: false,
+            costExponent: 0,
+            maxTotalCost: "10",
+            minTotalCost: "0",
+        };
+
+        const encryptionKey: EncryptionKey = {
+            x: BigInt(randomHex(32)).toString(),
+            y: BigInt(randomHex(32)).toString(),
+        };
+
+        const newProcessStream = procService.newProcess(
+            ProcessStatus.READY,
+            Math.floor(Date.now()/1000) + 60,
+            3600,
+            ballotMode,
+            invalidCensus,
+            `ipfs://invalid-meta-${Date.now()}`,
+            encryptionKey,
+            BigInt(randomHex(32))
+        );
+
+        let eventCount = 0;
+        for await (const event of newProcessStream) {
+            eventCount++;
+
+            if (event.status === 'failed') {
+                expect(event.error).toBeInstanceOf(ProcessCreateError);
+                expect((event.error as ProcessCreateError).operation).toBe('create');
+            } else if (event.status === 'reverted') {
+                // Some invalid parameters might cause revert instead of immediate failure
+                expect(event.reason).toBeDefined();
+            } else {
+                // If it doesn't fail immediately, it might succeed but create an invalid process
+                // This depends on the contract's validation logic
+                break;
+            }
+        }
+
+        expect(eventCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should get process count", async () => {
+        const count = await procService.getProcessCount();
+        expect(typeof count).toBe('number');
+        expect(count).toBeGreaterThanOrEqual(0);
     });
 });

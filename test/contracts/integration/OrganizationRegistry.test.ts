@@ -8,11 +8,11 @@ import { JsonRpcProvider, Wallet } from 'ethers';
 import {
   OrganizationRegistryService,
   SmartContractService,
-  CreateOrganizationError,
+  OrganizationCreateError,
   deployedAddresses as addresses,
 } from '../../../src/contracts';
 
-jest.setTimeout(Number(process.env.TIME_OUT) || 60000);
+jest.setTimeout(Number(process.env.TIMEOUT) || 60000);
 
 const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC!);
 provider.pollingInterval = 1_000;
@@ -91,7 +91,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
       eventCount++;
 
       if (event.status === 'failed') {
-        expect(event.error).toBeInstanceOf(CreateOrganizationError);
+        expect(event.error).toBeInstanceOf(OrganizationCreateError);
       } else {
         throw new Error(`Expected failed status but got ${event.status}`);
       }

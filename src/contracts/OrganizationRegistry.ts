@@ -4,20 +4,18 @@ import {
 } from "@vocdoni/davinci-contracts";
 import { SmartContractService } from "./SmartContractService";
 import type { ContractRunner } from "ethers";
-
-export class CreateOrganizationError extends Error {}
-export class UpdateOrganizationError extends Error {}
-export class AdministratorError extends Error {}
-export class DeleteOrganizationError extends Error {}
-
-type OrganizationCreatedCallback = (id: string) => void;
-type OrganizationUpdatedCallback = (id: string, updater: string) => void;
-type AdministratorAddedCallback = (id: string, administrator: string) => void;
-type AdministratorRemovedCallback = (
-  id: string,
-  administrator: string,
-  remover: string
-) => void;
+import {
+  OrganizationCreateError,
+  OrganizationUpdateError,
+  OrganizationDeleteError,
+  OrganizationAdministratorError,
+} from "./errors";
+import type {
+  OrganizationCreatedCallback,
+  OrganizationUpdatedCallback,
+  OrganizationAdministratorAddedCallback,
+  OrganizationAdministratorRemovedCallback,
+} from "./types";
 
 export interface OrganizationInfo {
   name: string;
@@ -34,6 +32,8 @@ export class OrganizationRegistryService extends SmartContractService {
       runner,
     );
   }
+
+  // ─── READ OPERATIONS ───────────────────────────────────────────────────────
 
   async getOrganization(id: string): Promise<OrganizationInfo> {
     const { name, metadataURI } = await this.contract.getOrganization(id);
@@ -53,6 +53,8 @@ export class OrganizationRegistryService extends SmartContractService {
     return Number(count);
   }
 
+  // ─── WRITE OPERATIONS ──────────────────────────────────────────────────────
+
   createOrganization(
     name: string,
     metadataURI: string,
@@ -62,7 +64,7 @@ export class OrganizationRegistryService extends SmartContractService {
       this.contract
         .createOrganization(name, metadataURI, administrators)
         .catch((e) => {
-          throw new CreateOrganizationError(e.message);
+          throw new OrganizationCreateError(e.message, 'create');
         }),
       async () => ({ success: true }),
     );
@@ -77,7 +79,7 @@ export class OrganizationRegistryService extends SmartContractService {
       this.contract
         .updateOrganization(id, name, metadataURI)
         .catch((e) => {
-          throw new UpdateOrganizationError(e.message);
+          throw new OrganizationUpdateError(e.message, 'update');
         }),
       async () => ({ success: true }),
     );
@@ -88,7 +90,7 @@ export class OrganizationRegistryService extends SmartContractService {
       this.contract
         .addAdministrator(id, administrator)
         .catch((e) => {
-          throw new AdministratorError(e.message);
+          throw new OrganizationAdministratorError(e.message, 'addAdministrator');
         }),
       async () => ({ success: true }),
     );
@@ -99,7 +101,7 @@ export class OrganizationRegistryService extends SmartContractService {
       this.contract
         .removeAdministrator(id, administrator)
         .catch((e) => {
-          throw new AdministratorError(e.message);
+          throw new OrganizationAdministratorError(e.message, 'removeAdministrator');
         }),
       async () => ({ success: true }),
     );
@@ -110,11 +112,13 @@ export class OrganizationRegistryService extends SmartContractService {
       this.contract
         .deleteOrganization(id)
         .catch((e) => {
-          throw new DeleteOrganizationError(e.message);
+          throw new OrganizationDeleteError(e.message, 'delete');
         }),
       async () => ({ success: true }),
     );
   }
+
+  // ─── EVENT LISTENERS ───────────────────────────────────────────────────────
 
   onOrganizationCreated(cb: OrganizationCreatedCallback): void {
     this.contract.on(
@@ -130,14 +134,14 @@ export class OrganizationRegistryService extends SmartContractService {
     );
   }
 
-  onAdministratorAdded(cb: AdministratorAddedCallback): void {
+  onAdministratorAdded(cb: OrganizationAdministratorAddedCallback): void {
     this.contract.on(
       this.contract.filters.AdministratorAdded(),
       this.normalizeListener<[string, string]>(cb)
     );
   }
 
-  onAdministratorRemoved(cb: AdministratorRemovedCallback): void {
+  onAdministratorRemoved(cb: OrganizationAdministratorRemovedCallback): void {
     this.contract.on(
       this.contract.filters.AdministratorRemoved(),
       this.normalizeListener<[string, string, string]>(cb)
