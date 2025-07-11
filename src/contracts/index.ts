@@ -49,6 +49,18 @@
 export * from './SmartContractService';
 
 /**
+ * Standardized error classes for contract service operations.
+ * @see {@link errors}
+ */
+export * from './errors';
+
+/**
+ * Standardized type definitions for callbacks and interfaces.
+ * @see {@link types}
+ */
+export * from './types';
+
+/**
  * Service for managing organizations on the Vocdoni protocol.
  * Provides methods for creating and updating organizations.
  * @see {@link OrganizationRegistry}

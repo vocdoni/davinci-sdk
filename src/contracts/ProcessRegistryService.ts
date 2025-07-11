@@ -7,22 +7,22 @@ import {
 import { SmartContractService } from "./SmartContractService";
 import type { ContractRunner } from "ethers";
 import { BallotMode, Census, EncryptionKey } from '../core';
-
-// Custom errors
-export class CreateProcessError      extends Error {}
-export class SetStatusError          extends Error {}
-export class SetCensusError          extends Error {}
-export class SetDurationError        extends Error {}
-export class SubmitStateTransitionError extends Error {}
-export class SetResultError          extends Error {}
-
-// Event callback types
-type ProcessCreatedCallback      = (processID: string, creator: string) => void;
-type StatusChangedCallback       = (processID: string, oldStatus: bigint, newStatus: bigint) => void;
-type CensusUpdatedCallback      = (processID: string, root: string, uri: string, maxVotes: bigint) => void;
-type DurationChangedCallback     = (processID: string, duration: bigint) => void;
-type StateRootUpdatedCallback    = (processID: string, sender: string, newStateRoot: bigint) => void;
-type ProcessResultsSetCallback   = (processID: string, sender: string, result: bigint[]) => void;
+import {
+    ProcessCreateError,
+    ProcessStatusError,
+    ProcessCensusError,
+    ProcessDurationError,
+    ProcessStateTransitionError,
+    ProcessResultError,
+} from "./errors";
+import type {
+    ProcessCreatedCallback,
+    ProcessStatusChangedCallback,
+    ProcessCensusUpdatedCallback,
+    ProcessDurationChangedCallback,
+    ProcessStateRootUpdatedCallback,
+    ProcessResultsSetCallback,
+} from "./types";
 
 export enum ProcessStatus {
     READY   = 0,
@@ -126,7 +126,7 @@ export class ProcessRegistryService extends SmartContractService {
                 metadata,
                 encryptionKey,
                 initStateRoot
-            ).catch(e => { throw new CreateProcessError(e.message) }),
+            ).catch(e => { throw new ProcessCreateError(e.message, 'create') }),
             async () => ({ success: true })
         );
     }
@@ -134,15 +134,10 @@ export class ProcessRegistryService extends SmartContractService {
     setProcessStatus(processID: string, newStatus: ProcessStatus) {
         return this.sendTx(
             this.contract.setProcessStatus(processID, newStatus).catch(e => {
-                throw new SetStatusError(e.message);
+                throw new ProcessStatusError(e.message, 'setStatus');
             }),
             async () => ({ success: true })
         );
-    }
-
-    /** convenience wrapper for "end" */
-    endProcess(processID: string) {
-        return this.setProcessStatus(processID, ProcessStatus.ENDED);
     }
 
     setProcessCensus(processID: string, census: Census) {
@@ -156,7 +151,7 @@ export class ProcessRegistryService extends SmartContractService {
 
         return this.sendTx(
             this.contract.setProcessCensus(processID, contractCensus).catch(e => {
-                throw new SetCensusError(e.message);
+                throw new ProcessCensusError(e.message, 'setCensus');
             }),
             async () => ({ success: true })
         );
@@ -165,7 +160,7 @@ export class ProcessRegistryService extends SmartContractService {
     setProcessDuration(processID: string, duration: number) {
         return this.sendTx(
             this.contract.setProcessDuration(processID, duration).catch(e => {
-                throw new SetDurationError(e.message);
+                throw new ProcessDurationError(e.message, 'setDuration');
             }),
             async () => ({ success: true })
         );
@@ -183,7 +178,7 @@ export class ProcessRegistryService extends SmartContractService {
             this.contract
                 .submitStateTransition(processID, proof, input)
                 .catch(e => {
-                    throw new SubmitStateTransitionError(e.message);
+                    throw new ProcessStateTransitionError(e.message, 'submitStateTransition');
                 }),
             async () => ({ success: true })
         );
@@ -204,11 +199,13 @@ export class ProcessRegistryService extends SmartContractService {
                 proof,
                 input
             ).catch(e => {
-                throw new SetResultError(e.message);
+                throw new ProcessResultError(e.message, 'setResults');
             }),
             async () => ({ success: true })
         );
     }
+
+    // ─── EVENT LISTENERS ───────────────────────────────────────────────────────
 
     onProcessCreated(cb: ProcessCreatedCallback): void {
         this.contract.on(
@@ -217,28 +214,28 @@ export class ProcessRegistryService extends SmartContractService {
         );
     }
 
-    onProcessStatusChanged(cb: StatusChangedCallback): void {
+    onProcessStatusChanged(cb: ProcessStatusChangedCallback): void {
         this.contract.on(
             this.contract.filters.ProcessStatusChanged(),
             this.normalizeListener<[string, bigint, bigint]>(cb)
         );
     }
 
-    onCensusUpdated(cb: CensusUpdatedCallback): void {
+    onCensusUpdated(cb: ProcessCensusUpdatedCallback): void {
         this.contract.on(
             this.contract.filters.CensusUpdated(),
             this.normalizeListener<[string, string, string, bigint]>(cb)
         );
     }
 
-    onProcessDurationChanged(cb: DurationChangedCallback): void {
+    onProcessDurationChanged(cb: ProcessDurationChangedCallback): void {
         this.contract.on(
             this.contract.filters.ProcessDurationChanged(),
             this.normalizeListener<[string, bigint]>(cb)
         );
     }
 
-    onStateRootUpdated(cb: StateRootUpdatedCallback): void {
+    onStateRootUpdated(cb: ProcessStateRootUpdatedCallback): void {
         this.contract.on(
             this.contract.filters.ProcessStateRootUpdated(),
             this.normalizeListener<[string, string, bigint]>(cb)
