@@ -77,6 +77,43 @@ RPC_URL=
 - **PROCESS_REGISTRY_ADDRESS** (Optional): Custom process registry contract address
   - If not provided, will use the default deployed address for the network
 
+- **FORCE_SEQUENCER_ADDRESSES** (Optional): Force using contract addresses from sequencer info endpoint
+  - Set to `true` to use addresses from the sequencer's `/info` endpoint
+  - Set to `false` (default) to use environment variables or default addresses
+
+### New Feature: Force Sequencer Addresses
+
+The UI now includes a new environment variable `FORCE_SEQUENCER_ADDRESSES` that allows you to force the use of contract addresses from the sequencer's info endpoint instead of using environment variables or default addresses.
+
+#### How it works:
+
+1. **When `FORCE_SEQUENCER_ADDRESSES=false` (default)**:
+   - The application will first check for `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS` in environment variables
+   - If not found, it will fall back to the default deployed addresses
+
+2. **When `FORCE_SEQUENCER_ADDRESSES=true`**:
+   - The application will fetch contract addresses from the sequencer's `/info` endpoint
+   - It will use the `process` and `organization` addresses from the sequencer response
+   - If the sequencer doesn't provide valid addresses, the application will throw an error
+   - Environment variables and default addresses are ignored when this flag is set
+
+#### Benefits:
+
+- **Dynamic Configuration**: Contract addresses are automatically retrieved from the sequencer
+- **Environment Consistency**: Ensures the application uses the same contract addresses that the sequencer is configured to use
+- **Reduced Configuration**: No need to manually specify contract addresses in environment variables
+
+#### Usage:
+
+To enable the feature, set the environment variable in your `.env` file:
+```env
+FORCE_SEQUENCER_ADDRESSES=true
+```
+
+When enabled, you'll see console output indicating which address source is being used:
+- `Using PROCESS_REGISTRY_ADDRESS from sequencer info: 0x1234...`
+- `Using ORGANIZATION_REGISTRY_ADDRESS from sequencer info: 0x5678...`
+
 ## Running the Application
 
 ### Development Mode
@@ -197,6 +234,13 @@ src/
 4. **SDK Build Issues**
    - Try removing `node_modules` and `davinci-sdk.tgz`
    - Run `yarn install` again to rebuild the SDK
+
+5. **"Invalid process registry address from sequencer" Error**
+   - **Cause**: `FORCE_SEQUENCER_ADDRESSES=true` but sequencer doesn't provide valid addresses
+   - **Solution**: 
+     - Check sequencer configuration
+     - Set `FORCE_SEQUENCER_ADDRESSES=false` to use environment variables or defaults
+     - Manually set `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS`
 
 ### Getting Sepolia ETH
 
