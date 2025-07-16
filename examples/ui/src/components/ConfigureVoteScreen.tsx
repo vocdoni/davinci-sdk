@@ -29,7 +29,7 @@ import {
 } from '@vocdoni/davinci-sdk'
 import { JsonRpcSigner, Wallet } from 'ethers'
 import { useState } from 'react'
-import { getProcessRegistryAddress } from '../utils/contractAddresses'
+import { getProcessRegistryAddress, logAddressConfiguration } from '../utils/contractAddresses'
 
 interface ConfigureVoteScreenProps {
   onBack: () => void
@@ -177,10 +177,17 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
       setError(null)
       setProgress(0)
 
+      // Log address configuration
+      logAddressConfiguration()
+
       const api = new VocdoniApiService({
         sequencerURL: import.meta.env.SEQUENCER_API_URL,
         censusURL: import.meta.env.CENSUS_API_URL
       })
+
+      // Step 0: Fetch sequencer info to get contract addresses if needed
+      setProgress(10)
+      const sequencerInfo = await api.sequencer.getInfo()
 
       // Step 1: Push metadata
       setProgress(20)
@@ -199,7 +206,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
 
       // Step 3: Get next process ID from contract using wallet address as organizationId
       setProgress(50)
-      const registry = new ProcessRegistryService(getProcessRegistryAddress(), wallet)
+      const registry = new ProcessRegistryService(getProcessRegistryAddress(sequencerInfo.contracts), wallet)
 
       const address = await wallet.getAddress()
       const processId = await registry.getNextProcessId(address)

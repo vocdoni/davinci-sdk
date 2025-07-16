@@ -12,7 +12,7 @@ import {
 import { ProcessRegistryService, VocdoniApiService } from '@vocdoni/davinci-sdk'
 import { JsonRpcSigner, Wallet } from 'ethers'
 import { useEffect, useState } from 'react'
-import { getProcessRegistryAddress } from '../utils/contractAddresses'
+import { getProcessRegistryAddress, logAddressConfiguration } from '../utils/contractAddresses'
 
 interface ShowResultsScreenProps {
   onBack: () => void
@@ -42,19 +42,25 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
   useEffect(() => {
     const loadResults = async () => {
       try {
+        // Log address configuration
+        logAddressConfiguration()
+        
         const detailsStr = localStorage.getItem('electionDetails')
         if (!detailsStr) throw new Error('Election details not found')
         const details = JSON.parse(detailsStr)
-
-        // Get process results
-        const registry = new ProcessRegistryService(getProcessRegistryAddress(), wallet)
-        const electionProcess = await registry.getProcess(details.processId)
 
         // Get metadata for question and choice labels
         const api = new VocdoniApiService({
           sequencerURL: import.meta.env.SEQUENCER_API_URL,
           censusURL: import.meta.env.CENSUS_API_URL
         })
+        
+        // Fetch sequencer info to get contract addresses if needed
+        const sequencerInfo = await api.sequencer.getInfo()
+
+        // Get process results
+        const registry = new ProcessRegistryService(getProcessRegistryAddress(sequencerInfo.contracts), wallet)
+        const electionProcess = await registry.getProcess(details.processId)
         const metadata = await api.sequencer.getMetadata(details.metadataUrl.split('/').pop() || '')
 
         // Map results to questions and choices
