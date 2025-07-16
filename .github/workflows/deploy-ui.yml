@@ -57,6 +57,7 @@ jobs:
           SEQUENCER_API_URL: ${{ secrets.SEQUENCER_API_URL }}
           CENSUS_API_URL: ${{ secrets.CENSUS_API_URL }}
           RPC_URL: ${{ secrets.RPC_URL }}
+          FORCE_SEQUENCER_ADDRESSES: ${{ secrets.FORCE_SEQUENCER_ADDRESSES }}
           ESLINT_NO_DEV_ERRORS: true
 
       - name: Copy index.html to 404.html for SPA fallback
