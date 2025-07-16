@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ethereumjs/common": "^4.4.0",
     "@vocdoni/davinci-sdk": "file:../..",
     "chalk": "^5.3.0",
     "dotenv": "^16.4.7",

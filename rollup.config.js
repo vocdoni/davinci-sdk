@@ -28,8 +28,7 @@ const createOutput = (name, options) => [
       'axios': 'axios',
       '@vocdoni/davinci-contracts': 'davinciContracts',
       'ethers': 'ethers',
-      'snarkjs': 'snarkjs',
-      '@ethereumjs/common': 'ethereumjsCommon'
+      'snarkjs': 'snarkjs'
     }
   }
 ];

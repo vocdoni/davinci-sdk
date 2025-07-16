@@ -40,7 +40,6 @@
   "author": "Vocdoni",
   "license": "MIT",
   "dependencies": {
-    "@ethereumjs/common": "^4.4.0",
     "@vocdoni/davinci-contracts": "0.0.14",
     "axios": "^1.8.4",
     "ethers": "^6.7.1",
