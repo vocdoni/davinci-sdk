@@ -20,7 +20,7 @@ import {
 import { VocdoniApiService } from '@vocdoni/davinci-sdk'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { getContractAddresses } from '../utils/contractAddresses'
+import { getContractAddresses, logAddressConfiguration } from '../utils/contractAddresses'
 import { getAddressUrl } from '../utils/explorerUrl'
 
 interface WelcomeScreenProps {
@@ -36,9 +36,10 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
     process: string
     organization: string
   } | null>(null)
-
-  // Get contract addresses (from env vars or fallback to deployed addresses)
-  const contractAddresses = getContractAddresses()
+  const [contractAddresses, setContractAddresses] = useState<{
+    organizationRegistry: string
+    processRegistry: string
+  } | null>(null)
 
   useEffect(() => {
     checkConnection()
@@ -48,12 +49,21 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
     try {
       setIsLoading(true)
       setError('')
+      
+      // Log address configuration
+      logAddressConfiguration()
+      
       const api = new VocdoniApiService({
         sequencerURL: import.meta.env.SEQUENCER_API_URL,
         censusURL: import.meta.env.CENSUS_API_URL
       })
       await api.sequencer.ping()
       const info = await api.sequencer.getInfo()
+      
+      // Get contract addresses using sequencer info
+      const addresses = getContractAddresses(info.contracts)
+      setContractAddresses(addresses)
+      
       setApiAddresses({
         process: info.contracts.process.toLowerCase(),
         organization: info.contracts.organization.toLowerCase(),
@@ -121,79 +131,83 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
             <ListItem>
               <ListItemText primary='Network' secondary='Sepolia Testnet' />
             </ListItem>
-            <ListItem>
-              <Tooltip
-                title={
-                  apiAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase()
-                    ? 'Contract address verified'
-                    : 'Contract address mismatch between SDK and API'
-                }
-              >
-                <ListItemIcon>
-                  {apiAddresses ? (
-                    apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ? (
-                      <CheckCircleIcon color='success' />
-                    ) : (
-                      <ErrorIcon color='error' />
-                    )
-                  ) : (
-                    <CircularProgress size={24} />
-                  )}
-                </ListItemIcon>
-              </Tooltip>
-              <ListItemText
-                primary='Organization Registry Contract'
-                secondary={
-                  <Link
-                    href={getAddressUrl(contractAddresses.organizationRegistry)}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    color='primary'
+            {contractAddresses && (
+              <>
+                <ListItem>
+                  <Tooltip
+                    title={
+                      apiAddresses && contractAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase()
+                        ? 'Contract address verified'
+                        : 'Contract address mismatch between SDK and API'
+                    }
                   >
-                    {contractAddresses.organizationRegistry}
-                  </Link>
-                }
-              />
-            </ListItem>
-            <ListItem>
-              <Tooltip
-                title={
-                  apiAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase()
-                    ? 'Contract address verified'
-                    : 'Contract address mismatch between SDK and API'
-                }
-              >
-                <ListItemIcon>
-                  {apiAddresses ? (
-                    apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ? (
-                      <CheckCircleIcon color='success' />
-                    ) : (
-                      <ErrorIcon color='error' />
-                    )
-                  ) : (
-                    <CircularProgress size={24} />
-                  )}
-                </ListItemIcon>
-              </Tooltip>
-              <ListItemText
-                primary='Process Registry Contract'
-                secondary={
-                  <Link
-                    href={getAddressUrl(contractAddresses.processRegistry)}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    color='primary'
+                    <ListItemIcon>
+                      {apiAddresses && contractAddresses ? (
+                        apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ? (
+                          <CheckCircleIcon color='success' />
+                        ) : (
+                          <ErrorIcon color='error' />
+                        )
+                      ) : (
+                        <CircularProgress size={24} />
+                      )}
+                    </ListItemIcon>
+                  </Tooltip>
+                  <ListItemText
+                    primary='Organization Registry Contract'
+                    secondary={
+                      <Link
+                        href={getAddressUrl(contractAddresses.organizationRegistry)}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        color='primary'
+                      >
+                        {contractAddresses.organizationRegistry}
+                      </Link>
+                    }
+                  />
+                </ListItem>
+                <ListItem>
+                  <Tooltip
+                    title={
+                      apiAddresses && contractAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase()
+                        ? 'Contract address verified'
+                        : 'Contract address mismatch between SDK and API'
+                    }
                   >
-                    {contractAddresses.processRegistry}
-                  </Link>
-                }
-              />
-            </ListItem>
+                    <ListItemIcon>
+                      {apiAddresses && contractAddresses ? (
+                        apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ? (
+                          <CheckCircleIcon color='success' />
+                        ) : (
+                          <ErrorIcon color='error' />
+                        )
+                      ) : (
+                        <CircularProgress size={24} />
+                      )}
+                    </ListItemIcon>
+                  </Tooltip>
+                  <ListItemText
+                    primary='Process Registry Contract'
+                    secondary={
+                      <Link
+                        href={getAddressUrl(contractAddresses.processRegistry)}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        color='primary'
+                      >
+                        {contractAddresses.processRegistry}
+                      </Link>
+                    }
+                  />
+                </ListItem>
+              </>
+            )}
           </List>
         </CardContent>
       </Card>
 
-      {apiAddresses &&
+      {apiAddresses && contractAddresses &&
       (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
         apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()) ? (
         <Alert severity='error' sx={{ mb: 2 }}>
@@ -222,7 +236,7 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
             !isConnected ||
             isLoading ||
             Boolean(
-              apiAddresses &&
+              apiAddresses && contractAddresses &&
                 (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
                   apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase())
             )
