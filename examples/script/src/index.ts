@@ -43,6 +43,7 @@ const SEQUENCER_API_URL          = process.env.SEQUENCER_API_URL;
 const CENSUS_API_URL             = process.env.CENSUS_API_URL;
 const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
+const FORCE_SEQUENCER_ADDRESSES  = process.env.FORCE_SEQUENCER_ADDRESSES === 'true';
 
 // ────────────────────────────────────────────────────────────
 //   LOGGING HELPERS
@@ -52,8 +53,16 @@ const success = (msg: string) => console.log(chalk.green("✔"), msg);
 const step    = (n: number, msg: string) =>
     console.log(chalk.yellow.bold(`\n[Step ${n}]`), chalk.white(msg));
 
-const PROCESS_REGISTRY_ADDR      = getProcessRegistryAddress();
-const ORGANIZATION_REGISTRY_ADDR = getOrganizationRegistryAddress();
+// Log the configuration
+if (FORCE_SEQUENCER_ADDRESSES) {
+    info("FORCE_SEQUENCER_ADDRESSES is enabled - will use contract addresses from sequencer info endpoint");
+} else {
+    info("FORCE_SEQUENCER_ADDRESSES is disabled - will use environment variables or default addresses");
+}
+
+// Address variables will be set after fetching sequencer info
+let PROCESS_REGISTRY_ADDR: string;
+let ORGANIZATION_REGISTRY_ADDR: string;
 
 // Ballot mode configuration for two questions with four options each (0-3)
 const BALLOT_MODE: ApiBallotMode = {
@@ -71,27 +80,53 @@ const BALLOT_MODE: ApiBallotMode = {
 //   ADDRESS HELPERS
 // ────────────────────────────────────────────────────────────
 /**
- * Gets the process registry address from environment variables with fallback to deployed addresses
+ * Gets the process registry address from environment variables, sequencer info, or fallback to deployed addresses
  */
-function getProcessRegistryAddress(): string {
+function getProcessRegistryAddress(sequencerContracts?: Record<string, string>): string {
+    // Check if we should force using sequencer addresses
+    if (FORCE_SEQUENCER_ADDRESSES && sequencerContracts?.process) {
+        if (isAddress(sequencerContracts.process)) {
+            info(`Using PROCESS_REGISTRY_ADDRESS from sequencer info: ${sequencerContracts.process}`);
+            return sequencerContracts.process;
+        } else {
+            throw new Error(`Invalid process registry address from sequencer: ${sequencerContracts.process}`);
+        }
+    }
+    
+    // Check environment variable
     const envAddress = process.env.PROCESS_REGISTRY_ADDRESS;
     if (envAddress && isAddress(envAddress)) {
         info(`Using PROCESS_REGISTRY_ADDRESS from environment: ${envAddress}`);
         return envAddress;
     }
+    
+    // Fallback to default
     info(`Using default process registry address: ${addresses.processRegistry.sepolia}`);
     return addresses.processRegistry.sepolia;
 }
 
 /**
- * Gets the organization registry address from environment variables with fallback to deployed addresses
+ * Gets the organization registry address from environment variables, sequencer info, or fallback to deployed addresses
  */
-function getOrganizationRegistryAddress(): string {
+function getOrganizationRegistryAddress(sequencerContracts?: Record<string, string>): string {
+    // Check if we should force using sequencer addresses
+    if (FORCE_SEQUENCER_ADDRESSES && sequencerContracts?.organization) {
+        if (isAddress(sequencerContracts.organization)) {
+            info(`Using ORGANIZATION_REGISTRY_ADDRESS from sequencer info: ${sequencerContracts.organization}`);
+            return sequencerContracts.organization;
+        } else {
+            throw new Error(`Invalid organization registry address from sequencer: ${sequencerContracts.organization}`);
+        }
+    }
+    
+    // Check environment variable
     const envAddress = process.env.ORGANIZATION_REGISTRY_ADDRESS;
     if (envAddress && isAddress(envAddress)) {
         info(`Using ORGANIZATION_REGISTRY_ADDRESS from environment: ${envAddress}`);
         return envAddress;
     }
+    
+    // Fallback to default
     info(`Using default organization registry address: ${addresses.organizationRegistry.sepolia}`);
     return addresses.organizationRegistry.sepolia;
 }
@@ -733,6 +768,11 @@ async function run() {
 
     await step1_ping(api);
     const info    = await step2_fetchInfo(api);
+    
+    // Set contract addresses based on environment variables and sequencer info
+    PROCESS_REGISTRY_ADDR = getProcessRegistryAddress(info.contracts);
+    ORGANIZATION_REGISTRY_ADDR = getOrganizationRegistryAddress(info.contracts);
+    
     const censusId         = await step3_createCensus(api);
     const participants     = await step4_addParticipants(api, censusId);
     const publishResult    = await step5_publishCensus(api, censusId);
