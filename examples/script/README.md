@@ -83,8 +83,11 @@ Before running this script, ensure you have:
 2. **Configure environment variables** in `.env`:
 
    ```env
-   # Vocdoni API endpoint
-   API_URL=https://sequencer1.davinci.vote
+   # Sequencer API endpoint (e.g., http://localhost:8080)
+   SEQUENCER_API_URL=
+
+   # Census API endpoint (e.g., http://localhost:8081)
+   CENSUS_API_URL=
 
    # Sepolia RPC endpoint (get from Infura, Alchemy, etc.)
    SEPOLIA_RPC=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
@@ -95,17 +98,44 @@ Before running this script, ensure you have:
    # Optional: Custom contract addresses
    ORGANIZATION_REGISTRY_ADDRESS=
    PROCESS_REGISTRY_ADDRESS=
+
+   # Force using contract addresses from sequencer info endpoint (default: false)
+   FORCE_SEQUENCER_ADDRESSES=false
    ```
 
 ### Environment Variables Explained
 
 | Variable | Description | Required | Example |
 |----------|-------------|----------|---------|
-| `API_URL` | Vocdoni API endpoint | ✅ | `https://sequencer1.davinci.vote` |
+| `SEQUENCER_API_URL` | Vocdoni sequencer API endpoint | ✅ | `https://sequencer1.davinci.vote` |
+| `CENSUS_API_URL` | Vocdoni census API endpoint | ✅ | `https://census1.davinci.vote` |
 | `SEPOLIA_RPC` | Ethereum Sepolia RPC URL | ✅ | `https://sepolia.infura.io/v3/...` |
 | `PRIVATE_KEY` | Wallet private key (no 0x) | ✅ | `abcd1234...` |
 | `ORGANIZATION_REGISTRY_ADDRESS` | Custom org registry address | ❌ | `0x1234...` |
 | `PROCESS_REGISTRY_ADDRESS` | Custom process registry address | ❌ | `0x5678...` |
+| `FORCE_SEQUENCER_ADDRESSES` | Use addresses from sequencer info | ❌ | `true` or `false` |
+
+### New Feature: Force Sequencer Addresses
+
+The script now includes a new environment variable `FORCE_SEQUENCER_ADDRESSES` that allows you to force the use of contract addresses from the sequencer's info endpoint instead of using environment variables or default addresses.
+
+#### How it works:
+
+1. **When `FORCE_SEQUENCER_ADDRESSES=false` (default)**:
+   - The script will first check for `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS` in environment variables
+   - If not found, it will fall back to the default deployed addresses
+
+2. **When `FORCE_SEQUENCER_ADDRESSES=true`**:
+   - The script will fetch contract addresses from the sequencer's `/info` endpoint
+   - It will use the `process` and `organization` addresses from the sequencer response
+   - If the sequencer doesn't provide valid addresses, the script will throw an error
+   - Environment variables and default addresses are ignored when this flag is set
+
+#### Benefits:
+
+- **Dynamic Configuration**: Contract addresses are automatically retrieved from the sequencer
+- **Environment Consistency**: Ensures the script uses the same contract addresses that the sequencer is configured to use
+- **Reduced Configuration**: No need to manually specify contract addresses in environment variables
 
 ### Getting Required Values
 
@@ -139,6 +169,20 @@ The script provides detailed console output with:
 - ℹ️ Information messages for ongoing processes
 - 🚀 Progress indicators for major phases
 - 📊 Final election results
+
+When `FORCE_SEQUENCER_ADDRESSES=true`, you'll see output like:
+```
+ℹ FORCE_SEQUENCER_ADDRESSES is enabled - will use contract addresses from sequencer info endpoint
+ℹ Using PROCESS_REGISTRY_ADDRESS from sequencer info: 0x1234...
+ℹ Using ORGANIZATION_REGISTRY_ADDRESS from sequencer info: 0x5678...
+```
+
+When `FORCE_SEQUENCER_ADDRESSES=false`, you'll see:
+```
+ℹ FORCE_SEQUENCER_ADDRESSES is disabled - will use environment variables or default addresses
+ℹ Using default process registry address: 0xabcd...
+ℹ Using default organization registry address: 0xefgh...
+```
 
 ## What the Script Does
 
@@ -258,7 +302,7 @@ graph LR
     B --> C[Vocdoni Sequencer]
     C --> D[Ethereum Smart Contract]
     D --> E[On-Chain Results]
-    
+
     style B fill:#fff3e0
     style C fill:#e8f5e8
     style D fill:#e3f2fd
@@ -276,7 +320,7 @@ graph LR
 
 ### Common Issues
 
-#### "API_URL environment variable is required"
+#### "SEQUENCER_API_URL environment variable is required"
 - **Cause**: Missing or empty `.env` file
 - **Solution**: Copy `.env.example` to `.env` and configure variables
 
@@ -292,18 +336,25 @@ graph LR
 - **Cause**: zk-SNARK circuit or input issues
 - **Solution**: Check API connectivity and try again
 
+#### "Invalid process registry address from sequencer"
+- **Cause**: `FORCE_SEQUENCER_ADDRESSES=true` but sequencer doesn't provide valid addresses
+- **Solution**: 
+  - Check sequencer configuration
+  - Set `FORCE_SEQUENCER_ADDRESSES=false` to use environment variables or defaults
+  - Manually set `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS`
+
 #### Connection timeout errors
 - **Cause**: Network issues or API downtime
-- **Solution**: 
+- **Solution**:
   - Check internet connection
-  - Verify API_URL is correct
+  - Verify SEQUENCER_API_URL and CENSUS_API_URL are correct
   - Try again later if API is down
 
 ### Debug Tips
 
 1. **Enable verbose logging**: The script already provides detailed output
 2. **Check transaction status**: Use [Sepolia Etherscan](https://sepolia.etherscan.io/) to verify transactions
-3. **Verify API status**: Test API connectivity with `curl $API_URL/ping`
+3. **Verify API status**: Test API connectivity with `curl $SEQUENCER_API_URL/ping`
 4. **Check balances**: Ensure wallet has sufficient Sepolia ETH
 
 ### Getting Help
