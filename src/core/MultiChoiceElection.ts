@@ -1,6 +1,7 @@
 import { BaseElection } from "./BaseElection";
-import { ElectionMetadata, BallotMode, ElectionResultsTypeNames } from "../core/types";
-import { VoteValidationResult } from "./types";
+import { ElectionMetadata, ElectionResultsTypeNames } from "./types/metadata";
+import { BallotMode } from "./types/common";
+import { VoteValidationResult } from "./types/election";
 
 /**
  * Multiple choice election allowing voters to select multiple options
@@ -18,6 +19,9 @@ export class MultiChoiceElection extends BaseElection {
     if (max < 1) {
       throw new Error('Maximum selections must be at least 1');
     }
+    if (max < this.minSelections) {
+      throw new Error('Maximum selections cannot be less than minimum selections');
+    }
     this.maxSelections = max;
     return this;
   }
@@ -28,6 +32,9 @@ export class MultiChoiceElection extends BaseElection {
   requireMinimumSelections(min: number): this {
     if (min < 0) {
       throw new Error('Minimum selections cannot be negative');
+    }
+    if (min > this.maxSelections) {
+      throw new Error('Minimum selections cannot be greater than maximum selections');
     }
     this.minSelections = min;
     return this;

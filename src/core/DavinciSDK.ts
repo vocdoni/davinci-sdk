@@ -1,8 +1,12 @@
 import { Signer, Provider } from "ethers";
 import { VocdoniApiService } from "./api/ApiService";
 import { ProcessRegistryService, OrganizationRegistryService, deployedAddresses, ProcessStatus } from "../contracts";
-import { ElectionMetadata, getElectionMetadataTemplate, BallotMode } from "./types";
-import { ElectionBuilder } from "../election";
+import { ElectionMetadata, getElectionMetadataTemplate } from "./types/metadata";
+import { BallotMode } from "./types/common";
+import { ElectionBuilder } from "./ElectionBuilder";
+import { BaseElection } from "./BaseElection";
+import { ElectionFactory } from "./ElectionFactory";
+import { ProcessInfo } from "./types/electionTypes";
 
 /**
  * Custom error for missing contract addresses
@@ -231,7 +235,7 @@ export class DavinciSDK {
     /**
      * Create a new voting process with simplified parameters
      */
-    async createProcess(params: CreateProcessParams): Promise<ProcessCreationResult> {
+    async createProcess(params: CreateProcessParams, ballotMode?: BallotMode): Promise<ProcessCreationResult> {
         // Validate required services
         if (!this.api.sequencer) {
             throw new Error('Sequencer service is not available. Please provide a sequencerUrl in the configuration.');
@@ -245,15 +249,18 @@ export class DavinciSDK {
         
         // Upload metadata to sequencer
         const metadataHash = await this.api.sequencer.pushMetadata(metadata);
+        const metadataUri = this.api.sequencer.getMetadataUrl(metadataHash);
 
-        // Get next process ID
+        // Get next process ID from the smart contract
         const organizationId = await this.getAddress();
         const processId = await this.processRegistry.getNextProcessId(organizationId);
 
-        // Create default ballot mode (single choice)
-        const ballotMode: BallotMode = {
+        // Use provided ballot mode or create default single choice ballot mode
+        const finalBallotMode: BallotMode = ballotMode || {
             maxCount: 1,
-            maxValue: "1",
+            maxValue: params.questions && params.questions.length > 0 
+                ? (Math.max(...params.questions[0].choices.map(c => c.value))).toString()
+                : "1",
             minValue: "0",
             forceUniqueness: true,
             costFromWeight: false,
@@ -262,31 +269,42 @@ export class DavinciSDK {
             minTotalCost: "0"
         };
 
-        // Create census object
+        // Sign the process creation for sequencer (BEFORE creating the process)
+        const signature = await this.signProcessCreation(processId);
+
+        // Register process with sequencer FIRST to get encryption key and state root
+        const sequencerResponse = await this.api.sequencer.createProcess({
+            processId,
+            censusRoot: params.censusRoot,
+            ballotMode: finalBallotMode,
+            signature
+        });
+
+        // Create census object with proper census URI
         const census = {
             censusOrigin: 1, // Off-chain census
             maxVotes: params.maxVotes,
             censusRoot: params.censusRoot,
-            censusURI: "" // Empty for off-chain census
+            censusURI: this.api.census ? `${(this.api.census as any).axios.defaults.baseURL}/censuses/${params.censusRoot}` : ""
         };
 
-        // Create encryption key (placeholder - in real implementation this would come from the sequencer)
+        // Use the encryption key from sequencer response
         const encryptionKey = {
-            x: "0x0000000000000000000000000000000000000000000000000000000000000000",
-            y: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            x: sequencerResponse.encryptionPubKey[0],
+            y: sequencerResponse.encryptionPubKey[1]
         };
 
-        const startTime = params.startTime || Math.floor(Date.now() / 1000);
-        const initStateRoot = BigInt(0); // Initial state root
-
+        const startTime = params.startTime || Math.floor(Date.now() / 1000) + 60; // Start 60 seconds in the future
+        const initStateRoot = BigInt(sequencerResponse.stateRoot);
+        
         // Create process on-chain
         const txStream = this.processRegistry.newProcess(
             ProcessStatus.READY,
             startTime,
             params.duration,
-            ballotMode,
+            finalBallotMode,
             census,
-            metadataHash,
+            metadataUri,
             encryptionKey,
             initStateRoot
         );
@@ -307,17 +325,6 @@ export class DavinciSDK {
                 throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
             }
         }
-
-        // Sign the process creation for sequencer
-        const signature = await this.signProcessCreation(processId);
-
-        // Register process with sequencer
-        const sequencerResponse = await this.api.sequencer.createProcess({
-            processId,
-            censusRoot: params.censusRoot,
-            ballotMode,
-            signature
-        });
 
         return {
             processId,
@@ -371,6 +378,84 @@ export class DavinciSDK {
     private async signProcessCreation(processId: string): Promise<string> {
         const message = `Create process: ${processId}`;
         return await this.signer.signMessage(message);
+    }
+
+    /**
+     * Retrieve an election by processId and reconstruct the full election instance
+     */
+    async getElection(processId: string): Promise<BaseElection | null> {
+        try {
+            // Validate required services
+            if (!this.processRegistry) {
+                throw new Error('Process registry is not available. Please ensure contract addresses are configured.');
+            }
+
+            // Get process information from smart contract
+            const processInfo = await this.getProcessInfo(processId);
+            if (!processInfo) {
+                return null;
+            }
+
+            // Fetch metadata from metadata URI
+            const metadata = await this.fetchMetadata(processInfo.metadataUri);
+            if (!metadata) {
+                return null;
+            }
+
+            // Use ElectionFactory to reconstruct the election
+            return ElectionFactory.fromMetadata(this, metadata, processInfo);
+
+        } catch (error) {
+            console.warn(`Failed to retrieve election ${processId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Get process information from smart contract
+     */
+    private async getProcessInfo(processId: string): Promise<ProcessInfo | null> {
+        if (!this.processRegistry) {
+            throw new Error('Process registry is not available');
+        }
+
+        try {
+            const processData = await this.processRegistry.getProcess(processId);
+            
+            return {
+                processId,
+                status: Number(processData.status),
+                startTime: Number(processData.startTime),
+                duration: Number(processData.duration),
+                ballotMode: processData.ballotMode,
+                census: processData.census,
+                metadataUri: processData.metadataURI,
+                encryptionKey: processData.encryptionKey,
+                stateRoot: '0x0' // State root is not directly available from process data
+            };
+        } catch (error) {
+            console.warn(`Failed to get process info for ${processId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Fetch metadata from metadata URI
+     */
+    private async fetchMetadata(metadataUri: string): Promise<ElectionMetadata | null> {
+        try {
+            // Use fetch to get metadata from URI
+            const response = await fetch(metadataUri);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const metadata = await response.json();
+            return metadata as ElectionMetadata;
+        } catch (error) {
+            console.warn(`Failed to fetch metadata from ${metadataUri}:`, error);
+            return null;
+        }
     }
 
     /**

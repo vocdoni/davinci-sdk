@@ -1,6 +1,7 @@
 import { BaseElection } from "./BaseElection";
-import { ElectionMetadata, BallotMode, ElectionResultsTypeNames } from "../core/types";
-import { VoteValidationResult } from "./types";
+import { ElectionMetadata, ElectionResultsTypeNames } from "./types/metadata";
+import { BallotMode } from "./types/common";
+import { VoteValidationResult } from "./types/election";
 
 /**
  * Basic election for simple yes/no or single choice voting

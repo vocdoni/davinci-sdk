@@ -9,6 +9,3 @@ export * from './sequencer';
 
 // Export census module
 export * from './census';
-
-// Export election module
-export * from './election';

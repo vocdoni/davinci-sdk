@@ -1,4 +1,4 @@
-import { ElectionMetadata } from "../core/types";
+import { ElectionMetadata } from "./metadata";
 
 /**
  * Common election configuration options

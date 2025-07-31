@@ -1,5 +1,5 @@
-import { DavinciSDK } from "../core/DavinciSDK";
-import { ElectionConfig } from "./types";
+import { DavinciSDK } from "./DavinciSDK";
+import { ElectionConfig } from "./types/election";
 import { BasicElection } from "./BasicElection";
 import { MultiChoiceElection } from "./MultiChoiceElection";
 

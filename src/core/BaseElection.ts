@@ -1,6 +1,7 @@
-import { DavinciSDK } from "../core/DavinciSDK";
-import { ElectionMetadata, getElectionMetadataTemplate, BallotMode } from "../core/types";
-import { ElectionConfig, ElectionChoice, ElectionResult, VoteValidationResult } from "./types";
+import { DavinciSDK } from "./DavinciSDK";
+import { ElectionMetadata, getElectionMetadataTemplate } from "./types/metadata";
+import { BallotMode } from "./types/common";
+import { ElectionConfig, ElectionChoice, ElectionResult, VoteValidationResult } from "./types/election";
 
 /**
  * Abstract base class for all election types
@@ -66,7 +67,7 @@ export abstract class BaseElection {
         }))
       }],
       media: this.config.media
-    });
+    }, ballotMode);
 
     return {
       processId: result.processId,
