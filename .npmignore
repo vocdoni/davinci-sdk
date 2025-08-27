@@ -1,0 +1,8 @@
+/src
+/test
+/examples
+package.json.backup
+.eslintrc.json
+clean-package.config.json
+.prettierrc.json
+.lintstagedrc.json
