@@ -66,14 +66,14 @@ let ORGANIZATION_REGISTRY_ADDR: string;
 
 // Ballot mode configuration for two questions with four options each (0-3)
 const BALLOT_MODE: ApiBallotMode = {
-    maxCount:        2,  // Two questions
+    numFields:        2,  // Two questions
     maxValue:       "3", // Four options (0,1,2,3)
     minValue:       "0",
-    forceUniqueness: false,
+    uniqueValues: false,
     costFromWeight:  false,
     costExponent:    0,
-    maxTotalCost:   "6", // Sum of max values for both questions (3 + 3)
-    minTotalCost:    "0",
+    maxValueSum:   "6", // Sum of max values for both questions (3 + 3)
+    minValueSum:    "0",
 };
 
 // ────────────────────────────────────────────────────────────
