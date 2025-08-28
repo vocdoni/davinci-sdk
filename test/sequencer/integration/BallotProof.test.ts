@@ -19,14 +19,14 @@ describe("BallotProofService Integration", () => {
         ],
         k: "964256131946492867709099996647243890828558919187",
         ballotMode: {
-            maxCount: 1,
+            numFields: 1,
             maxValue: "10",
             minValue: "0",
-            forceUniqueness: false,
+            uniqueValues: false,
             costFromWeight: false,
             costExponent: 0,
-            maxTotalCost: "10",
-            minTotalCost: "0"
+            maxValueSum: "10",
+            minValueSum: "0"
         },
         weight: "60",
         fieldValues: ["1"]

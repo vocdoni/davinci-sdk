@@ -52,20 +52,20 @@ interface Question {
 // Calculate ballot mode based on questions
 const calculateBallotMode = (questions: Question[]) => {
   const maxValue = (Math.max(...questions.map((q) => q.choices.length)) - 1).toString() // -1 because choices are 0-based
-  const maxTotalCost = questions
+  const maxValueSum = questions
     .map((q) => q.choices.length - 1)
     .reduce((a, b) => a + b, 0)
     .toString()
 
   return {
-    maxCount: questions.length,
+    numFields: questions.length,
     maxValue,
     minValue: '0',
-    forceUniqueness: false,
+    uniqueValues: false,
     costFromWeight: false,
     costExponent: 0,
-    maxTotalCost,
-    minTotalCost: '0',
+    maxValueSum,
+    minValueSum: '0',
   }
 }
 

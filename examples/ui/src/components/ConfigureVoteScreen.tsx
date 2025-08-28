@@ -46,14 +46,14 @@ interface Question {
 
 // Ballot mode configuration
 const BALLOT_MODE = {
-  maxCount: 1,
+  numFields: 1,
   maxValue: '3',
   minValue: '0',
-  forceUniqueness: false,
+  uniqueValues: false,
   costFromWeight: false,
   costExponent: 0,
-  maxTotalCost: '3',
-  minTotalCost: '0',
+  maxValueSum: '3',
+  minValueSum: '0',
 }
 
 export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }: ConfigureVoteScreenProps) {

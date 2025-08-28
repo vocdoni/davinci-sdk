@@ -1,15 +1,5 @@
-import {ProofInputs} from "./CircomProofService";
-
-export interface BallotProofMode {
-    maxCount: number;
-    forceUniqueness: boolean;
-    maxValue: string;
-    minValue: string;
-    maxTotalCost: string;
-    minTotalCost: string;
-    costExponent: number;
-    costFromWeight: boolean;
-}
+import { BallotMode } from "../core/types";
+import { ProofInputs } from "./CircomProofService";
 
 export interface BallotProofInputs {
     address: string;
@@ -18,7 +8,7 @@ export interface BallotProofInputs {
     k: string;
     weight: string;
     fieldValues: string[];
-    ballotMode: BallotProofMode;
+    ballotMode: BallotMode;
 }
 
 export interface BallotProofCiphertext {

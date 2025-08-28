@@ -60,14 +60,14 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         };
 
         const ballotMode: BallotMode = {
-            maxCount:        1,
+            numFields:        1,
             maxValue:       "10",
             minValue:       "0",
-            forceUniqueness: false,
+            uniqueValues: false,
             costFromWeight:  false,
             costExponent:    0,
-            maxTotalCost:   "10",
-            minTotalCost:    "0",
+            maxValueSum:   "10",
+            minValueSum:    "0",
         };
 
         const encryptionKey: EncryptionKey = {
@@ -253,14 +253,14 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         };
 
         const ballotMode: BallotMode = {
-            maxCount: 1,
+            numFields: 1,
             maxValue: "10",
             minValue: "0",
-            forceUniqueness: false,
+            uniqueValues: false,
             costFromWeight: false,
             costExponent: 0,
-            maxTotalCost: "10",
-            minTotalCost: "0",
+            maxValueSum: "10",
+            minValueSum: "0",
         };
 
         const encryptionKey: EncryptionKey = {
