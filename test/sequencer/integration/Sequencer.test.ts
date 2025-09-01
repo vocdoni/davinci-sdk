@@ -5,7 +5,7 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, '../../.env') });
 import { VocdoniSequencerService } from "../../../src/sequencer/SequencerService";
 import { VocdoniCensusService } from "../../../src/census";
-import { createProcessSignatureMessage, signProcessCreation } from "../../../src/sequencer/api";
+import { createProcessSignatureMessage, signProcessCreation, CensusOrigin } from "../../../src/sequencer/api";
 import { mockProvider, mockWallet, generateMockCensusParticipants, generateMockProcessRequest, isValidUUID, isValidHex } from "./utils";
 import { getElectionMetadataTemplate } from "../../../src/core/types";
 

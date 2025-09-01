@@ -1,4 +1,5 @@
 import { Wallet, JsonRpcProvider } from "ethers";
+import { CensusOrigin } from "../../../src/sequencer/api/types";
 
 // Create mock provider and wallet
 export const mockProvider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
@@ -24,7 +25,8 @@ export const generateMockProcessRequest = (processId: string, censusRoot: string
         costExponent: 0,
         maxValueSum: "10",
         minValueSum: "0"
-    }
+    },
+    censusOrigin: CensusOrigin.CensusOriginMerkleTree
 });
 
 // UUID validator

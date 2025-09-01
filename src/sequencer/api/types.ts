@@ -1,11 +1,26 @@
 import { BallotMode, Census, EncryptionKey } from '../../core/types';
 import { CensusProof } from '../../census/types';
 
+/**
+ * Census origin types for process creation
+ */
+export enum CensusOrigin {
+    /** Indicates that the census is derived from a Merkle Tree structure */
+    CensusOriginMerkleTree = 1,
+    /** Indicates that the census is provided by a Credential Service Provider (CSP) */
+    CensusOriginCSP = 2
+}
+
 export interface CreateProcessRequest {
     processId: string;
     censusRoot: string;
     ballotMode: BallotMode;
     signature: string;
+    /**
+     * The censusOrigin specifies the origin type of the census used in the request.
+     * This attribute allows the API to determine how the census data should be processed or verified.
+     */
+    censusOrigin: CensusOrigin;
 }
 
 export interface CreateProcessResponse {
