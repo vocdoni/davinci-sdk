@@ -11,12 +11,12 @@ const __dirname = dirname(__filename);
 import {
     VocdoniApiService,
     VoteBallot,
-    BallotProofOutput,
+    DavinciCryptoOutput,
     CircomProof,
     Groth16Proof,
     ProofInputs as Groth16ProofInputs,
-    BallotProof,
-    BallotProofInputs,
+    DavinciCrypto,
+    DavinciCryptoInputs,
     signProcessCreation,
     CensusOrigin
 } from "../../../src";
@@ -447,17 +447,17 @@ async function step11_generateProofInputs(
 ): Promise<Array<{
     key: string;
     voteID: string;
-    out: BallotProofOutput;
+    out: DavinciCryptoOutput;
     circomInputs: Groth16ProofInputs;
 }>> {
     step(11, "Generate zk‐SNARK inputs for each participant");
-    const sdk = new BallotProof({ wasmExecUrl, wasmUrl });
+    const sdk = new DavinciCrypto({ wasmExecUrl, wasmUrl });
     await sdk.init();
 
     const list: Array<{
         key: string;
         voteID: string;
-        out: BallotProofOutput;
+        out: DavinciCryptoOutput;
         circomInputs: Groth16ProofInputs;
     }> = [];
 
@@ -482,7 +482,7 @@ async function step11_generateProofInputs(
      Q1: ${colorChoice} (choice array: [${question1Choices.join(", ")}])
      Q2: ${transportChoice} (choice array: [${question2Choices.join(", ")}])`);
 
-        const inputs: BallotProofInputs = {
+        const inputs: DavinciCryptoInputs = {
             address:       p.key.replace(/^0x/, ""),
             processID:     processId.replace(/^0x/, ""),
             encryptionKey: encryptionPubKey,
@@ -566,7 +566,7 @@ export async function step14_submitVotes(
     processId: string,
     censusRoot: string,
     participants: TestParticipant[],
-    listProofInputs: Array<{ key: string; voteID: string; out: BallotProofOutput; circomInputs: Groth16ProofInputs }>,
+    listProofInputs: Array<{ key: string; voteID: string; out: DavinciCryptoOutput; circomInputs: Groth16ProofInputs }>,
     proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>
 ): Promise<string[]> {
     step(14, "Submit votes for each participant");
@@ -674,7 +674,7 @@ async function step17_verifyVotes(
     api: VocdoniApiService,
     processId: string,
     participants: TestParticipant[],
-    listProofInputs: Array<{ out: BallotProofOutput }>
+    listProofInputs: Array<{ out: DavinciCryptoOutput }>
 ) {
     step(17, "Verify votes");
     
