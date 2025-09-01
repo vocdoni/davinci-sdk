@@ -28,6 +28,7 @@ import {
   VocdoniApiService,
   getElectionMetadataTemplate,
   signProcessCreation,
+  CensusOrigin,
   type Census,
   type EncryptionKey,
 } from '@vocdoni/davinci-sdk'
@@ -250,6 +251,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
         censusRoot,
         ballotMode,
         signature,
+        censusOrigin: CensusOrigin.CensusOriginMerkleTree,
       })
 
       // Step 5: Submit process on-chain (without organizationId)

@@ -24,6 +24,7 @@ import {
   signProcessCreation,
   SmartContractService,
   VocdoniApiService,
+  CensusOrigin,
   type Census,
   type EncryptionKey,
 } from '@vocdoni/davinci-sdk'
@@ -224,6 +225,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
         censusRoot,
         ballotMode: BALLOT_MODE,
         signature,
+        censusOrigin: CensusOrigin.CensusOriginMerkleTree,
       })
 
       // Step 5: Submit process on-chain (8 parameters like the script)

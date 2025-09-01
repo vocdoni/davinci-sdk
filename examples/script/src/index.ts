@@ -17,7 +17,8 @@ import {
     ProofInputs as Groth16ProofInputs,
     BallotProof,
     BallotProofInputs,
-    signProcessCreation
+    signProcessCreation,
+    CensusOrigin
 } from "../../../src";
 import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
 import {
@@ -380,7 +381,7 @@ async function step8_createProcess(
     const signature = await signProcessCreation(processId, wallet);
     
     const { processId: returnedProcessId, encryptionPubKey, stateRoot } =
-        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature });
+        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature, censusOrigin: CensusOrigin.CensusOriginMerkleTree });
     
     console.log("   processId:", returnedProcessId);
     console.log("   pubKey:", encryptionPubKey);
