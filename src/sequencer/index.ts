@@ -1,4 +1,4 @@
 export * from './api';
 export * from './SequencerService';
-export * from './BallotProofService';
+export * from './DavinciCryptoService';
 export * from './CircomProofService';
