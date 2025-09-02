@@ -265,7 +265,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
         duration,
         ballotMode,
         {
-          censusOrigin: 1,
+          censusOrigin: CensusOrigin.CensusOriginMerkleTree,
           maxVotes: censusSize.toString(),
           censusRoot: censusRoot,
           censusURI: import.meta.env.API_URL + `/censuses/${censusRoot}`,

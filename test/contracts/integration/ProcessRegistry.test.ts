@@ -12,6 +12,7 @@ import {
     deployedAddresses as addresses
 } from "../../../src/contracts";
 import { BallotMode, Census, EncryptionKey } from "../../../src/core";
+import { CensusOrigin } from "../../../src/census";
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
@@ -53,7 +54,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
         initStateRoot  = randomHex(32);
         initDuration   = 3600;  // seconds
         initCensus = {
-            censusOrigin: 1,
+            censusOrigin: CensusOrigin.CensusOriginMerkleTree,
             maxVotes:     "5",
             censusRoot:   randomHex(32),
             censusURI:    `ipfs://census-${Date.now()}`,
@@ -246,7 +247,7 @@ describe("ProcessRegistryService Integration (Sepolia)", () => {
 
     it("should yield failure status when creating process with invalid parameters", async () => {
         const invalidCensus: Census = {
-            censusOrigin: 1,
+            censusOrigin: CensusOrigin.CensusOriginMerkleTree,
             maxVotes: "0", // Invalid: maxVotes should be > 0
             censusRoot: randomHex(32),
             censusURI: `ipfs://invalid-census-${Date.now()}`,

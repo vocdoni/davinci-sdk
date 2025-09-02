@@ -1,3 +1,5 @@
+import { CensusOrigin } from "../../../src/census";
+
 export interface BallotMode {
     numFields: number;
     maxValue: string;
@@ -10,7 +12,7 @@ export interface BallotMode {
 }
 
 export interface Census {
-    censusOrigin: number;
+    censusOrigin: CensusOrigin;
     maxVotes: string;
     censusRoot: string;
     censusURI: string;

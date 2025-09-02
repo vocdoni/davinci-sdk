@@ -3,21 +3,21 @@ import { groth16 } from "snarkjs";
 
 export interface ProofInputs {
     fields: string[];
-    max_count: string;
-    force_uniqueness: string;
+    num_fields: string;
+    unique_values: string;
     max_value: string;
     min_value: string;
-    max_total_cost: string;
-    min_total_cost: string;
-    cost_exp: string;
+    max_value_sum: string;
+    min_value_sum: string;
+    cost_exponent: string;
     cost_from_weight: string;
     address: string;
     weight: string;
     process_id: string;
-    pk: [string, string];
+    vote_id: string;
+    encryption_pubkey: [string, string];
     k: string;
     cipherfields: string[];
-    vote_id: string;
     inputs_hash: string;
 }
 
