@@ -406,7 +406,7 @@ async function step9_newProcessOnChain(
             3600 * 8,
             BALLOT_MODE,
             {
-                censusOrigin: 1,
+                censusOrigin: CensusOrigin.CensusOriginMerkleTree,
                 maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
                 censusURI: CENSUS_API_URL + `/censuses/${args.censusRoot}`

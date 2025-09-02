@@ -1,6 +1,6 @@
 import { DavinciCrypto, DavinciCryptoInputs } from "../../../src/sequencer";
 import { VocdoniSequencerService } from "../../../src/sequencer/SequencerService";
-import { CensusOrigin } from "../../../src/sequencer/api/types";
+import { CensusOrigin } from '../../../src/census/';
 import { config } from "dotenv";
 import { resolve } from "path";
 

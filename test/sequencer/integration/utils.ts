@@ -1,5 +1,5 @@
 import { Wallet, JsonRpcProvider } from "ethers";
-import { CensusOrigin } from "../../../src/sequencer/api/types";
+import { CensusOrigin } from '../../../src/census/types';
 
 // Create mock provider and wallet
 export const mockProvider = new JsonRpcProvider(process.env.SEPOLIA_RPC);

@@ -1,15 +1,5 @@
 import { BallotMode, Census, EncryptionKey } from '../../core/types';
-import { CensusProof } from '../../census/types';
-
-/**
- * Census origin types for process creation
- */
-export enum CensusOrigin {
-    /** Indicates that the census is derived from a Merkle Tree structure */
-    CensusOriginMerkleTree = 1,
-    /** Indicates that the census is provided by a Credential Service Provider (CSP) */
-    CensusOriginCSP = 2
-}
+import { CensusOrigin, CensusProof } from '../../census/types';
 
 export interface CreateProcessRequest {
     processId: string;

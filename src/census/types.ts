@@ -1,20 +1,48 @@
+/**
+ * Census origin types
+ */
+export enum CensusOrigin {
+    /** Indicates that the census is derived from a Merkle Tree structure */
+    CensusOriginMerkleTree = 1,
+    /** Indicates that the census is provided by a Credential Service Provider (CSP) */
+    CensusOriginCSP = 2
+}
+
 export interface CensusParticipant {
     key: string;
     weight?: string;
 }
 
-export interface CensusProof {
+export interface BaseCensusProof {
     /** The Merkle root (hex-prefixed). */
     root: string;
     /** The voter's address (hex-prefixed). */
-    key: string;
+    address: string;
+    /** The weight as a decimal string. */
+    weight: string;
+    /** Census origin type: CensusOriginMerkleTree for merkle proofs, CensusOriginCSP for csp proofs */
+    censusOrigin: CensusOrigin;
+}
+
+export interface MerkleCensusProof extends BaseCensusProof {
+    censusOrigin: CensusOrigin.CensusOriginMerkleTree;
     /** The leaf value (hex-prefixed weight). */
     value: string;
     /** The serialized sibling path (hex-prefixed). */
     siblings: string;
-    /** The weight as a decimal string. */
-    weight: string;
 }
+
+export interface CSPCensusProof extends BaseCensusProof {
+    censusOrigin: CensusOrigin.CensusOriginCSP;
+    /** The process id signed with the address (hex-prefixed). */
+    processId: string;
+    /** The public key of the csp (hex-prefixed). */
+    publicKey: string;
+    /** The signature that proves that the voter is in the census (hex-prefixed). */
+    signature: string;
+}
+
+export type CensusProof = MerkleCensusProof | CSPCensusProof;
 
 export interface PublishCensusResponse {
     /** The Merkle root of the published census (hex-prefixed). */

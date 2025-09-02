@@ -4,7 +4,7 @@ import { resolve } from "path";
 // Load environment variables from test/.env
 config({ path: resolve(__dirname, '../../.env') });
 import { VocdoniCensusService } from "../../../src/census";
-import { CensusParticipant } from "../../../src/census/types";
+import { CensusParticipant, CensusOrigin } from "../../../src/census/types";
 import { generateMockCensusParticipants, isValidUUID, isValidHex } from "../../sequencer/integration/utils";
 
 const censusService = new VocdoniCensusService(process.env.CENSUS_API_URL!);
@@ -87,10 +87,22 @@ describe("VocdoniCensusService Integration", () => {
         it("should be able to get proofs from published census using root", async () => {
             const proof = await censusService.getCensusProof(publishedCensusRoot, testParticipants[0].key);
             expect(proof).toHaveProperty("root");
-            expect(proof).toHaveProperty("key");
-            expect(proof).toHaveProperty("siblings");
+            expect(proof).toHaveProperty("address");
             expect(proof).toHaveProperty("weight");
+            expect(proof).toHaveProperty("censusOrigin");
             expect(proof.root).toBe(publishedCensusRoot);
+            
+            // Check that it's either a Merkle or CSP proof
+            if (proof.censusOrigin === CensusOrigin.CensusOriginMerkleTree) {
+                // Merkle proof should have value and siblings
+                expect(proof).toHaveProperty("value");
+                expect(proof).toHaveProperty("siblings");
+            } else if (proof.censusOrigin === CensusOrigin.CensusOriginCSP) {
+                // CSP proof should have processId, publicKey, and signature
+                expect(proof).toHaveProperty("processId");
+                expect(proof).toHaveProperty("publicKey");
+                expect(proof).toHaveProperty("signature");
+            }
         });
 
         it("should get census size by root for published census", async () => {

@@ -237,7 +237,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
           3600 * 8, // Duration: 8 hours
           BALLOT_MODE,
           {
-            censusOrigin: 1,
+            censusOrigin: CensusOrigin.CensusOriginMerkleTree,
             maxVotes: censusSize.toString(),
             censusRoot: censusRoot,
             censusURI: import.meta.env.API_URL + `/censuses/${censusRoot}`,
