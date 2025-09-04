@@ -27,10 +27,10 @@ import {
   Typography,
 } from '@mui/material'
 import {
-  BallotProof,
+  DavinciCrypto,
   CircomProof,
   VocdoniApiService,
-  type BallotProofInputs,
+  type DavinciCryptoInputs,
   type InfoResponse,
   type IQuestion,
   type MultiLanguage,
@@ -225,7 +225,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       // Get WASM URLs from API info
       const info = await api.sequencer.getInfo()
       const urls = getCircuitUrls(info)
-      const sdk = new BallotProof({
+      const sdk = new DavinciCrypto({
         wasmExecUrl: urls.ballotProofExec,
         wasmUrl: urls.ballotProof,
       })
@@ -251,7 +251,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       // Flatten all arrays into one, preserving order
       const fieldValues = questionArrays.flat()
 
-      const inputs: BallotProofInputs = {
+      const inputs: DavinciCryptoInputs = {
         address: selectedAddress,
         processID: details.processId,
         ballotMode: {
