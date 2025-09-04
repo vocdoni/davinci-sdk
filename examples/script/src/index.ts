@@ -5,6 +5,7 @@ import { JsonRpcProvider, Wallet, isAddress } from "ethers";
 import chalk from "chalk";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import * as readline from "readline";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,6 +46,9 @@ const CENSUS_API_URL             = process.env.CENSUS_API_URL;
 const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 const FORCE_SEQUENCER_ADDRESSES  = process.env.FORCE_SEQUENCER_ADDRESSES === 'true';
+
+// CSP private key - use from env or generate random one
+const CSP_PRIVATE_KEY = process.env.CSP_PRIVATE_KEY || randomBytes(32).toString('hex');
 
 // ────────────────────────────────────────────────────────────
 //   LOGGING HELPERS
@@ -146,12 +150,78 @@ function initClients() {
 }
 
 // ────────────────────────────────────────────────────────────
+//   USER INPUT HELPERS
+// ────────────────────────────────────────────────────────────
+interface UserConfig {
+    numParticipants: number;
+    censusType: CensusOrigin;
+}
+
+function createReadlineInterface(): readline.Interface {
+    return readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+}
+
+async function askQuestion(rl: readline.Interface, question: string): Promise<string> {
+    return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+            resolve(answer.trim());
+        });
+    });
+}
+
+async function getUserConfiguration(): Promise<UserConfig> {
+    const rl = createReadlineInterface();
+    
+    console.log(chalk.bold.cyan("\n📋 Configuration Setup\n"));
+    
+    // Ask for number of participants
+    const numParticipantsAnswer = await askQuestion(
+        rl, 
+        chalk.yellow("How many participants do you want to create? (default: 10): ")
+    );
+    const numParticipants = numParticipantsAnswer ? parseInt(numParticipantsAnswer, 10) : 10;
+    
+    if (isNaN(numParticipants) || numParticipants < 1) {
+        console.log(chalk.red("Invalid number of participants. Using default: 10"));
+    }
+    
+    // Ask for census type
+    console.log(chalk.cyan("\nCensus Type Options:"));
+    console.log("1. MerkleTree (default) - Traditional Merkle tree-based census");
+    console.log("2. CSP - Credential Service Provider census");
+    
+    const censusTypeAnswer = await askQuestion(
+        rl,
+        chalk.yellow("Which census type do you want to use? (1 or 2, default: 1): ")
+    );
+    
+    let censusType: CensusOrigin;
+    if (censusTypeAnswer === "2") {
+        censusType = CensusOrigin.CensusOriginCSP;
+        console.log(chalk.green("✓ Selected: CSP Census"));
+    } else {
+        censusType = CensusOrigin.CensusOriginMerkleTree;
+        console.log(chalk.green("✓ Selected: MerkleTree Census"));
+    }
+    
+    rl.close();
+    
+    return {
+        numParticipants: Math.max(1, numParticipants || 10),
+        censusType
+    };
+}
+
+// ────────────────────────────────────────────────────────────
 //   PARTICIPANTS GENERATOR
 // ────────────────────────────────────────────────────────────
 type TestParticipant = { key: string; weight: string; secret: string };
-function makeTestParticipants(): TestParticipant[] {
+function makeTestParticipants(count: number = 10): TestParticipant[] {
     const wallets = [
-        ...Array.from({ length: 10 }, () => Wallet.createRandom())
+        ...Array.from({ length: count }, () => Wallet.createRandom())
     ];
     return wallets.map((w, i) => ({
         key:    w.address,
@@ -197,7 +267,7 @@ async function step2_fetchInfo(api: VocdoniApiService): Promise<InfoResp> {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 3: Create Census
+//   STEP 3: Create Census (MerkleTree only)
 // ────────────────────────────────────────────────────────────
 async function step3_createCensus(api: VocdoniApiService): Promise<string> {
     step(3, "Create a new census");
@@ -207,11 +277,11 @@ async function step3_createCensus(api: VocdoniApiService): Promise<string> {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 4: Add Participants
+//   STEP 4: Add Participants (MerkleTree only)
 // ────────────────────────────────────────────────────────────
-async function step4_addParticipants(api: VocdoniApiService, censusId: string) {
+async function step4_addParticipants(api: VocdoniApiService, censusId: string, numParticipants: number) {
     step(4, "Add participants to census");
-    const participants = makeTestParticipants();
+    const participants = makeTestParticipants(numParticipants);
     await api.census.addParticipants(censusId, participants.map((p: TestParticipant) => ({
         key:    p.key,
         weight: p.weight
@@ -221,7 +291,7 @@ async function step4_addParticipants(api: VocdoniApiService, censusId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 5: Publish Census
+//   STEP 5: Publish Census (MerkleTree only)
 // ────────────────────────────────────────────────────────────
 async function step5_publishCensus(api: VocdoniApiService, censusId: string) {
     step(5, "Publish census");
@@ -234,7 +304,7 @@ async function step5_publishCensus(api: VocdoniApiService, censusId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-//   STEP 6: Fetch Census Size
+//   STEP 6: Fetch Census Size (MerkleTree only)
 // ────────────────────────────────────────────────────────────
 async function step6_fetchCensusSize(api: VocdoniApiService, censusRoot: string) {
     step(6, "Fetch census size using census root");
@@ -243,6 +313,39 @@ async function step6_fetchCensusSize(api: VocdoniApiService, censusRoot: string)
     console.log(`   size = ${size}`);
     success("Census ready");
     return { censusRoot, censusSize: size };
+}
+
+// ────────────────────────────────────────────────────────────
+//   STEP 3-CSP: Generate CSP Census Root
+// ────────────────────────────────────────────────────────────
+async function step3_generateCSPCensusRoot(
+    wasmExecUrl: string,
+    wasmUrl: string,
+    processId: string,
+    numParticipants: number
+): Promise<{ censusRoot: string; censusSize: number; participants: TestParticipant[] }> {
+    step(3, "Generate CSP census root using cspCensusRoot function");
+    
+    // Initialize DavinciCrypto
+    const davinciCrypto = new DavinciCrypto({ wasmExecUrl, wasmUrl });
+    await davinciCrypto.init();
+    
+    // Generate participants
+    const participants = makeTestParticipants(numParticipants);
+    
+    // Use the new cspCensusRoot function to generate census root
+    const censusRoot = await davinciCrypto.cspCensusRoot(
+        CensusOrigin.CensusOriginCSP,
+        CSP_PRIVATE_KEY
+    );
+
+    success("CSP census root generated successfully using cspCensusRoot function");
+    
+    return {
+        censusRoot,
+        censusSize: participants.length,
+        participants
+    };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -367,21 +470,30 @@ async function step8_createProcess(
     provider: JsonRpcProvider,
     wallet: Wallet,
     censusRoot: string,
-    censusSize: number
+    censusSize: number,
+    censusType: CensusOrigin,
+    existingProcessId?: string
 ): Promise<Pick<ApiFlowResult, "processId" | "encryptionPubKey" | "stateRoot">> {
     step(8, "Create process via Sequencer API");
     
-    // Get the next process ID from the smart contract using wallet address as organizationId
-    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-    const processId = await registry.getNextProcessId(wallet.address);
+    // Use existing processId for CSP or get new one for MerkleTree
+    let processId: string;
+    if (existingProcessId) {
+        processId = existingProcessId;
+        console.log("   using existing processId for CSP:", processId);
+    } else {
+        const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+        processId = await registry.getNextProcessId(wallet.address);
+        console.log("   nextProcessId from contract:", processId);
+    }
     
-    console.log("   nextProcessId from contract:", processId);
+    console.log("   censusType:", censusType === CensusOrigin.CensusOriginMerkleTree ? 'MerkleTree' : 'CSP');
     
     // Use the new signature format
     const signature = await signProcessCreation(processId, wallet);
     
     const { processId: returnedProcessId, encryptionPubKey, stateRoot } =
-        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature, censusOrigin: CensusOrigin.CensusOriginMerkleTree });
+        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature, censusOrigin: censusType });
     
     console.log("   processId:", returnedProcessId);
     console.log("   pubKey:", encryptionPubKey);
@@ -395,7 +507,8 @@ async function step8_createProcess(
 // ────────────────────────────────────────────────────────────
 async function step9_newProcessOnChain(
     wallet: Wallet,
-    args: ApiFlowResult
+    args: ApiFlowResult,
+    censusType: CensusOrigin
 ) {
     step(9, "Submit newProcess on‐chain");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
@@ -406,7 +519,7 @@ async function step9_newProcessOnChain(
             3600 * 8,
             BALLOT_MODE,
             {
-                censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+                censusOrigin: censusType,
                 maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
                 censusURI: CENSUS_API_URL + `/censuses/${args.censusRoot}`
@@ -567,18 +680,57 @@ export async function step14_submitVotes(
     censusRoot: string,
     participants: TestParticipant[],
     listProofInputs: Array<{ key: string; voteID: string; out: DavinciCryptoOutput; circomInputs: Groth16ProofInputs }>,
-    proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>
+    proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>,
+    censusType: CensusOrigin,
+    wasmExecUrl: string,
+    wasmUrl: string
 ): Promise<string[]> {
     step(14, "Submit votes for each participant");
     const voteIds: string[] = [];
+
+    // Initialize DavinciCrypto for CSP proofs if needed
+    let davinciCrypto: DavinciCrypto | null = null;
+    if (censusType === CensusOrigin.CensusOriginCSP) {
+        davinciCrypto = new DavinciCrypto({ wasmExecUrl, wasmUrl });
+        await davinciCrypto.init();
+        info("DavinciCrypto initialized for CSP proof generation");
+    }
 
     for (let i = 0; i < participants.length; i++) {
         const p = participants[i];
         const { out, voteID } = listProofInputs[i];
         const { proof }       = proofs[i];
 
-        // 1) Merkle proof
-        const censusProof = await api.census.getCensusProof(censusRoot, p.key);
+        let censusProof: any;
+
+        if (censusType === CensusOrigin.CensusOriginMerkleTree) {
+            // 1) Merkle proof
+            censusProof = await api.census.getCensusProof(censusRoot, p.key);
+            info(`  [${i + 1}/${participants.length}] Using Merkle census proof for ${p.key}`);
+        } else {
+            // 1) CSP proof - generate using cspSign
+            info(`  [${i + 1}/${participants.length}] Generating CSP census proof for ${p.key}`);
+            
+            const cspProofData = await davinciCrypto!.cspSign(
+                censusType,
+                CSP_PRIVATE_KEY,
+                processId.replace(/^0x/, ""),
+                p.key.replace(/^0x/, "")
+            );
+            
+            // Create CSP census proof structure (cspProofData is now already parsed)
+            censusProof = {
+                root: cspProofData.root,
+                address: cspProofData.address,
+                weight: p.weight,
+                censusOrigin: censusType,
+                processId: cspProofData.processId,
+                publicKey: cspProofData.publicKey,
+                signature: cspProofData.signature
+            };
+            
+            info(`  [${i + 1}/${participants.length}] CSP proof generated for ${p.key}`);
+        }
 
         // 2) Map ciphertexts → VoteBallot shape
         const voteBallot: VoteBallot = {
@@ -765,27 +917,55 @@ async function step19_showResults(wallet: Wallet, processId: string) {
 async function run() {
     console.log(chalk.bold.cyan("\n🚀 Starting end-to-end demo…\n"));
 
+    // Get user configuration
+    const userConfig = await getUserConfiguration();
+    console.log(chalk.green(`\n✓ Configuration set: ${userConfig.numParticipants} participants, ${userConfig.censusType === CensusOrigin.CensusOriginMerkleTree ? 'MerkleTree' : 'CSP'} census\n`));
+
     const { api, provider, wallet } = initClients();
 
     await step1_ping(api);
-    const info    = await step2_fetchInfo(api);
+    const info = await step2_fetchInfo(api);
     
     // Set contract addresses based on environment variables and sequencer info
     PROCESS_REGISTRY_ADDR = getProcessRegistryAddress(info.contracts);
     ORGANIZATION_REGISTRY_ADDR = getOrganizationRegistryAddress(info.contracts);
     
-    const censusId         = await step3_createCensus(api);
-    const participants     = await step4_addParticipants(api, censusId);
-    const publishResult    = await step5_publishCensus(api, censusId);
-    const { censusRoot, censusSize } = await step6_fetchCensusSize(api, publishResult.root);
+    let censusRoot: string;
+    let censusSize: number;
+    let participants: TestParticipant[];
+    let processIdForCSP: string | undefined;
+    
+    if (userConfig.censusType === CensusOrigin.CensusOriginMerkleTree) {
+        // MerkleTree census flow
+        const censusId = await step3_createCensus(api);
+        participants = await step4_addParticipants(api, censusId, userConfig.numParticipants);
+        const publishResult = await step5_publishCensus(api, censusId);
+        const censusData = await step6_fetchCensusSize(api, publishResult.root);
+        censusRoot = censusData.censusRoot;
+        censusSize = censusData.censusSize;
+    } else {
+        // CSP census flow - need processId first, so we'll get it and then generate CSP root
+        const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
+        processIdForCSP = await registry.getNextProcessId(wallet.address);
+        
+        const cspData = await step3_generateCSPCensusRoot(
+            info.ballotProofWasmHelperExecJsUrl,
+            info.ballotProofWasmHelperUrl,
+            processIdForCSP,
+            userConfig.numParticipants
+        );
+        censusRoot = cspData.censusRoot;
+        censusSize = cspData.censusSize;
+        participants = cspData.participants;
+    }
 
     const metadataUri = await step7_pushMetadata(api);
     const { processId, encryptionPubKey, stateRoot } =
-        await step8_createProcess(api, provider, wallet, censusRoot, censusSize);
+        await step8_createProcess(api, provider, wallet, censusRoot, censusSize, userConfig.censusType, processIdForCSP);
 
     // 9–10) on‐chain process registry (simplified without organization)
     await step9_newProcessOnChain(wallet, {
-        censusId,
+        censusId: "",
         participants,
         censusRoot,
         censusSize,
@@ -793,7 +973,7 @@ async function run() {
         encryptionPubKey,
         stateRoot,
         metadataUri
-    });
+    }, userConfig.censusType);
     await step10_fetchOnChain(wallet, processId);
 
     const listProofInputs = await step11_generateProofInputs(
@@ -822,7 +1002,10 @@ async function run() {
         censusRoot,
         participants,
         listProofInputs,
-        proofs
+        proofs,
+        userConfig.censusType,
+        info.ballotProofWasmHelperExecJsUrl,
+        info.ballotProofWasmHelperUrl
     );
 
     console.log(chalk.bold.cyan("\nVote IDs:"), voteIds);
