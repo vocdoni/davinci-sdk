@@ -1,5 +1,6 @@
 import { BallotMode } from "../core/types";
 import { ProofInputs } from "./CircomProofService";
+import { CensusOrigin } from "../census/types";
 
 export interface DavinciCryptoInputs {
     address: string;
@@ -28,12 +29,22 @@ export interface DavinciCryptoOutput {
     circomInputs: ProofInputs;
 }
 
+export interface CSPSignOutput {
+    censusOrigin: CensusOrigin;
+    root: string;
+    address: string;
+    processId: string;
+    publicKey: string;
+    signature: string;
+}
+
 // internal shapes returned by the Go runtime
 interface RawResult { error?: string; data?: string; }
 interface GoDavinciCryptoWasm {
     proofInputs(inputJson: string): RawResult;
     cspSign(censusOrigin: number, privKey: string, processId: string, address: string): RawResult;
     cspVerify(cspProof: string): RawResult;
+    cspCensusRoot(censusOrigin: number, privKey: string): RawResult;
 }
 
 declare global {
@@ -147,14 +158,14 @@ export class DavinciCrypto {
 
     /**
      * Generate a CSP (Credential Service Provider) signature for census proof.
-     * @param censusOrigin - The census origin type (e.g., 2 for CSP)
+     * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
      * @param privKey - The private key in hex format
      * @param processId - The process ID in hex format
      * @param address - The address in hex format
-     * @returns The CSP proof as a JSON string
+     * @returns The CSP proof as a parsed JSON object
      * @throws if called before `await init()`, or if Go returns an error
      */
-    async cspSign(censusOrigin: number, privKey: string, processId: string, address: string): Promise<string> {
+    async cspSign(censusOrigin: CensusOrigin, privKey: string, processId: string, address: string): Promise<CSPSignOutput> {
         if (!this.initialized) {
             throw new Error("DavinciCrypto not initialized — call `await init()` first");
         }
@@ -169,22 +180,37 @@ export class DavinciCrypto {
             throw new Error("Go/WASM cspSign returned no data");
         }
 
-        return raw.data;
+        return JSON.parse(raw.data) as CSPSignOutput;
     }
 
     /**
      * Verify a CSP (Credential Service Provider) proof.
-     * @param cspProof - The CSP proof as a JSON string
+     * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
+     * @param root - The census root
+     * @param address - The address
+     * @param processId - The process ID
+     * @param publicKey - The public key
+     * @param signature - The signature
      * @returns The verification result
      * @throws if called before `await init()`, or if Go returns an error
      */
-    async cspVerify(cspProof: string): Promise<boolean> {
+    async cspVerify(censusOrigin: CensusOrigin, root: string, address: string, processId: string, publicKey: string, signature: string): Promise<boolean> {
         if (!this.initialized) {
             throw new Error("DavinciCrypto not initialized — call `await init()` first");
         }
 
+        // Create the CSP proof object and stringify it for the WASM call
+        const cspProof = {
+            censusOrigin,
+            root,
+            address,
+            processId,
+            publicKey,
+            signature
+        };
+
         const raw = (globalThis.DavinciCrypto as GoDavinciCryptoWasm)
-            .cspVerify(cspProof);
+            .cspVerify(JSON.stringify(cspProof));
 
         if (raw.error) {
             throw new Error(`Go/WASM cspVerify error: ${raw.error}`);
@@ -201,5 +227,30 @@ export class DavinciCrypto {
             // If it's not JSON, treat as string and check for truthy values
             return raw.data.toLowerCase() === 'true';
         }
+    }
+
+    /**
+     * Generate a CSP (Credential Service Provider) census root.
+     * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
+     * @param privKey - The private key in hex format
+     * @returns The census root as a hexadecimal string
+     * @throws if called before `await init()`, or if Go returns an error
+     */
+    async cspCensusRoot(censusOrigin: CensusOrigin, privKey: string): Promise<string> {
+        if (!this.initialized) {
+            throw new Error("DavinciCrypto not initialized — call `await init()` first");
+        }
+
+        const raw = (globalThis.DavinciCrypto as GoDavinciCryptoWasm)
+            .cspCensusRoot(censusOrigin, privKey);
+
+        if (raw.error) {
+            throw new Error(`Go/WASM cspCensusRoot error: ${raw.error}`);
+        }
+        if (!raw.data) {
+            throw new Error("Go/WASM cspCensusRoot returned no data");
+        }
+
+        return JSON.parse(raw.data) as string;
     }
 }

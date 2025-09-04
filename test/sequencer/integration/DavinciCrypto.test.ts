@@ -93,111 +93,257 @@ describe("DavinciCryptoService Integration", () => {
             address: "0e9eA11b92F119aEce01990b68d85227a41AA627"
         };
 
-        it("should generate a CSP signature and return valid proof", async () => {
-            const cspProof = await service.cspSign(
-                cspTestData.censusOrigin,
-                cspTestData.privKey,
-                cspTestData.processId,
-                cspTestData.address
-            );
-
-            // Verify the proof is a valid JSON string
-            expect(typeof cspProof).toBe("string");
-            expect(() => JSON.parse(cspProof)).not.toThrow();
-
-            const parsedProof = JSON.parse(cspProof);
-            expect(typeof parsedProof).toBe("object");
-            expect(parsedProof).not.toBeNull();
-
-            // The proof should contain expected fields (structure may vary based on implementation)
-            expect(parsedProof).toHaveProperty("signature");
-            expect(parsedProof).toHaveProperty("publicKey");
-        });
-
-        it("should verify a valid CSP proof", async () => {
-            // First generate a proof
-            const cspProof = await service.cspSign(
-                cspTestData.censusOrigin,
-                cspTestData.privKey,
-                cspTestData.processId,
-                cspTestData.address
-            );
-
-            // Then verify it
-            const isValid = await service.cspVerify(cspProof);
-            expect(typeof isValid).toBe("boolean");
-            expect(isValid).toBe(true);
-        });
-
-        it("should reject an invalid CSP proof", async () => {
-            const invalidProof = JSON.stringify({
-                signature: "invalid_signature",
-                publicKey: "invalid_public_key"
-            });
-
-            // The Go/WASM implementation throws an error for invalid proofs
-            await expect(service.cspVerify(invalidProof)).rejects.toThrow();
-        });
-
-        it("should throw error when cspSign is called before initialization", async () => {
-            const uninitializedService = new DavinciCrypto({
-                wasmExecUrl: "dummy_url",
-                wasmUrl: "dummy_url"
-            });
-
-            await expect(
-                uninitializedService.cspSign(
+        describe("CSP Signing and Verification", () => {
+            it("should generate a CSP signature and return valid proof", async () => {
+                const cspProof = await service.cspSign(
                     cspTestData.censusOrigin,
                     cspTestData.privKey,
                     cspTestData.processId,
                     cspTestData.address
-                )
-            ).rejects.toThrow("DavinciCrypto not initialized");
-        });
+                );
 
-        it("should throw error when cspVerify is called before initialization", async () => {
-            const uninitializedService = new DavinciCrypto({
-                wasmExecUrl: "dummy_url",
-                wasmUrl: "dummy_url"
+                // Verify the proof is a valid object with expected structure
+                expect(typeof cspProof).toBe("object");
+                expect(cspProof).not.toBeNull();
+
+                // The proof should contain expected fields
+                expect(cspProof).toHaveProperty("signature");
+                expect(cspProof).toHaveProperty("publicKey");
+                expect(cspProof).toHaveProperty("censusOrigin");
+                expect(cspProof).toHaveProperty("root");
+                expect(cspProof).toHaveProperty("address");
+                expect(cspProof).toHaveProperty("processId");
             });
 
-            await expect(
-                uninitializedService.cspVerify("{}")
-            ).rejects.toThrow("DavinciCrypto not initialized");
+            it("should verify a valid CSP proof", async () => {
+                // First generate a proof
+                const cspProof = await service.cspSign(
+                    cspTestData.censusOrigin,
+                    cspTestData.privKey,
+                    cspTestData.processId,
+                    cspTestData.address
+                );
+
+                // Then verify it
+                const isValid = await service.cspVerify(
+                    cspProof.censusOrigin,
+                    cspProof.root,
+                    cspProof.address,
+                    cspProof.processId,
+                    cspProof.publicKey,
+                    cspProof.signature
+                );
+                expect(typeof isValid).toBe("boolean");
+                expect(isValid).toBe(true);
+            });
+
+            it("should reject an invalid CSP proof", async () => {
+                // The Go/WASM implementation throws an error for invalid proofs
+                await expect(service.cspVerify(
+                    CensusOrigin.CensusOriginCSP,
+                    "invalid_root",
+                    "invalid_address",
+                    "invalid_process_id",
+                    "invalid_public_key",
+                    "invalid_signature"
+                )).rejects.toThrow();
+            });
+
+            it("should handle invalid parameters in cspVerify gracefully", async () => {
+                // This should either throw an error or return false, depending on implementation
+                try {
+                    const result = await service.cspVerify(
+                        CensusOrigin.CensusOriginCSP,
+                        "malformed_root",
+                        "malformed_address",
+                        "malformed_process_id",
+                        "malformed_public_key",
+                        "malformed_signature"
+                    );
+                    expect(typeof result).toBe("boolean");
+                } catch (error) {
+                    expect(error).toBeInstanceOf(Error);
+                }
+            });
         });
 
-        it("should handle different census origin types", async () => {
-            // Test with different census origin values
-            const origins = [CensusOrigin.CensusOriginMerkleTree, CensusOrigin.CensusOriginCSP];
-            
-            for (const origin of origins) {
-                if (origin === CensusOrigin.CensusOriginCSP) { // Only test CSP origin for now
-                    const cspProof = await service.cspSign(
-                        origin,
+        describe("CSP Census Root Generation", () => {
+            it("should generate a CSP census root and return valid hexadecimal string", async () => {
+                const censusRoot = await service.cspCensusRoot(
+                    cspTestData.censusOrigin,
+                    cspTestData.privKey
+                );
+
+                // Verify the result is a string and a valid hex string
+                expect(typeof censusRoot).toBe("string");
+                expect(censusRoot.length).toBeGreaterThan(0);
+                expect(censusRoot).toMatch(/^0x[0-9a-fA-F]+$/);
+            });
+
+            it("should generate consistent census root for same inputs", async () => {
+                const censusRoot1 = await service.cspCensusRoot(
+                    cspTestData.censusOrigin,
+                    cspTestData.privKey
+                );
+
+                const censusRoot2 = await service.cspCensusRoot(
+                    cspTestData.censusOrigin,
+                    cspTestData.privKey
+                );
+
+                // Same inputs should produce same output
+                expect(censusRoot1).toBe(censusRoot2);
+            });
+
+            it("should generate different census roots for different private keys", async () => {
+                const differentPrivKey = "60df49d9d1175d49808602d12bf945ba3f55d90146882fbc5d54078f204f5005372143904f3fd452767581fd55b4c27aedacdd7b70d14f374b7c9f341c0f9a5301";
+                
+                const censusRoot1 = await service.cspCensusRoot(
+                    cspTestData.censusOrigin,
+                    cspTestData.privKey
+                );
+
+                const censusRoot2 = await service.cspCensusRoot(
+                    cspTestData.censusOrigin,
+                    differentPrivKey
+                );
+
+                // Different private keys should produce different outputs
+                expect(censusRoot1).not.toBe(censusRoot2);
+            });
+        });
+
+        describe("Error Handling and Edge Cases", () => {
+            it("should throw error when cspSign is called before initialization", async () => {
+                const uninitializedService = new DavinciCrypto({
+                    wasmExecUrl: "dummy_url",
+                    wasmUrl: "dummy_url"
+                });
+
+                await expect(
+                    uninitializedService.cspSign(
+                        cspTestData.censusOrigin,
                         cspTestData.privKey,
                         cspTestData.processId,
                         cspTestData.address
+                    )
+                ).rejects.toThrow("DavinciCrypto not initialized");
+            });
+
+            it("should throw error when cspVerify is called before initialization", async () => {
+                const uninitializedService = new DavinciCrypto({
+                    wasmExecUrl: "dummy_url",
+                    wasmUrl: "dummy_url"
+                });
+
+                await expect(
+                    uninitializedService.cspVerify(
+                        CensusOrigin.CensusOriginCSP,
+                        "test_root",
+                        "test_address",
+                        "test_process_id",
+                        "test_public_key",
+                        "test_signature"
+                    )
+                ).rejects.toThrow("DavinciCrypto not initialized");
+            });
+
+            it("should throw error when cspCensusRoot is called before initialization", async () => {
+                const uninitializedService = new DavinciCrypto({
+                    wasmExecUrl: "dummy_url",
+                    wasmUrl: "dummy_url"
+                });
+
+                await expect(
+                    uninitializedService.cspCensusRoot(
+                        cspTestData.censusOrigin,
+                        cspTestData.privKey
+                    )
+                ).rejects.toThrow("DavinciCrypto not initialized");
+            });
+
+            it("should handle invalid private key format gracefully", async () => {
+                const invalidPrivKey = "invalid_private_key";
+
+                // This should throw an error for invalid private key
+                await expect(
+                    service.cspCensusRoot(
+                        cspTestData.censusOrigin,
+                        invalidPrivKey
+                    )
+                ).rejects.toThrow();
+            });
+
+            it("should handle empty private key gracefully", async () => {
+                const emptyPrivKey = "";
+
+                // The Go/WASM implementation may handle empty private key by returning a result
+                // rather than throwing an error, so we test for either behavior
+                try {
+                    const result = await service.cspCensusRoot(
+                        cspTestData.censusOrigin,
+                        emptyPrivKey
                     );
-
-                    expect(typeof cspProof).toBe("string");
-                    expect(() => JSON.parse(cspProof)).not.toThrow();
-
-                    const isValid = await service.cspVerify(cspProof);
-                    expect(isValid).toBe(true);
+                    
+                    // If it doesn't throw, verify it returns a valid string
+                    expect(typeof result).toBe("string");
+                    expect(result.length).toBeGreaterThan(0);
+                } catch (error) {
+                    // If it throws an error, that's also acceptable behavior
+                    expect(error).toBeInstanceOf(Error);
                 }
-            }
+            });
         });
 
-        it("should handle malformed JSON in cspVerify gracefully", async () => {
-            const malformedJson = "not_valid_json";
+        describe("Census Origin Types", () => {
+            it("should handle different census origin types for signing", async () => {
+                // Test with different census origin values
+                const origins = [CensusOrigin.CensusOriginMerkleTree, CensusOrigin.CensusOriginCSP];
+                
+                for (const origin of origins) {
+                    if (origin === CensusOrigin.CensusOriginCSP) { // Only test CSP origin for now
+                        const cspProof = await service.cspSign(
+                            origin,
+                            cspTestData.privKey,
+                            cspTestData.processId,
+                            cspTestData.address
+                        );
 
-            // This should either throw an error or return false, depending on implementation
-            try {
-                const result = await service.cspVerify(malformedJson);
-                expect(typeof result).toBe("boolean");
-            } catch (error) {
-                expect(error).toBeInstanceOf(Error);
-            }
+                        expect(typeof cspProof).toBe("object");
+                        expect(cspProof).not.toBeNull();
+
+                        const isValid = await service.cspVerify(
+                            cspProof.censusOrigin,
+                            cspProof.root,
+                            cspProof.address,
+                            cspProof.processId,
+                            cspProof.publicKey,
+                            cspProof.signature
+                        );
+                        expect(isValid).toBe(true);
+                    }
+                }
+            });
+
+            it("should handle different census origin types for census root", async () => {
+                // Test with different census origin values
+                const origins = [CensusOrigin.CensusOriginMerkleTree, CensusOrigin.CensusOriginCSP];
+                
+                for (const origin of origins) {
+                    if (origin === CensusOrigin.CensusOriginCSP) { // Only test CSP origin for now
+                        const censusRoot = await service.cspCensusRoot(
+                            origin,
+                            cspTestData.privKey
+                        );
+
+                        expect(typeof censusRoot).toBe("string");
+                        expect(censusRoot.length).toBeGreaterThan(0);
+                        
+                        // Verify it's a valid hex string
+                        expect(censusRoot).toMatch(/^0x[0-9a-fA-F]+$/);
+                    }
+                }
+            });
         });
     });
 });
