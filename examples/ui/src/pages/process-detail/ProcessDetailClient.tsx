@@ -34,8 +34,8 @@ import {
   createTheme,
 } from '@mui/material'
 import {
-  BallotProof,
-  type BallotProofInputs,
+  DavinciCrypto,
+  type DavinciCryptoInputs,
   CircomProof,
   type GetProcessResponse,
   type InfoResponse,
@@ -634,7 +634,7 @@ export default function ProcessDetailClient() {
       // Get WASM URLs from API info
       const info = await api.sequencer.getInfo()
       const urls = getCircuitUrls(info)
-      const sdk = new BallotProof({
+      const sdk = new DavinciCrypto({
         wasmExecUrl: urls.ballotProofExec,
         wasmUrl: urls.ballotProof,
       })
@@ -660,7 +660,7 @@ export default function ProcessDetailClient() {
       // Flatten all arrays into one, preserving order
       const fieldValues = questionArrays.flat()
 
-      const inputs: BallotProofInputs = {
+      const inputs: DavinciCryptoInputs = {
         address: walletAddress.replace(/^0x/, ''),
         processID: processData.id.replace(/^0x/, ''),
         encryptionKey: [processData.encryptionKey.x, processData.encryptionKey.y],
