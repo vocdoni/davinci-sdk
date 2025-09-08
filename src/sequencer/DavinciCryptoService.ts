@@ -1,6 +1,7 @@
 import { BallotMode } from "../core/types";
 import { ProofInputs } from "./CircomProofService";
 import { CensusOrigin } from "../census/types";
+import { sha256 } from "ethers";
 
 export interface DavinciCryptoInputs {
     address: string;
@@ -59,6 +60,10 @@ export interface DavinciCryptoOptions {
     wasmUrl: string;
     /** How long (ms) to wait for the Go runtime to attach DavinciCrypto */
     initTimeoutMs?: number;
+    /** Optional SHA-256 hash to verify wasm_exec.js integrity */
+    wasmExecHash?: string;
+    /** Optional SHA-256 hash to verify davinci_crypto.wasm integrity */
+    wasmHash?: string;
 }
 
 export class DavinciCrypto {
@@ -67,13 +72,15 @@ export class DavinciCrypto {
     private readonly wasmExecUrl: string;
     private readonly wasmUrl: string;
     private readonly initTimeoutMs: number;
+    private readonly wasmExecHash?: string;
+    private readonly wasmHash?: string;
 
     // Cache for wasm files
     private static wasmExecCache = new Map<string, string>();
     private static wasmBinaryCache = new Map<string, ArrayBuffer>();
 
     constructor(opts: DavinciCryptoOptions) {
-        const { wasmExecUrl, wasmUrl, initTimeoutMs } = opts;
+        const { wasmExecUrl, wasmUrl, initTimeoutMs, wasmExecHash, wasmHash } = opts;
 
         if (!wasmExecUrl) throw new Error("`wasmExecUrl` is required");
         if (!wasmUrl)     throw new Error("`wasmUrl` is required");
@@ -81,6 +88,37 @@ export class DavinciCrypto {
         this.wasmExecUrl   = wasmExecUrl;
         this.wasmUrl       = wasmUrl;
         this.initTimeoutMs = initTimeoutMs ?? 5_000;
+        this.wasmExecHash  = wasmExecHash;
+        this.wasmHash      = wasmHash;
+    }
+
+    /**
+     * Computes SHA-256 hash of the given data and compares it with the expected hash.
+     * @param data - The data to hash (string or ArrayBuffer)
+     * @param expectedHash - The expected SHA-256 hash in hexadecimal format
+     * @param filename - The filename for error reporting
+     * @throws Error if the computed hash doesn't match the expected hash
+     */
+    private verifyHash(data: string | ArrayBuffer, expectedHash: string, filename: string): void {
+        // Convert data to Uint8Array for hashing
+        let bytes: Uint8Array;
+        if (typeof data === 'string') {
+            bytes = new TextEncoder().encode(data);
+        } else {
+            bytes = new Uint8Array(data);
+        }
+
+        // Compute SHA-256 hash using ethers
+        const computedHash = sha256(bytes).slice(2); // Remove '0x' prefix
+
+        // Compare hashes (case-insensitive)
+        if (computedHash.toLowerCase() !== expectedHash.toLowerCase()) {
+            throw new Error(
+                `Hash verification failed for ${filename}. ` +
+                `Expected: ${expectedHash.toLowerCase()}, ` +
+                `Computed: ${computedHash.toLowerCase()}`
+            );
+        }
     }
 
     /**
@@ -90,7 +128,7 @@ export class DavinciCrypto {
     async init(): Promise<void> {
         if (this.initialized) return;
 
-        // 1) Fetch & eval Go runtime shim (with caching)
+        // 1) Fetch & eval Go runtime shim (with caching and hash verification)
         let shimCode = DavinciCrypto.wasmExecCache.get(this.wasmExecUrl);
         if (!shimCode) {
             const shim = await fetch(this.wasmExecUrl);
@@ -98,6 +136,12 @@ export class DavinciCrypto {
                 throw new Error(`Failed to fetch wasm_exec.js from ${this.wasmExecUrl}`);
             }
             shimCode = await shim.text();
+            
+            // Verify hash if provided
+            if (this.wasmExecHash) {
+                this.verifyHash(shimCode, this.wasmExecHash, 'wasm_exec.js');
+            }
+            
             DavinciCrypto.wasmExecCache.set(this.wasmExecUrl, shimCode);
         }
         new Function(shimCode)();  // registers globalThis.Go
@@ -107,7 +151,7 @@ export class DavinciCrypto {
         }
         this.go = new globalThis.Go();
 
-        // 2) Fetch & instantiate your Go‐compiled WASM (with caching)
+        // 2) Fetch & instantiate your Go‐compiled WASM (with caching and hash verification)
         let bytes = DavinciCrypto.wasmBinaryCache.get(this.wasmUrl);
         if (!bytes) {
             const resp = await fetch(this.wasmUrl);
@@ -115,6 +159,12 @@ export class DavinciCrypto {
                 throw new Error(`Failed to fetch ballotproof.wasm from ${this.wasmUrl}`);
             }
             bytes = await resp.arrayBuffer();
+            
+            // Verify hash if provided
+            if (this.wasmHash) {
+                this.verifyHash(bytes, this.wasmHash, 'davinci_crypto.wasm');
+            }
+            
             DavinciCrypto.wasmBinaryCache.set(this.wasmUrl, bytes);
         }
         const { instance } = await WebAssembly.instantiate(bytes, this.go.importObject);

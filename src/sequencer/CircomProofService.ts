@@ -1,5 +1,6 @@
 // src/ProofGenerator.ts
 import { groth16 } from "snarkjs";
+import { sha256 } from "ethers";
 
 export interface ProofInputs {
     fields: string[];
@@ -33,12 +34,21 @@ export interface CircomProofOptions {
     wasmUrl?: string;
     zkeyUrl?: string;
     vkeyUrl?: string;
+    /** Optional SHA-256 hash to verify circuit WASM file integrity */
+    wasmHash?: string;
+    /** Optional SHA-256 hash to verify proving key file integrity */
+    zkeyHash?: string;
+    /** Optional SHA-256 hash to verify verification key file integrity */
+    vkeyHash?: string;
 }
 
 export class CircomProof {
     private readonly wasmUrl?: string;
     private readonly zkeyUrl?: string;
     private readonly vkeyUrl?: string;
+    private readonly wasmHash?: string;
+    private readonly zkeyHash?: string;
+    private readonly vkeyHash?: string;
 
     // simple in-memory cache keyed by URL
     private wasmCache = new Map<string, Uint8Array>();
@@ -49,6 +59,40 @@ export class CircomProof {
         this.wasmUrl = opts.wasmUrl;
         this.zkeyUrl = opts.zkeyUrl;
         this.vkeyUrl = opts.vkeyUrl;
+        this.wasmHash = opts.wasmHash;
+        this.zkeyHash = opts.zkeyHash;
+        this.vkeyHash = opts.vkeyHash;
+    }
+
+    /**
+     * Computes SHA-256 hash of the given data and compares it with the expected hash.
+     * @param data - The data to hash (string or ArrayBuffer or Uint8Array)
+     * @param expectedHash - The expected SHA-256 hash in hexadecimal format
+     * @param filename - The filename for error reporting
+     * @throws Error if the computed hash doesn't match the expected hash
+     */
+    private verifyHash(data: string | ArrayBuffer | Uint8Array, expectedHash: string, filename: string): void {
+        // Convert data to Uint8Array for hashing
+        let bytes: Uint8Array;
+        if (typeof data === 'string') {
+            bytes = new TextEncoder().encode(data);
+        } else if (data instanceof ArrayBuffer) {
+            bytes = new Uint8Array(data);
+        } else {
+            bytes = data;
+        }
+
+        // Compute SHA-256 hash using ethers
+        const computedHash = sha256(bytes).slice(2); // Remove '0x' prefix
+
+        // Compare hashes (case-insensitive)
+        if (computedHash.toLowerCase() !== expectedHash.toLowerCase()) {
+            throw new Error(
+                `Hash verification failed for ${filename}. ` +
+                `Expected: ${expectedHash.toLowerCase()}, ` +
+                `Computed: ${computedHash.toLowerCase()}`
+            );
+        }
     }
 
     /**
@@ -71,6 +115,12 @@ export class CircomProof {
             if (!r.ok) throw new Error(`Failed to fetch wasm at ${wasmUrl}: ${r.status}`);
             const buf = await r.arrayBuffer();
             wasmBin = new Uint8Array(buf);
+            
+            // Verify hash if provided
+            if (this.wasmHash) {
+                this.verifyHash(wasmBin, this.wasmHash, 'circuit.wasm');
+            }
+            
             this.wasmCache.set(wasmUrl, wasmBin);
         }
 
@@ -81,6 +131,12 @@ export class CircomProof {
             if (!r.ok) throw new Error(`Failed to fetch zkey at ${zkeyUrl}: ${r.status}`);
             const buf = await r.arrayBuffer();
             zkeyBin = new Uint8Array(buf);
+            
+            // Verify hash if provided
+            if (this.zkeyHash) {
+                this.verifyHash(zkeyBin, this.zkeyHash, 'proving_key.zkey');
+            }
+            
             this.zkeyCache.set(zkeyUrl, zkeyBin);
         }
 
@@ -108,7 +164,14 @@ export class CircomProof {
         if (!vk) {
             const r = await fetch(vkeyUrl);
             if (!r.ok) throw new Error(`Failed to fetch vkey at ${vkeyUrl}: ${r.status}`);
-            vk = await r.json();
+            const vkeyText = await r.text();
+            
+            // Verify hash if provided
+            if (this.vkeyHash) {
+                this.verifyHash(vkeyText, this.vkeyHash, 'verification_key.json');
+            }
+            
+            vk = JSON.parse(vkeyText);
             this.vkeyCache.set(vkeyUrl, vk);
         }
 

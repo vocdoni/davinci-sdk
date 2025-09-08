@@ -1,5 +1,6 @@
 import { DavinciCrypto, DavinciCryptoInputs } from "../../../src/sequencer";
 import { VocdoniSequencerService } from "../../../src/sequencer/SequencerService";
+import { InfoResponse } from "../../../src/sequencer/api/types";
 import { CensusOrigin } from '../../../src/census/';
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -39,7 +40,10 @@ describe("DavinciCryptoService Integration", () => {
         
         service = new DavinciCrypto({
             wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
-            wasmUrl: info.ballotProofWasmHelperUrl
+            wasmUrl: info.ballotProofWasmHelperUrl,
+            // Include hashes for verification
+            wasmExecHash: info.ballotProofWasmHelperExecJsHash,
+            wasmHash: info.ballotProofWasmHelperHash
         });
         await service.init();
     });
@@ -344,6 +348,118 @@ describe("DavinciCryptoService Integration", () => {
                     }
                 }
             });
+        });
+    });
+
+    describe("Hash Verification", () => {
+        let api: VocdoniSequencerService;
+        let info: InfoResponse;
+
+        beforeAll(async () => {
+            api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+            info = await api.getInfo();
+        });
+
+        it("should initialize successfully with valid hashes", async () => {
+            const serviceWithHashes = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                wasmUrl: info.ballotProofWasmHelperUrl,
+                wasmExecHash: info.ballotProofWasmHelperExecJsHash,
+                wasmHash: info.ballotProofWasmHelperHash
+            });
+
+            // Should not throw an error
+            await expect(serviceWithHashes.init()).resolves.not.toThrow();
+        });
+
+        it("should work without hash verification (backward compatibility)", async () => {
+            const serviceWithoutHashes = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                wasmUrl: info.ballotProofWasmHelperUrl
+                // No hashes provided
+            });
+
+            // Should not throw an error
+            await expect(serviceWithoutHashes.init()).resolves.not.toThrow();
+        });
+
+        it("should throw error with invalid wasm exec hash", async () => {
+            // Use a different URL to avoid cache conflicts
+            const serviceWithInvalidExecHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl + "?test=invalid_exec",
+                wasmUrl: info.ballotProofWasmHelperUrl + "?test=invalid_exec",
+                wasmExecHash: "invalid_hash_value_that_will_not_match_the_actual_file_content",
+                wasmHash: info.ballotProofWasmHelperHash
+            });
+
+            await expect(serviceWithInvalidExecHash.init()).rejects.toThrow(/Hash verification failed for wasm_exec\.js/);
+        });
+
+        it("should throw error with invalid wasm binary hash", async () => {
+            // Use a different URL to avoid cache conflicts
+            const serviceWithInvalidWasmHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl + "?test=invalid_wasm",
+                wasmUrl: info.ballotProofWasmHelperUrl + "?test=invalid_wasm",
+                wasmExecHash: info.ballotProofWasmHelperExecJsHash,
+                wasmHash: "invalid_hash_value_that_will_not_match_the_actual_file_content"
+            });
+
+            await expect(serviceWithInvalidWasmHash.init()).rejects.toThrow(/Hash verification failed for davinci_crypto\.wasm/);
+        });
+
+        it("should provide detailed error message on hash mismatch", async () => {
+            // Use a different URL to avoid cache conflicts
+            const serviceWithInvalidHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl + "?test=detailed_error",
+                wasmUrl: info.ballotProofWasmHelperUrl + "?test=detailed_error",
+                wasmExecHash: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            });
+
+            try {
+                await serviceWithInvalidHash.init();
+                throw new Error("Expected hash verification to fail");
+            } catch (error: any) {
+                expect(error.message).toContain("Hash verification failed for wasm_exec.js");
+                expect(error.message).toContain("Expected: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+                expect(error.message).toContain("Computed:");
+            }
+        });
+
+        it("should handle case-insensitive hash comparison", async () => {
+            // Get the actual hash and convert to uppercase
+            const upperCaseHash = info.ballotProofWasmHelperExecJsHash.toUpperCase();
+            
+            const serviceWithUpperCaseHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                wasmUrl: info.ballotProofWasmHelperUrl,
+                wasmExecHash: upperCaseHash,
+                wasmHash: info.ballotProofWasmHelperHash
+            });
+
+            // Should not throw an error even with uppercase hash
+            await expect(serviceWithUpperCaseHash.init()).resolves.not.toThrow();
+        });
+
+        it("should verify only provided hashes (partial verification)", async () => {
+            // Test with only wasm exec hash provided
+            const serviceWithOnlyExecHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                wasmUrl: info.ballotProofWasmHelperUrl,
+                wasmExecHash: info.ballotProofWasmHelperExecJsHash
+                // wasmHash intentionally omitted
+            });
+
+            await expect(serviceWithOnlyExecHash.init()).resolves.not.toThrow();
+
+            // Test with only wasm binary hash provided
+            const serviceWithOnlyWasmHash = new DavinciCrypto({
+                wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                wasmUrl: info.ballotProofWasmHelperUrl,
+                wasmHash: info.ballotProofWasmHelperHash
+                // wasmExecHash intentionally omitted
+            });
+
+            await expect(serviceWithOnlyWasmHash.init()).resolves.not.toThrow();
         });
     });
 });

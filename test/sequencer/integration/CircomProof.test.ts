@@ -130,3 +130,128 @@ describe("CircomProofService Integration", () => {
         expect(ok).toBe(true);
     }, 30_000);
 });
+
+describe("CircomProofService Hash Verification Integration", () => {
+    let api: VocdoniSequencerService;
+    let info: any;
+
+    beforeAll(async () => {
+        api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+        info = await api.getInfo();
+    });
+
+    it("should verify circuit WASM hash when provided", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            wasmHash: info.circuitHash
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        
+        expect(proof).toBeDefined();
+        expect(publicSignals).toBeDefined();
+        expect(publicSignals[0]).toBe(finalInputs.inputs_hash);
+    }, 60_000);
+
+    it("should verify proving key hash when provided", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            zkeyHash: info.provingKeyHash
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        
+        expect(proof).toBeDefined();
+        expect(publicSignals).toBeDefined();
+        expect(publicSignals[0]).toBe(finalInputs.inputs_hash);
+    }, 60_000);
+
+    it("should verify verification key hash when provided", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            vkeyHash: info.verificationKeyHash
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        const ok = await service.verify(proof, publicSignals);
+        
+        expect(ok).toBe(true);
+    }, 60_000);
+
+    it("should verify all hashes when provided", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            wasmHash: info.circuitHash,
+            zkeyHash: info.provingKeyHash,
+            vkeyHash: info.verificationKeyHash
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        const ok = await service.verify(proof, publicSignals);
+        
+        expect(proof).toBeDefined();
+        expect(publicSignals).toBeDefined();
+        expect(publicSignals[0]).toBe(finalInputs.inputs_hash);
+        expect(ok).toBe(true);
+    }, 60_000);
+
+    it("should work without hash verification (backward compatibility)", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl
+            // No hashes provided
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        const ok = await service.verify(proof, publicSignals);
+        
+        expect(proof).toBeDefined();
+        expect(publicSignals).toBeDefined();
+        expect(publicSignals[0]).toBe(finalInputs.inputs_hash);
+        expect(ok).toBe(true);
+    }, 60_000);
+
+    it("should throw error when circuit WASM hash verification fails", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            wasmHash: 'invalid_hash'
+        });
+
+        await expect(service.generate(finalInputs)).rejects.toThrow('Hash verification failed for circuit.wasm');
+    }, 30_000);
+
+    it("should throw error when proving key hash verification fails", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            zkeyHash: 'invalid_hash'
+        });
+
+        await expect(service.generate(finalInputs)).rejects.toThrow('Hash verification failed for proving_key.zkey');
+    }, 30_000);
+
+    it("should throw error when verification key hash verification fails", async () => {
+        const service = new CircomProof({
+            wasmUrl: info.circuitUrl,
+            zkeyUrl: info.provingKeyUrl,
+            vkeyUrl: info.verificationKeyUrl,
+            vkeyHash: 'invalid_hash'
+        });
+
+        const { proof, publicSignals } = await service.generate(finalInputs);
+        
+        await expect(service.verify(proof, publicSignals)).rejects.toThrow('Hash verification failed for verification_key.json');
+    }, 60_000);
+});
