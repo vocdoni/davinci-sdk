@@ -5,6 +5,7 @@ import { OrganizationRegistryService } from "./contracts/OrganizationRegistry";
 import { DavinciCrypto } from "./sequencer/DavinciCryptoService";
 import { deployedAddresses } from "./contracts/SmartContractService";
 import { Environment, EnvironmentOptions, resolveConfiguration } from "./core/config";
+import { ProcessOrchestrationService, ProcessConfig, ProcessCreationResult } from "./core/process";
 
 /**
  * Configuration interface for the DavinciSDK
@@ -65,6 +66,7 @@ export class DavinciSDK {
     private apiService: VocdoniApiService;
     private _processRegistry?: ProcessRegistryService;
     private _organizationRegistry?: OrganizationRegistryService;
+    private _processOrchestrator?: ProcessOrchestrationService;
     private davinciCrypto?: DavinciCrypto;
     private initialized = false;
 
@@ -79,7 +81,7 @@ export class DavinciSDK {
             customChain: config.chain
         });
 
-        // Set defaults for optional parameters (environment is not stored internally)
+        // Set defaults for optional parameters
         this.config = {
             signer: config.signer,
             sequencerUrl: config.sequencerUrl ?? resolvedConfig.sequencer,
@@ -162,6 +164,91 @@ export class DavinciSDK {
         }
 
         return this.davinciCrypto;
+    }
+
+    /**
+     * Get the process orchestration service for simplified process creation
+     */
+    get processOrchestrator(): ProcessOrchestrationService {
+        if (!this._processOrchestrator) {
+            this._processOrchestrator = new ProcessOrchestrationService(
+                this.processes,
+                this.apiService,
+                this.organizations,
+                () => this.getCrypto(),
+                this.config.signer
+            );
+        }
+        return this._processOrchestrator;
+    }
+
+    /**
+     * Creates a complete voting process with minimal configuration.
+     * This is the ultra-easy method for end users that handles all the complex orchestration internally.
+     * 
+     * The method automatically:
+     * - Gets encryption keys and initial state root from the sequencer
+     * - Handles process creation signatures
+     * - Coordinates between sequencer API and on-chain contract calls
+     * - Creates and pushes metadata
+     * - Submits the on-chain transaction
+     * 
+     * @param config - Simplified process configuration
+     * @returns Promise resolving to the process creation result
+     * 
+     * @example
+     * ```typescript
+     * // Option 1: Using duration (traditional approach)
+     * const result1 = await sdk.createProcess({
+     *   title: "My Election",
+     *   description: "A simple election",
+     *   census: {
+     *     type: CensusOrigin.CensusOriginMerkleTree,
+     *     root: "0x1234...",
+     *     size: 100,
+     *     uri: "ipfs://your-census-uri"
+     *   },
+     *   ballot: {
+     *     numFields: 2,
+     *     maxValue: "3",
+     *     minValue: "0",
+     *     uniqueValues: false,
+     *     costFromWeight: false,
+     *     costExponent: 10000,
+     *     maxValueSum: "6",
+     *     minValueSum: "0"
+     *   },
+     *   timing: {
+     *     startDate: new Date("2024-12-01T10:00:00Z"),
+     *     duration: 3600 * 24
+     *   },
+     *   questions: [
+     *     {
+     *       title: "What is your favorite color?",
+     *       choices: [
+     *         { title: "Red", value: 0 },
+     *         { title: "Blue", value: 1 }
+     *       ]
+     *     }
+     *   ]
+     * });
+     * 
+     * // Option 2: Using start and end dates
+     * const result2 = await sdk.createProcess({
+     *   title: "Weekend Vote",
+     *   timing: {
+     *     startDate: "2024-12-07T09:00:00Z",
+     *     endDate: "2024-12-08T18:00:00Z"
+     *   }
+     * });
+     * ```
+     */
+    async createProcess(config: ProcessConfig): Promise<ProcessCreationResult> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before creating processes. Call sdk.init() first.");
+        }
+        
+        return this.processOrchestrator.createProcess(config);
     }
 
     /**

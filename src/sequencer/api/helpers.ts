@@ -1,4 +1,4 @@
-import { Wallet } from 'ethers';
+import { Signer, Wallet } from 'ethers';
 
 /**
  * Creates the signature message for process creation.
@@ -12,14 +12,14 @@ export function createProcessSignatureMessage(processId: string): string {
 }
 
 /**
- * Signs the process creation message with the provided wallet.
+ * Signs the process creation message with the provided signer.
  * @param processId - The process ID (with or without 0x prefix)
- * @param wallet - The wallet to sign with
+ * @param signer - The signer (Wallet or Signer) to sign with
  * @returns Promise resolving to the signature string
  */
-export async function signProcessCreation(processId: string, wallet: Wallet): Promise<string> {
+export async function signProcessCreation(processId: string, signer: Signer | Wallet): Promise<string> {
     const message = createProcessSignatureMessage(processId);
-    return await wallet.signMessage(message);
+    return await signer.signMessage(message);
 }
 
 /**
