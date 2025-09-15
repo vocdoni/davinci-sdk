@@ -63,8 +63,8 @@ interface InternalDavinciSDKConfig {
 export class DavinciSDK {
     private config: InternalDavinciSDKConfig;
     private apiService: VocdoniApiService;
-    private processRegistry: ProcessRegistryService;
-    private organizationRegistry: OrganizationRegistryService;
+    private _processRegistry?: ProcessRegistryService;
+    private _organizationRegistry?: OrganizationRegistryService;
     private davinciCrypto?: DavinciCrypto;
     private initialized = false;
 
@@ -95,12 +95,7 @@ export class DavinciSDK {
             censusURL: this.config.censusUrl
         });
 
-        // Initialize contract services with resolved addresses
-        const processRegistryAddress = this.resolveContractAddress('processRegistry');
-        const organizationRegistryAddress = this.resolveContractAddress('organizationRegistry');
-
-        this.processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
-        this.organizationRegistry = new OrganizationRegistryService(organizationRegistryAddress, this.config.signer);
+        // Contract services will be initialized lazily when accessed
     }
 
     /**
@@ -132,14 +127,22 @@ export class DavinciSDK {
      * Get the process registry service for process management
      */
     get processes(): ProcessRegistryService {
-        return this.processRegistry;
+        if (!this._processRegistry) {
+            const processRegistryAddress = this.resolveContractAddress('processRegistry');
+            this._processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
+        }
+        return this._processRegistry;
     }
 
     /**
      * Get the organization registry service for organization management
      */
     get organizations(): OrganizationRegistryService {
-        return this.organizationRegistry;
+        if (!this._organizationRegistry) {
+            const organizationRegistryAddress = this.resolveContractAddress('organizationRegistry');
+            this._organizationRegistry = new OrganizationRegistryService(organizationRegistryAddress, this.config.signer);
+        }
+        return this._organizationRegistry;
     }
 
     /**
@@ -217,13 +220,13 @@ export class DavinciSDK {
 
             // Update process registry with sequencer address (overrides user address)
             if (contracts.process) {
-                this.processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
+                this._processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
                 this.config.contractAddresses.processRegistry = contracts.process;
             }
 
             // Update organization registry with sequencer address (overrides user address)
             if (contracts.organization) {
-                this.organizationRegistry = new OrganizationRegistryService(contracts.organization, this.config.signer);
+                this._organizationRegistry = new OrganizationRegistryService(contracts.organization, this.config.signer);
                 this.config.contractAddresses.organizationRegistry = contracts.organization;
             }
 
