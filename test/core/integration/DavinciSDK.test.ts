@@ -6,9 +6,10 @@ describe('DavinciSDK Integration Tests', () => {
     let mockSigner: Wallet;
 
     beforeEach(() => {
-        // Create a mock provider and signer for testing
-        const mockProvider = new JsonRpcProvider('http://localhost:8545'); // Mock RPC endpoint
-        mockSigner = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234', mockProvider);
+        // Create a provider with a dummy URL that won't be used for actual network calls
+        // This satisfies ethers.js requirements without making real network connections
+        const provider = new JsonRpcProvider('http://localhost:8545');
+        mockSigner = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234', provider);
     });
 
     describe('Environment Configuration', () => {
@@ -176,6 +177,118 @@ describe('DavinciSDK Integration Tests', () => {
             // Check initialization state
             expect(sdk.isInitialized()).toBe(false);
         });
+
+        it('should initialize SDK and mark as initialized', async () => {
+            const sdk = new DavinciSDK({
+                signer: mockSigner,
+                environment: 'dev'
+            });
+
+            // Should not be initialized initially
+            expect(sdk.isInitialized()).toBe(false);
+
+            // Initialize the SDK
+            await sdk.init();
+
+            // Should be initialized after calling init()
+            expect(sdk.isInitialized()).toBe(true);
+
+            // Calling init() again should not cause issues
+            await sdk.init();
+            expect(sdk.isInitialized()).toBe(true);
+        });
+
+        it('should handle initialization with useSequencerAddresses disabled', async () => {
+            const sdk = new DavinciSDK({
+                signer: mockSigner,
+                environment: 'dev',
+                useSequencerAddresses: false
+            });
+
+            const initialConfig = sdk.getConfig();
+            
+            // Initialize without sequencer addresses
+            await sdk.init();
+
+            const finalConfig = sdk.getConfig();
+            
+            // Configuration should remain the same since useSequencerAddresses is false
+            expect(finalConfig.contractAddresses).toEqual(initialConfig.contractAddresses);
+            expect(sdk.isInitialized()).toBe(true);
+        });
+
+        it('should handle useSequencerAddresses flag correctly', () => {
+            const sdk = new DavinciSDK({
+                signer: mockSigner,
+                environment: 'dev',
+                useSequencerAddresses: true,
+                contractAddresses: {
+                    processRegistry: '0xUserProcessRegistry123456789012345678901234',
+                    organizationRegistry: '0xUserOrgRegistry123456789012345678901234567'
+                }
+            });
+
+            const config = sdk.getConfig();
+            
+            // Should have useSequencerAddresses flag set to true
+            expect(config.useSequencerAddresses).toBe(true);
+            
+            // Should have user-provided addresses initially
+            expect(config.contractAddresses.processRegistry).toBe('0xUserProcessRegistry123456789012345678901234');
+            expect(config.contractAddresses.organizationRegistry).toBe('0xUserOrgRegistry123456789012345678901234567');
+        });
+
+        it('should fetch sequencer addresses and verify they would override user addresses', async () => {
+            // Create SDK with dev environment to test real sequencer API
+            const sdk = new DavinciSDK({
+                signer: mockSigner,
+                environment: 'dev',
+                useSequencerAddresses: true,
+                contractAddresses: {
+                    processRegistry: '0xUserProcessRegistry123456789012345678901234',
+                    organizationRegistry: '0xUserOrgRegistry123456789012345678901234567'
+                }
+            });
+
+            const initialConfig = sdk.getConfig();
+            
+            // Verify initial state has user addresses and correct flag
+            expect(initialConfig.contractAddresses.processRegistry).toBe('0xUserProcessRegistry123456789012345678901234');
+            expect(initialConfig.contractAddresses.organizationRegistry).toBe('0xUserOrgRegistry123456789012345678901234567');
+            expect(initialConfig.useSequencerAddresses).toBe(true);
+            expect(initialConfig.sequencerUrl).toBe('https://sequencer-dev.davinci.vote');
+            
+            // Get sequencer info to know what addresses should be set
+            const sequencerInfo = await sdk.api.sequencer.getInfo();
+            
+            // Verify sequencer provides contract addresses
+            expect(sequencerInfo.contracts).toBeDefined();
+            expect(sequencerInfo.contracts).toHaveProperty('process');
+            expect(sequencerInfo.contracts).toHaveProperty('organization');
+            
+            // Initialize the SDK - this should fetch and apply sequencer addresses
+            await sdk.init();
+            
+            const finalConfig = sdk.getConfig();
+            
+            // Verify that the configuration now contains exactly the sequencer addresses
+            expect(finalConfig.contractAddresses.processRegistry).toBe(sequencerInfo.contracts.process);
+            expect(finalConfig.contractAddresses.organizationRegistry).toBe(sequencerInfo.contracts.organization);
+            
+            // Verify sequencer addresses are different from user addresses (they should have overridden them)
+            expect(finalConfig.contractAddresses.processRegistry).not.toBe('0xUserProcessRegistry123456789012345678901234');
+            expect(finalConfig.contractAddresses.organizationRegistry).not.toBe('0xUserOrgRegistry123456789012345678901234567');
+            
+            // Verify other sequencer addresses are also set if available
+            if (sequencerInfo.contracts.stateTransitionVerifier) {
+                expect(finalConfig.contractAddresses.stateTransitionVerifier).toBe(sequencerInfo.contracts.stateTransitionVerifier);
+            }
+            if (sequencerInfo.contracts.resultsVerifier) {
+                expect(finalConfig.contractAddresses.resultsVerifier).toBe(sequencerInfo.contracts.resultsVerifier);
+            }
+            
+            expect(sdk.isInitialized()).toBe(true);
+        }, 10000); // Increase timeout for network call
 
     });
 
