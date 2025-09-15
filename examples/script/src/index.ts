@@ -47,8 +47,42 @@ const RPC_URL                    = process.env.SEPOLIA_RPC;
 const PRIVATE_KEY                = process.env.PRIVATE_KEY;
 const FORCE_SEQUENCER_ADDRESSES  = process.env.FORCE_SEQUENCER_ADDRESSES === 'true';
 
-// CSP private key - use from env or generate random one
-const CSP_PRIVATE_KEY = process.env.CSP_PRIVATE_KEY || randomBytes(32).toString('hex');
+// CSP server URL for HTTP API calls
+const CSP_SERVER_URL = process.env.CSP_SERVER_URL;
+
+// ────────────────────────────────────────────────────────────
+//   CSP HTTP API HELPERS
+// ────────────────────────────────────────────────────────────
+async function fetchCSPRoot(): Promise<string> {
+    if (!CSP_SERVER_URL) {
+        throw new Error("CSP_SERVER_URL environment variable is required for CSP operations");
+    }
+    
+    const response = await fetch(`${CSP_SERVER_URL}/root`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch CSP root: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.root || data; // Handle both {root: "..."} and direct string responses
+}
+
+async function fetchCSPProof(processId: string, address: string): Promise<any> {
+    if (!CSP_SERVER_URL) {
+        throw new Error("CSP_SERVER_URL environment variable is required for CSP operations");
+    }
+    
+    // Remove 0x prefix if present
+    const pid = processId.replace(/^0x/, "");
+    const addr = address.replace(/^0x/, "");
+    
+    const response = await fetch(`${CSP_SERVER_URL}/proof?pid=${pid}&addr=0x${addr}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch CSP proof: ${response.status} ${response.statusText}`);
+    }
+    
+    return await response.json();
+}
 
 // ────────────────────────────────────────────────────────────
 //   LOGGING HELPERS
@@ -324,22 +358,16 @@ async function step3_generateCSPCensusRoot(
     processId: string,
     numParticipants: number
 ): Promise<{ censusRoot: string; censusSize: number; participants: TestParticipant[] }> {
-    step(3, "Generate CSP census root using cspCensusRoot function");
-    
-    // Initialize DavinciCrypto
-    const davinciCrypto = new DavinciCrypto({ wasmExecUrl, wasmUrl });
-    await davinciCrypto.init();
+    step(3, "Fetch CSP census root from server");
     
     // Generate participants
     const participants = makeTestParticipants(numParticipants);
     
-    // Use the new cspCensusRoot function to generate census root
-    const censusRoot = await davinciCrypto.cspCensusRoot(
-        CensusOrigin.CensusOriginCSP,
-        CSP_PRIVATE_KEY
-    );
+    // Fetch census root from CSP server
+    const censusRoot = await fetchCSPRoot();
+    console.log("   census root from CSP server:", censusRoot);
 
-    success("CSP census root generated successfully using cspCensusRoot function");
+    success("CSP census root fetched successfully from server");
     
     return {
         censusRoot,
@@ -708,28 +736,24 @@ export async function step14_submitVotes(
             censusProof = await api.census.getCensusProof(censusRoot, p.key);
             info(`  [${i + 1}/${participants.length}] Using Merkle census proof for ${p.key}`);
         } else {
-            // 1) CSP proof - generate using cspSign
-            info(`  [${i + 1}/${participants.length}] Generating CSP census proof for ${p.key}`);
+            // 1) CSP proof - fetch from server
+            info(`  [${i + 1}/${participants.length}] Fetching CSP census proof for ${p.key}`);
             
-            const cspProofData = await davinciCrypto!.cspSign(
-                censusType,
-                CSP_PRIVATE_KEY,
-                processId.replace(/^0x/, ""),
-                p.key.replace(/^0x/, "")
-            );
+            const cspProofData = await fetchCSPProof(processId, p.key);
             
-            // Create CSP census proof structure (cspProofData is now already parsed)
+            // Create CSP census proof structure using server response
             censusProof = {
-                root: cspProofData.root,
-                address: cspProofData.address,
+                root: cspProofData.root || censusRoot,
+                address: cspProofData.address || p.key,
                 weight: p.weight,
                 censusOrigin: censusType,
-                processId: cspProofData.processId,
+                processId: cspProofData.processId || processId,
                 publicKey: cspProofData.publicKey,
-                signature: cspProofData.signature
+                signature: cspProofData.signature,
+                ...cspProofData // Include any additional fields from server response
             };
             
-            info(`  [${i + 1}/${participants.length}] CSP proof generated for ${p.key}`);
+            info(`  [${i + 1}/${participants.length}] CSP proof fetched for ${p.key}`);
         }
 
         // 2) Map ciphertexts → VoteBallot shape
