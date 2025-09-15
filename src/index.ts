@@ -9,3 +9,6 @@ export * from './sequencer';
 
 // Export census module
 export * from './census';
+
+// Export simplified SDK
+export * from './DavinciSDK';
