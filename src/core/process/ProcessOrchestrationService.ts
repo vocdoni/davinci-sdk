@@ -9,9 +9,9 @@ import { CensusOrigin } from "../../census/types";
 import { getElectionMetadataTemplate } from "../types/metadata";
 
 /**
- * Configuration for creating a process
+ * Base interface with shared fields between ProcessConfig and ProcessInfo
  */
-export interface ProcessConfig {
+export interface BaseProcess {
     /** Process title */
     title: string;
     
@@ -33,16 +33,6 @@ export interface ProcessConfig {
     /** Ballot configuration */
     ballot: BallotMode;
     
-    /** Process timing - use either duration-based or date-based configuration */
-    timing: {
-        /** Start date/time (Date object, ISO string, or Unix timestamp, default: now + 60 seconds) */
-        startDate?: Date | string | number;
-        /** Duration in seconds (required if endDate is not provided) */
-        duration?: number;
-        /** End date/time (Date object, ISO string, or Unix timestamp, cannot be used with duration) */
-        endDate?: Date | string | number;
-    };
-    
     /** Election questions and choices (required) */
     questions: Array<{
         title: string;
@@ -52,6 +42,21 @@ export interface ProcessConfig {
             value: number;
         }>;
     }>;
+}
+
+/**
+ * Configuration for creating a process
+ */
+export interface ProcessConfig extends BaseProcess {
+    /** Process timing - use either duration-based or date-based configuration */
+    timing: {
+        /** Start date/time (Date object, ISO string, or Unix timestamp, default: now + 60 seconds) */
+        startDate?: Date | string | number;
+        /** Duration in seconds (required if endDate is not provided) */
+        duration?: number;
+        /** End date/time (Date object, ISO string, or Unix timestamp, cannot be used with duration) */
+        endDate?: Date | string | number;
+    };
 }
 
 /**
@@ -65,6 +70,47 @@ export interface ProcessCreationResult {
 }
 
 /**
+ * User-friendly process information that extends the base process with additional runtime data
+ */
+export interface ProcessInfo extends BaseProcess {
+    /** The process ID */
+    processId: string;
+    
+    /** Current process status */
+    status: ProcessStatus;
+    
+    /** Process creator address */
+    creator: string;
+    
+    /** Start date as Date object */
+    startDate: Date;
+    
+    /** End date as Date object */
+    endDate: Date;
+    
+    /** Duration in seconds */
+    duration: number;
+    
+    /** Time remaining in seconds (0 if ended, negative if not started) */
+    timeRemaining: number;
+    
+    /** Process results (array of BigInt values) */
+    result: bigint[];
+    
+    /** Number of votes cast */
+    voteCount: number;
+    
+    /** Number of vote overwrites */
+    voteOverwriteCount: number;
+    
+    /** Metadata URI */
+    metadataURI: string;
+    
+    /** Raw contract data (for advanced users) */
+    raw?: any;
+}
+
+/**
  * Service that orchestrates the complete process creation workflow
  */
 export class ProcessOrchestrationService {
@@ -75,6 +121,93 @@ export class ProcessOrchestrationService {
         private getCrypto: () => Promise<DavinciCrypto>,
         private signer: Signer
     ) {}
+
+    /**
+     * Gets user-friendly process information by transforming raw contract data
+     * @param processId - The process ID to fetch
+     * @returns Promise resolving to the user-friendly process information
+     */
+    async getProcess(processId: string): Promise<ProcessInfo> {
+        // 1. Get raw process data from contract
+        const rawProcess = await this.processRegistry.getProcess(processId);
+        
+        // 2. Fetch and parse metadata
+        let metadata: any = null;
+        let title: string | undefined;
+        let description: string | undefined;
+        let questions: ProcessConfig['questions'] = [];
+        
+        try {
+            if (rawProcess.metadataURI) {
+                metadata = await this.apiService.sequencer.getMetadata(rawProcess.metadataURI);
+                title = metadata?.title?.default;
+                description = metadata?.description?.default;
+                
+                // Transform metadata questions to ProcessConfig format
+                if (metadata?.questions) {
+                    questions = metadata.questions.map((q: any) => ({
+                        title: q.title?.default,
+                        description: q.description?.default,
+                        choices: q.choices?.map((c: any) => ({
+                            title: c.title?.default,
+                            value: c.value
+                        })) || []
+                    }));
+                }
+            }
+        } catch (error) {
+            console.warn(`Failed to fetch metadata for process ${processId}:`, error);
+        }
+        
+        // 3. Calculate timing information
+        const now = Math.floor(Date.now() / 1000);
+        const startTime = Number(rawProcess.startTime);
+        const duration = Number(rawProcess.duration);
+        const endTime = startTime + duration;
+        
+        const timeRemaining = now >= endTime ? 0 : (now >= startTime ? endTime - now : startTime - now);
+        
+        // 4. Transform census information
+        const census = {
+            type: Number(rawProcess.census.censusOrigin) as CensusOrigin,
+            root: rawProcess.census.censusRoot,
+            size: Number(rawProcess.census.maxVotes),
+            uri: rawProcess.census.censusURI || ""
+        };
+        
+        // 5. Transform ballot mode (convert BigInt fields to appropriate types)
+        const ballot: BallotMode = {
+            numFields: Number(rawProcess.ballotMode.numFields),
+            maxValue: rawProcess.ballotMode.maxValue.toString(),
+            minValue: rawProcess.ballotMode.minValue.toString(),
+            uniqueValues: rawProcess.ballotMode.uniqueValues,
+            costFromWeight: rawProcess.ballotMode.costFromWeight,
+            costExponent: Number(rawProcess.ballotMode.costExponent),
+            maxValueSum: rawProcess.ballotMode.maxValueSum.toString(),
+            minValueSum: rawProcess.ballotMode.minValueSum.toString()
+        };
+        
+        // 6. Return user-friendly process info
+        return {
+            processId,
+            title: title!,
+            description: description!,
+            census,
+            ballot,
+            questions,
+            status: Number(rawProcess.status) as ProcessStatus,
+            creator: rawProcess.organizationId,
+            startDate: new Date(startTime * 1000),
+            endDate: new Date(endTime * 1000),
+            duration,
+            timeRemaining,
+            result: rawProcess.result,
+            voteCount: Number(rawProcess.voteCount),
+            voteOverwriteCount: Number(rawProcess.voteOverwriteCount),
+            metadataURI: rawProcess.metadataURI,
+            raw: rawProcess
+        };
+    }
 
     /**
      * Creates a complete voting process with minimal configuration

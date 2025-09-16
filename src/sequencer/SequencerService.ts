@@ -105,12 +105,29 @@ export class VocdoniSequencerService extends BaseService {
         }).then(res => res.hash);
     }
 
-    getMetadata(hash: string): Promise<ElectionMetadata> {
-        if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
+    async getMetadata(hashOrUrl: string): Promise<ElectionMetadata> {
+        // Check if it's a URL
+        if (hashOrUrl.startsWith('http://') || hashOrUrl.startsWith('https://')) {
+            // Make direct HTTP request to the URL
+            try {
+                const response = await fetch(hashOrUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch metadata from URL: ${response.status} ${response.statusText}`);
+                }
+                return await response.json();
+            } catch (error) {
+                throw new Error(`Failed to fetch metadata from URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+        
+        // Treat as hash
+        if (!isHexString(hashOrUrl)) {
+            throw new Error("Invalid metadata hash format");
+        }
 
         return this.request<ElectionMetadata>({
             method: "GET",
-            url: `/metadata/${hash}`
+            url: `/metadata/${hashOrUrl}`
         });
     }
 
