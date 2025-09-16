@@ -6,6 +6,7 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from "ethers";
 import { DavinciSDK, CensusOrigin, ProcessConfig } from "../../../src";
+import { ProcessStatus } from "../../../src/contracts/ProcessRegistryService";
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
@@ -575,6 +576,86 @@ describe("Simple Process Creation Integration (Sepolia)", () => {
 
         await expect(sdk.createProcess(invalidDateOrderConfig)).rejects.toThrow(
             "End date must be after start date."
+        );
+    });
+
+    it("should get process information using the simple wrapper", async () => {
+        // First create a process to test with
+        const censusRoot = randomHex(32);
+        const processConfig: ProcessConfig = {
+            title: "Get Process Test",
+            description: "Testing the getProcess wrapper method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 50,
+                uri: `ipfs://get-process-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Test question for getProcess",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+        // Now test getting the process information
+        const processInfo = await sdk.getProcess(createResult.processId);
+
+        // Verify the process information
+        expect(processInfo).toBeDefined();
+        expect(processInfo.title).toBe("Get Process Test");
+        expect(processInfo.description).toBe("Testing the getProcess wrapper method");
+        expect(processInfo.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
+        expect(processInfo.census.size).toBe(50);
+        expect(processInfo.duration).toBe(3600);
+        expect(processInfo.status).toBeDefined();
+        expect(processInfo.status).toBe(ProcessStatus.READY); // Process should be in READY status when created
+        expect(processInfo.startDate).toBeDefined();
+        expect(processInfo.startDate).toBeInstanceOf(Date);
+        expect(processInfo.endDate).toBeDefined();
+        expect(processInfo.endDate).toBeInstanceOf(Date);
+        expect(processInfo.duration).toBe(3600);
+        expect(processInfo.timeRemaining).toBeDefined();
+        expect(processInfo.creator).toBeDefined();
+        
+        // Verify that the creator address matches the wallet address that created the process
+        const walletAddress = await wallet.getAddress();
+        expect(processInfo.creator.toLowerCase()).toBe(walletAddress.toLowerCase());
+        
+        expect(processInfo.questions).toBeDefined();
+        expect(processInfo.questions.length).toBe(1);
+        expect(processInfo.questions[0].title).toBe("Test question for getProcess");
+    });
+
+    it("should validate SDK initialization requirement for getProcess", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        await expect(uninitializedSdk.getProcess("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).rejects.toThrow(
+            "SDK must be initialized before getting processes. Call sdk.init() first."
         );
     });
 });

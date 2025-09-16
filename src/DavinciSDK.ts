@@ -5,7 +5,7 @@ import { OrganizationRegistryService } from "./contracts/OrganizationRegistry";
 import { DavinciCrypto } from "./sequencer/DavinciCryptoService";
 import { deployedAddresses } from "./contracts/SmartContractService";
 import { Environment, EnvironmentOptions, resolveConfiguration } from "./core/config";
-import { ProcessOrchestrationService, ProcessConfig, ProcessCreationResult } from "./core/process";
+import { ProcessOrchestrationService, ProcessConfig, ProcessCreationResult, ProcessInfo } from "./core/process";
 
 /**
  * Configuration interface for the DavinciSDK
@@ -180,6 +180,45 @@ export class DavinciSDK {
             );
         }
         return this._processOrchestrator;
+    }
+
+    /**
+     * Gets user-friendly process information from the blockchain.
+     * This method fetches raw contract data and transforms it into a user-friendly format
+     * that matches the ProcessConfig interface used for creation, plus additional runtime data.
+     * 
+     * @param processId - The process ID to fetch
+     * @returns Promise resolving to user-friendly process information
+     * 
+     * @example
+     * ```typescript
+     * const processInfo = await sdk.getProcess("0x1234567890abcdef...");
+     * 
+     * // Access the same fields as ProcessConfig
+     * console.log("Title:", processInfo.title);
+     * console.log("Description:", processInfo.description);
+     * console.log("Questions:", processInfo.questions);
+     * console.log("Census size:", processInfo.census.size);
+     * console.log("Ballot config:", processInfo.ballot);
+     * 
+     * // Plus additional runtime information
+     * console.log("Status:", processInfo.status);
+     * console.log("Creator:", processInfo.creator);
+     * console.log("Start date:", processInfo.startDate);
+     * console.log("End date:", processInfo.endDate);
+     * console.log("Duration:", processInfo.duration, "seconds");
+     * console.log("Time remaining:", processInfo.timeRemaining, "seconds");
+     * 
+     * // Access raw contract data if needed
+     * console.log("Raw data:", processInfo.raw);
+     * ```
+     */
+    async getProcess(processId: string): Promise<ProcessInfo> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before getting processes. Call sdk.init() first.");
+        }
+        
+        return this.processOrchestrator.getProcess(processId);
     }
 
     /**
