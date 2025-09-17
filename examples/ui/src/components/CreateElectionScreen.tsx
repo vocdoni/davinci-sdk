@@ -258,6 +258,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       setProgress(80)
       const startTime = Math.floor(Date.now() / 1000) + 60 // Start time: 1 minute from now
       const duration = Math.floor(endDate.getTime() / 1000) - startTime // Duration in seconds
+      const censusURI = await api.census.getCensusUri(censusRoot)
 
       const txGenerator = registry.newProcess(
         ProcessStatus.READY,
@@ -268,7 +269,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
           censusOrigin: CensusOrigin.CensusOriginMerkleTree,
           maxVotes: censusSize.toString(),
           censusRoot: censusRoot,
-          censusURI: import.meta.env.API_URL + `/censuses/${censusRoot}`,
+          censusURI: censusURI,
         } as Census,
         metadataUrl,
         { x: encryptionPubKey[0], y: encryptionPubKey[1] } as EncryptionKey,

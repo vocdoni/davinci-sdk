@@ -53,6 +53,8 @@ export interface PublishCensusResponse {
     createdAt: string;
     /** ISO timestamp when the census was published. */
     publishedAt: string;
+    /** The constructed URI for accessing the census */
+    uri: string;
 }
 
 export interface Snapshot {

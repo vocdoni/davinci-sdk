@@ -68,7 +68,7 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
                 type: CensusOrigin.CensusOriginMerkleTree,
                 root: publishResult.root,
                 size: censusSize,
-                uri: `${organizerSdk.getConfig().censusUrl}/censuses/${publishResult.root}`
+                uri: publishResult.uri
             },
             ballot: {
                 numFields: 2,
