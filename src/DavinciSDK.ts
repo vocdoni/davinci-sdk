@@ -6,6 +6,8 @@ import { DavinciCrypto } from "./sequencer/DavinciCryptoService";
 import { deployedAddresses } from "./contracts/SmartContractService";
 import { Environment, EnvironmentOptions, resolveConfiguration } from "./core/config";
 import { ProcessOrchestrationService, ProcessConfig, ProcessCreationResult, ProcessInfo } from "./core/process";
+import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from "./core/vote";
+import { VoteStatus } from "./sequencer/api/types";
 
 /**
  * Configuration interface for the DavinciSDK
@@ -67,6 +69,7 @@ export class DavinciSDK {
     private _processRegistry?: ProcessRegistryService;
     private _organizationRegistry?: OrganizationRegistryService;
     private _processOrchestrator?: ProcessOrchestrationService;
+    private _voteOrchestrator?: VoteOrchestrationService;
     private davinciCrypto?: DavinciCrypto;
     private initialized = false;
 
@@ -183,6 +186,20 @@ export class DavinciSDK {
     }
 
     /**
+     * Get the vote orchestration service for simplified voting
+     */
+    get voteOrchestrator(): VoteOrchestrationService {
+        if (!this._voteOrchestrator) {
+            this._voteOrchestrator = new VoteOrchestrationService(
+                this.apiService,
+                () => this.getCrypto(),
+                this.config.signer
+            );
+        }
+        return this._voteOrchestrator;
+    }
+
+    /**
      * Gets user-friendly process information from the blockchain.
      * This method fetches raw contract data and transforms it into a user-friendly format
      * that matches the ProcessConfig interface used for creation, plus additional runtime data.
@@ -288,6 +305,141 @@ export class DavinciSDK {
         }
         
         return this.processOrchestrator.createProcess(config);
+    }
+
+    /**
+     * Submit a vote with simplified configuration.
+     * This is the ultra-easy method for end users that handles all the complex voting workflow internally.
+     * 
+     * The method automatically:
+     * - Fetches process information and validates voting is allowed
+     * - Gets census proof (Merkle tree based)
+     * - Generates cryptographic proofs and encrypts the vote
+     * - Signs and submits the vote to the sequencer
+     * 
+     * @param config - Simplified vote configuration
+     * @returns Promise resolving to vote submission result
+     * 
+     * @example
+     * ```typescript
+     * // Submit a vote with voter's private key
+     * const voteResult = await sdk.submitVote({
+     *   processId: "0x1234567890abcdef...",
+     *   choices: [1, 0], // Vote for option 1 in question 1, option 0 in question 2
+     *   voterKey: "0x1234567890abcdef..." // Voter's private key
+     * });
+     * 
+     * console.log("Vote ID:", voteResult.voteId);
+     * console.log("Status:", voteResult.status);
+     * 
+     * // Submit a vote with a Wallet instance
+     * import { Wallet } from "ethers";
+     * const voterWallet = new Wallet("0x...");
+     * 
+     * const voteResult2 = await sdk.submitVote({
+     *   processId: "0x1234567890abcdef...",
+     *   choices: [2], // Single question vote
+     *   voterKey: voterWallet
+     * });
+     * ```
+     */
+    async submitVote(config: VoteConfig): Promise<VoteResult> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before submitting votes. Call sdk.init() first.");
+        }
+        
+        return this.voteOrchestrator.submitVote(config);
+    }
+
+    /**
+     * Get the status of a submitted vote.
+     * 
+     * @param processId - The process ID
+     * @param voteId - The vote ID returned from submitVote()
+     * @returns Promise resolving to vote status information
+     * 
+     * @example
+     * ```typescript
+     * const statusInfo = await sdk.getVoteStatus(processId, voteId);
+     * console.log("Vote status:", statusInfo.status);
+     * // Possible statuses: "pending", "verified", "aggregated", "processed", "settled", "error"
+     * ```
+     */
+    async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before getting vote status. Call sdk.init() first.");
+        }
+        
+        return this.voteOrchestrator.getVoteStatus(processId, voteId);
+    }
+
+    /**
+     * Check if an address has voted in a process.
+     * 
+     * @param processId - The process ID
+     * @param address - The voter's address
+     * @returns Promise resolving to boolean indicating if the address has voted
+     * 
+     * @example
+     * ```typescript
+     * const hasVoted = await sdk.hasAddressVoted(processId, "0x1234567890abcdef...");
+     * if (hasVoted) {
+     *   console.log("This address has already voted");
+     * }
+     * ```
+     */
+    async hasAddressVoted(processId: string, address: string): Promise<boolean> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before checking vote status. Call sdk.init() first.");
+        }
+        
+        return this.voteOrchestrator.hasAddressVoted(processId, address);
+    }
+
+    /**
+     * Wait for a vote to reach a specific status.
+     * Useful for waiting for vote confirmation and processing.
+     * 
+     * @param processId - The process ID
+     * @param voteId - The vote ID
+     * @param targetStatus - The target status to wait for (default: "settled")
+     * @param timeoutMs - Maximum time to wait in milliseconds (default: 300000 = 5 minutes)
+     * @param pollIntervalMs - Polling interval in milliseconds (default: 5000 = 5 seconds)
+     * @returns Promise resolving to final vote status
+     * 
+     * @example
+     * ```typescript
+     * // Submit vote and wait for it to be settled
+     * const voteResult = await sdk.submitVote({
+     *   processId: "0x1234567890abcdef...",
+     *   choices: [1],
+     *   voterKey: "0x..."
+     * });
+     * 
+     * // Wait for the vote to be fully processed
+     * const finalStatus = await sdk.waitForVoteStatus(
+     *   voteResult.processId,
+     *   voteResult.voteId,
+     *   "settled", // Wait until vote is settled
+     *   300000,    // 5 minute timeout
+     *   5000       // Check every 5 seconds
+     * );
+     * 
+     * console.log("Vote final status:", finalStatus.status);
+     * ```
+     */
+    async waitForVoteStatus(
+        processId: string,
+        voteId: string,
+        targetStatus: VoteStatus = VoteStatus.Settled,
+        timeoutMs: number = 300000,
+        pollIntervalMs: number = 5000
+    ): Promise<VoteStatusInfo> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before waiting for vote status. Call sdk.init() first.");
+        }
+        
+        return this.voteOrchestrator.waitForVoteStatus(processId, voteId, targetStatus, timeoutMs, pollIntervalMs);
     }
 
     /**
