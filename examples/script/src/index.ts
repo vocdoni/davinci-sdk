@@ -19,7 +19,8 @@ import {
     DavinciCrypto,
     DavinciCryptoInputs,
     signProcessCreation,
-    CensusOrigin
+    CensusOrigin,
+    PublishCensusResponse
 } from "../../../src";
 import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
 import {
@@ -508,7 +509,8 @@ async function step8_createProcess(
 async function step9_newProcessOnChain(
     wallet: Wallet,
     args: ApiFlowResult,
-    censusType: CensusOrigin
+    censusType: CensusOrigin,
+    publishResult?: { uri: string }
 ) {
     step(9, "Submit newProcess on‐chain");
     const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
@@ -522,7 +524,7 @@ async function step9_newProcessOnChain(
                 censusOrigin: censusType,
                 maxVotes: args.censusSize.toString(),
                 censusRoot: args.censusRoot,
-                censusURI: CENSUS_API_URL + `/censuses/${args.censusRoot}`
+                censusURI: publishResult?.uri
             } as Census,
             args.metadataUri,
             { x: args.encryptionPubKey[0], y: args.encryptionPubKey[1] } as EncryptionKey,
@@ -934,12 +936,13 @@ async function run() {
     let censusSize: number;
     let participants: TestParticipant[];
     let processIdForCSP: string | undefined;
+    let publishResult: PublishCensusResponse | undefined;
     
     if (userConfig.censusType === CensusOrigin.CensusOriginMerkleTree) {
         // MerkleTree census flow
         const censusId = await step3_createCensus(api);
         participants = await step4_addParticipants(api, censusId, userConfig.numParticipants);
-        const publishResult = await step5_publishCensus(api, censusId);
+        publishResult = await step5_publishCensus(api, censusId);
         const censusData = await step6_fetchCensusSize(api, publishResult.root);
         censusRoot = censusData.censusRoot;
         censusSize = censusData.censusSize;
@@ -973,7 +976,7 @@ async function run() {
         encryptionPubKey,
         stateRoot,
         metadataUri
-    }, userConfig.censusType);
+    }, userConfig.censusType, userConfig.censusType === CensusOrigin.CensusOriginMerkleTree ? publishResult : undefined);
     await step10_fetchOnChain(wallet, processId);
 
     const listProofInputs = await step11_generateProofInputs(

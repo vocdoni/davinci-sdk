@@ -228,6 +228,8 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
         censusOrigin: CensusOrigin.CensusOriginMerkleTree,
       })
 
+      const censusURI = await api.census.getCensusUri(censusRoot)
+
       // Step 5: Submit process on-chain (8 parameters like the script)
       setProgress(70)
       await SmartContractService.executeTx(
@@ -240,7 +242,7 @@ export default function ConfigureVoteScreen({ onBack, onNext, wallet, censusId }
             censusOrigin: CensusOrigin.CensusOriginMerkleTree,
             maxVotes: censusSize.toString(),
             censusRoot: censusRoot,
-            censusURI: import.meta.env.API_URL + `/censuses/${censusRoot}`,
+            censusURI: censusURI,
           } as Census,
           metadataUrl,
           { x: encryptionPubKey[0], y: encryptionPubKey[1] } as EncryptionKey,

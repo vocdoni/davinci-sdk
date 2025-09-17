@@ -32,15 +32,31 @@ const sdk = new DavinciSDK({
 
 await sdk.init();
 
-// Create a voting process
+// 1. Create a census with eligible voters
+const censusId = await sdk.api.census.createCensus();
+
+// Add participants to the census
+const participants = [
+  { key: "0x1234567890123456789012345678901234567890", weight: "1" },
+  { key: "0x2345678901234567890123456789012345678901", weight: "1" },
+  { key: "0x3456789012345678901234567890123456789012", weight: "2" } // Higher weight
+];
+
+await sdk.api.census.addParticipants(censusId, participants);
+
+// Publish the census to get the root
+const publishResult = await sdk.api.census.publishCensus(censusId);
+const censusSize = await sdk.api.census.getCensusSize(publishResult.root);
+
+// 2. Create a voting process
 const process = await sdk.createProcess({
   title: "Community Decision",
   description: "Vote on our next community initiative",
   census: {
     type: CensusOrigin.CensusOriginMerkleTree,
-    root: "0x...", // Your census root
-    size: 100,
-    uri: "ipfs://your-census-uri"
+    root: publishResult.root,
+    size: censusSize,
+    uri: publishResult.uri
   },
   timing: {
     startDate: new Date("2024-12-01T10:00:00Z"),
@@ -56,14 +72,21 @@ const process = await sdk.createProcess({
   }]
 });
 
-// Submit a vote
-const vote = await sdk.submitVote({
+// 3. Submit a vote (using one of the census participants)
+const voterWallet = new Wallet('voter-private-key'); // Must be one of the census participants
+const voterSdk = new DavinciSDK({
+  signer: voterWallet,
+  environment: 'dev'
+});
+await voterSdk.init();
+
+const vote = await voterSdk.submitVote({
   processId: process.processId,
   choices: [1] // Vote for "Tech Workshop"
 });
 
-// Wait for vote confirmation
-const finalStatus = await sdk.waitForVoteStatus(
+// 4. Wait for vote confirmation
+const finalStatus = await voterSdk.waitForVoteStatus(
   vote.processId,
   vote.voteId,
   VoteStatus.Settled
@@ -90,14 +113,13 @@ console.log('Vote confirmed!', finalStatus);
 
 ## ✨ Features
 
-- **🔒 Privacy-First**: Zero-knowledge proofs ensure vote privacy
+- **🔒 Privacy-First**: Homomorphic encryption ensures vote privacy
 - **🛡️ Secure**: Built on battle-tested cryptographic primitives
 - **⚡ Easy Integration**: Simple, intuitive API for developers
 - **🌐 Decentralized**: No central authority controls the voting process
 - **📱 Cross-Platform**: Works in browsers, Node.js, and mobile apps
 - **🔧 TypeScript**: Full type safety and excellent developer experience
 - **🎯 Flexible**: Support for multiple question types and voting modes
-- **📊 Real-time**: Live vote status tracking and results
 
 ## 🛠 Installation
 
@@ -297,9 +319,26 @@ async function completeVotingExample() {
   });
   await sdk.init();
 
-  // 2. Create census (simplified - in practice, use census API)
-  const censusRoot = "0x..."; // Your census root
-  const censusSize = 100;
+  // 2. Create census with eligible voters
+  const censusId = await sdk.api.census.createCensus();
+  
+  // Create voter wallets and add them to census
+  const voters = [];
+  for (let i = 0; i < 5; i++) {
+    const voterWallet = Wallet.createRandom();
+    voters.push(voterWallet);
+  }
+  
+  const participants = voters.map(voter => ({
+    key: voter.address,
+    weight: "1"
+  }));
+  
+  await sdk.api.census.addParticipants(censusId, participants);
+  
+  // Publish the census
+  const publishResult = await sdk.api.census.publishCensus(censusId);
+  const censusSize = await sdk.api.census.getCensusSize(publishResult.root);
 
   // 3. Create voting process
   const process = await sdk.createProcess({
@@ -307,9 +346,9 @@ async function completeVotingExample() {
     description: "Decide how to allocate our community budget",
     census: {
       type: CensusOrigin.CensusOriginMerkleTree,
-      root: censusRoot,
+      root: publishResult.root,
       size: censusSize,
-      uri: `ipfs://census-metadata`
+      uri: publishResult.uri
     },
     timing: {
       startDate: new Date(Date.now() + 60000), // Start in 1 minute
@@ -327,8 +366,8 @@ async function completeVotingExample() {
 
   console.log(`Process created: ${process.processId}`);
 
-  // 4. Vote (using a different wallet)
-  const voterWallet = new Wallet('voter-private-key');
+  // 4. Vote using one of the census participants
+  const voterWallet = voters[0]; // Use first voter from census
   const voterSdk = new DavinciSDK({
     signer: voterWallet,
     environment: 'dev'
@@ -567,14 +606,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Documentation
 
-- [API Documentation](https://docs.vocdoni.io/davinci-sdk)
-- [Protocol Documentation](https://docs.vocdoni.io)
+- [API Documentation](https://github.com/vocdoni/davinci-node/tree/main/api)
+- [Protocol Documentation](https://whitepaper.vocdoni.io)
 - [Examples Repository](https://github.com/vocdoni/davinci-sdk/tree/main/examples)
 
 ### Community
 
-- [Discord](https://discord.gg/vocdoni)
-- [Telegram](https://t.me/vocdoni)
+- [Discord](https://chat.vocdoni.io)
+- [Telegram](https://t.me/vocdoni_community)
 - [Twitter](https://twitter.com/vocdoni)
 
 ### Issues and Bugs
@@ -583,7 +622,7 @@ Please report issues on our [GitHub Issues](https://github.com/vocdoni/davinci-s
 
 ### Professional Support
 
-For enterprise support and custom integrations, contact us at [support@vocdoni.io](mailto:support@vocdoni.io).
+For enterprise support and custom integrations, contact us at [info@vocdoni.io](mailto:info@vocdoni.io).
 
 ---
 
