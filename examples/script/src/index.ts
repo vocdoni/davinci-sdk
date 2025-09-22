@@ -1,903 +1,386 @@
 #!/usr/bin/env ts-node
 
-import { config } from "dotenv";
-import { JsonRpcProvider, Wallet, isAddress } from "ethers";
 import chalk from "chalk";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-import * as readline from "readline";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-import {
-    VocdoniApiService,
-    VoteBallot,
-    DavinciCryptoOutput,
-    CircomProof,
-    Groth16Proof,
-    ProofInputs as Groth16ProofInputs,
-    DavinciCrypto,
-    DavinciCryptoInputs,
-    signProcessCreation,
-    CensusOrigin,
-    PublishCensusResponse
-} from "../../../src";
-import { getElectionMetadataTemplate, BallotMode as ApiBallotMode } from "../../../src/core";
-import {
-    SmartContractService,
-    ProcessRegistryService,
-    ProcessStatus,
-    deployedAddresses as addresses
-} from "../../../src/contracts";
-import { Census, EncryptionKey } from "../../../src/core";
-import { randomBytes } from "crypto";
-
-config();
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, CensusOrigin, ProcessStatus, VoteStatus } from "../../../src";
+import { 
+    getUserConfiguration, 
+    generateTestParticipants,
+    info, 
+    success, 
+    step,
+    SEQUENCER_API_URL,
+    CENSUS_API_URL,
+    RPC_URL,
+    USE_SEQUENCER_ADDRESSES,
+    PRIVATE_KEY,
+    type TestParticipant
+} from "./utils";
 
 // ────────────────────────────────────────────────────────────
-//   CONFIG / CONSTANTS
+//   SDK FACTORY
 // ────────────────────────────────────────────────────────────
-if (!process.env.SEQUENCER_API_URL) throw new Error("SEQUENCER_API_URL environment variable is required");
-if (!process.env.CENSUS_API_URL) throw new Error("CENSUS_API_URL environment variable is required");
-if (!process.env.SEPOLIA_RPC) throw new Error("SEPOLIA_RPC environment variable is required");
-if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY environment variable is required");
-
-const SEQUENCER_API_URL          = process.env.SEQUENCER_API_URL;
-const CENSUS_API_URL             = process.env.CENSUS_API_URL;
-const RPC_URL                    = process.env.SEPOLIA_RPC;
-const PRIVATE_KEY                = process.env.PRIVATE_KEY;
-const FORCE_SEQUENCER_ADDRESSES  = process.env.FORCE_SEQUENCER_ADDRESSES === 'true';
-
-// CSP private key - use from env or generate random one
-const CSP_PRIVATE_KEY = process.env.CSP_PRIVATE_KEY || randomBytes(32).toString('hex');
-
-// ────────────────────────────────────────────────────────────
-//   LOGGING HELPERS
-// ────────────────────────────────────────────────────────────
-const info    = (msg: string) => console.log(chalk.cyan("ℹ"), msg);
-const success = (msg: string) => console.log(chalk.green("✔"), msg);
-const step    = (n: number, msg: string) =>
-    console.log(chalk.yellow.bold(`\n[Step ${n}]`), chalk.white(msg));
-
-// Log the configuration
-if (FORCE_SEQUENCER_ADDRESSES) {
-    info("FORCE_SEQUENCER_ADDRESSES is enabled - will use contract addresses from sequencer info endpoint");
-} else {
-    info("FORCE_SEQUENCER_ADDRESSES is disabled - will use environment variables or default addresses");
-}
-
-// Address variables will be set after fetching sequencer info
-let PROCESS_REGISTRY_ADDR: string;
-let ORGANIZATION_REGISTRY_ADDR: string;
-
-// Ballot mode configuration for two questions with four options each (0-3)
-const BALLOT_MODE: ApiBallotMode = {
-    numFields:        2,  // Two questions
-    maxValue:       "3", // Four options (0,1,2,3)
-    minValue:       "0",
-    uniqueValues: false,
-    costFromWeight:  false,
-    costExponent:    0,
-    maxValueSum:   "6", // Sum of max values for both questions (3 + 3)
-    minValueSum:    "0",
-};
-
-// ────────────────────────────────────────────────────────────
-//   ADDRESS HELPERS
-// ────────────────────────────────────────────────────────────
-/**
- * Gets the process registry address from environment variables, sequencer info, or fallback to deployed addresses
- */
-function getProcessRegistryAddress(sequencerContracts?: Record<string, string>): string {
-    // Check if we should force using sequencer addresses
-    if (FORCE_SEQUENCER_ADDRESSES && sequencerContracts?.process) {
-        if (isAddress(sequencerContracts.process)) {
-            info(`Using PROCESS_REGISTRY_ADDRESS from sequencer info: ${sequencerContracts.process}`);
-            return sequencerContracts.process;
-        } else {
-            throw new Error(`Invalid process registry address from sequencer: ${sequencerContracts.process}`);
-        }
-    }
-    
-    // Check environment variable
-    const envAddress = process.env.PROCESS_REGISTRY_ADDRESS;
-    if (envAddress && isAddress(envAddress)) {
-        info(`Using PROCESS_REGISTRY_ADDRESS from environment: ${envAddress}`);
-        return envAddress;
-    }
-    
-    // Fallback to default
-    info(`Using default process registry address: ${addresses.processRegistry.sepolia}`);
-    return addresses.processRegistry.sepolia;
-}
-
-/**
- * Gets the organization registry address from environment variables, sequencer info, or fallback to deployed addresses
- */
-function getOrganizationRegistryAddress(sequencerContracts?: Record<string, string>): string {
-    // Check if we should force using sequencer addresses
-    if (FORCE_SEQUENCER_ADDRESSES && sequencerContracts?.organization) {
-        if (isAddress(sequencerContracts.organization)) {
-            info(`Using ORGANIZATION_REGISTRY_ADDRESS from sequencer info: ${sequencerContracts.organization}`);
-            return sequencerContracts.organization;
-        } else {
-            throw new Error(`Invalid organization registry address from sequencer: ${sequencerContracts.organization}`);
-        }
-    }
-    
-    // Check environment variable
-    const envAddress = process.env.ORGANIZATION_REGISTRY_ADDRESS;
-    if (envAddress && isAddress(envAddress)) {
-        info(`Using ORGANIZATION_REGISTRY_ADDRESS from environment: ${envAddress}`);
-        return envAddress;
-    }
-    
-    // Fallback to default
-    info(`Using default organization registry address: ${addresses.organizationRegistry.sepolia}`);
-    return addresses.organizationRegistry.sepolia;
-}
-
-// ────────────────────────────────────────────────────────────
-//   BOOTSTRAP CLIENTS
-// ────────────────────────────────────────────────────────────
-function initClients() {
+function createSDKInstance(privateKey: string) {
     const provider = new JsonRpcProvider(RPC_URL);
-    const wallet   = new Wallet(PRIVATE_KEY, provider);
-    const api      = new VocdoniApiService({
-        sequencerURL: SEQUENCER_API_URL,
-        censusURL: CENSUS_API_URL
-    });
-    return { api, provider, wallet };
-}
-
-// ────────────────────────────────────────────────────────────
-//   USER INPUT HELPERS
-// ────────────────────────────────────────────────────────────
-interface UserConfig {
-    numParticipants: number;
-    censusType: CensusOrigin;
-}
-
-function createReadlineInterface(): readline.Interface {
-    return readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-}
-
-async function askQuestion(rl: readline.Interface, question: string): Promise<string> {
-    return new Promise((resolve) => {
-        rl.question(question, (answer) => {
-            resolve(answer.trim());
-        });
-    });
-}
-
-async function getUserConfiguration(): Promise<UserConfig> {
-    const rl = createReadlineInterface();
-    
-    console.log(chalk.bold.cyan("\n📋 Configuration Setup\n"));
-    
-    // Ask for number of participants
-    const numParticipantsAnswer = await askQuestion(
-        rl, 
-        chalk.yellow("How many participants do you want to create? (default: 10): ")
-    );
-    const numParticipants = numParticipantsAnswer ? parseInt(numParticipantsAnswer, 10) : 10;
-    
-    if (isNaN(numParticipants) || numParticipants < 1) {
-        console.log(chalk.red("Invalid number of participants. Using default: 10"));
-    }
-    
-    // Ask for census type
-    console.log(chalk.cyan("\nCensus Type Options:"));
-    console.log("1. MerkleTree (default) - Traditional Merkle tree-based census");
-    console.log("2. CSP - Credential Service Provider census");
-    
-    const censusTypeAnswer = await askQuestion(
-        rl,
-        chalk.yellow("Which census type do you want to use? (1 or 2, default: 1): ")
-    );
-    
-    let censusType: CensusOrigin;
-    if (censusTypeAnswer === "2") {
-        censusType = CensusOrigin.CensusOriginCSP;
-        console.log(chalk.green("✓ Selected: CSP Census"));
-    } else {
-        censusType = CensusOrigin.CensusOriginMerkleTree;
-        console.log(chalk.green("✓ Selected: MerkleTree Census"));
-    }
-    
-    rl.close();
+    const signer = new Wallet(privateKey, provider);
     
     return {
-        numParticipants: Math.max(1, numParticipants || 10),
-        censusType
+        signer,
+        environment: 'dev',
+        sequencerUrl: SEQUENCER_API_URL,
+        censusUrl: CENSUS_API_URL,
+        chain: 'sepolia',
+        useSequencerAddresses: USE_SEQUENCER_ADDRESSES
     };
 }
 
 // ────────────────────────────────────────────────────────────
-//   PARTICIPANTS GENERATOR
+//   MAIN SCRIPT STEPS
 // ────────────────────────────────────────────────────────────
-type TestParticipant = { key: string; weight: string; secret: string };
-function makeTestParticipants(count: number = 10): TestParticipant[] {
-    const wallets = [
-        ...Array.from({ length: count }, () => Wallet.createRandom())
-    ];
-    return wallets.map((w, i) => ({
-        key:    w.address,
-        weight: ((i + 1) * 10).toString(),
-        secret: w.privateKey.replace(/^0x/, ""),
-    }));
+
+/**
+ * Step 1: Initialize the DavinciSDK
+ */
+async function step1_initializeSDK(): Promise<DavinciSDK> {
+    step(1, "Initialize DavinciSDK");
+    
+    const sdk = new DavinciSDK(createSDKInstance(PRIVATE_KEY));
+    await sdk.init();
+    success("SDK initialized successfully");
+    
+    return sdk;
 }
 
-
-// ────────────────────────────────────────────────────────────
-//   STEP 1: Ping the HTTP API
-// ────────────────────────────────────────────────────────────
-async function step1_ping(api: VocdoniApiService) {
-    step(1, "Ping the HTTP API");
-    await api.sequencer.ping();
-    success("API reachable");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 2: Fetch zk‐circuit & on‐chain info
-// ────────────────────────────────────────────────────────────
-interface InfoResp {
-    circuitUrl: string;
-    provingKeyUrl: string;
-    verificationKeyUrl: string;
-    ballotProofWasmHelperUrl: string;
-    ballotProofWasmHelperExecJsUrl: string;
-    contracts: Record<string, string>;
-}
-async function step2_fetchInfo(api: VocdoniApiService): Promise<InfoResp> {
-    step(2, "Fetch zk‐circuit & on‐chain contract info");
-    const info = await api.sequencer.getInfo();
-    console.log("   circuitUrl:", info.circuitUrl);
-    console.log("   contracts:", JSON.stringify(info.contracts, null, 2));
-    return {
-        circuitUrl: info.circuitUrl,
-        provingKeyUrl: info.provingKeyUrl,
-        verificationKeyUrl: info.verificationKeyUrl,
-        ballotProofWasmHelperUrl: info.ballotProofWasmHelperUrl,
-        ballotProofWasmHelperExecJsUrl: info.ballotProofWasmHelperExecJsUrl,
-        contracts: info.contracts,
-    };
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 3: Create Census (MerkleTree only)
-// ────────────────────────────────────────────────────────────
-async function step3_createCensus(api: VocdoniApiService): Promise<string> {
-    step(3, "Create a new census");
-    const censusId = await api.census.createCensus();
-    success(`censusId = ${censusId}`);
-    return censusId;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 4: Add Participants (MerkleTree only)
-// ────────────────────────────────────────────────────────────
-async function step4_addParticipants(api: VocdoniApiService, censusId: string, numParticipants: number) {
-    step(4, "Add participants to census");
-    const participants = makeTestParticipants(numParticipants);
-    await api.census.addParticipants(censusId, participants.map((p: TestParticipant) => ({
-        key:    p.key,
+/**
+ * Step 2: Create Census with participants
+ */
+async function step2_createCensus(sdk: DavinciSDK, numParticipants: number): Promise<{
+    censusRoot: string;
+    censusSize: number;
+    censusUri: string;
+    participants: TestParticipant[];
+}> {
+    step(2, "Create census with participants");
+    
+    // Generate test participants
+    const participants = generateTestParticipants(numParticipants);
+    info(`Generated ${participants.length} test participants`);
+    
+    // Create census
+    const censusId = await sdk.api.census.createCensus();
+    success(`Census created with ID: ${censusId}`);
+    
+    // Add participants to census
+    await sdk.api.census.addParticipants(censusId, participants.map(p => ({
+        key: p.address,
         weight: p.weight
     })));
-    success(`Added ${participants.length} participants`);
-    return participants;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 5: Publish Census (MerkleTree only)
-// ────────────────────────────────────────────────────────────
-async function step5_publishCensus(api: VocdoniApiService, censusId: string) {
-    step(5, "Publish census");
+    success(`Added ${participants.length} participants to census`);
     
-    const publishResult = await api.census.publishCensus(censusId);
-    console.log("   census published with root:", publishResult.root);
-    success("Census published successfully");
+    // Publish census
+    const publishResult = await sdk.api.census.publishCensus(censusId);
+    success(`Census published with root: ${publishResult.root}`);
+    success(`Census URI: ${publishResult.uri}`);
     
-    return publishResult;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 6: Fetch Census Size (MerkleTree only)
-// ────────────────────────────────────────────────────────────
-async function step6_fetchCensusSize(api: VocdoniApiService, censusRoot: string) {
-    step(6, "Fetch census size using census root");
-    const size = await api.census.getCensusSize(censusRoot);
-    console.log(`   root = ${censusRoot}`);
-    console.log(`   size = ${size}`);
-    success("Census ready");
-    return { censusRoot, censusSize: size };
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 3-CSP: Generate CSP Census Root
-// ────────────────────────────────────────────────────────────
-async function step3_generateCSPCensusRoot(
-    wasmExecUrl: string,
-    wasmUrl: string,
-    processId: string,
-    numParticipants: number
-): Promise<{ censusRoot: string; censusSize: number; participants: TestParticipant[] }> {
-    step(3, "Generate CSP census root using cspCensusRoot function");
-    
-    // Initialize DavinciCrypto
-    const davinciCrypto = new DavinciCrypto({ wasmExecUrl, wasmUrl });
-    await davinciCrypto.init();
-    
-    // Generate participants
-    const participants = makeTestParticipants(numParticipants);
-    
-    // Use the new cspCensusRoot function to generate census root
-    const censusRoot = await davinciCrypto.cspCensusRoot(
-        CensusOrigin.CensusOriginCSP,
-        CSP_PRIVATE_KEY
-    );
-
-    success("CSP census root generated successfully using cspCensusRoot function");
+    // Get census size
+    const censusSize = await sdk.api.census.getCensusSize(publishResult.root);
+    success(`Census ready with ${censusSize} participants`);
     
     return {
-        censusRoot,
-        censusSize: participants.length,
+        censusRoot: publishResult.root,
+        censusSize,
+        censusUri: publishResult.uri,
         participants
     };
 }
 
-// ────────────────────────────────────────────────────────────
-//   STEP 7: Push Election Metadata
-// ────────────────────────────────────────────────────────────
-async function step7_pushMetadata(api: VocdoniApiService): Promise<string> {
-    step(7, "Push election metadata");
-    const metadata = getElectionMetadataTemplate();
-    metadata.title.default = "Test Election " + Date.now();
-    metadata.description.default = "This is a test election created via script";
-    
-    // Set up two questions with three options each
-    metadata.questions = [
-        {
-            title: {
-                default: "What is your favorite color?",
-            },
-            description: {
-                default: "Choose your preferred color from the options below",
-            },
-            meta: {},
-            choices: [
-                {
-                    title: {
-                        default: "Red",
-                    },
-                    value: 0,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Blue",
-                    },
-                    value: 1,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Green",
-                    },
-                    value: 2,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Yellow",
-                    },
-                    value: 3,
-                    meta: {},
-                },
-            ],
-        },
-        {
-            title: {
-                default: "What is your preferred transportation?",
-            },
-            description: {
-                default: "Select your most used mode of transportation",
-            },
-            meta: {},
-            choices: [
-                {
-                    title: {
-                        default: "Car",
-                    },
-                    value: 0,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Bike",
-                    },
-                    value: 1,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Public Transport",
-                    },
-                    value: 2,
-                    meta: {},
-                },
-                {
-                    title: {
-                        default: "Walking",
-                    },
-                    value: 3,
-                    meta: {},
-                },
-            ],
-        },
-    ];
-    
-    const hash = await api.sequencer.pushMetadata(metadata);
-    const metadataUrl = api.sequencer.getMetadataUrl(hash);
-    console.log("   metadata hash:", hash);
-    console.log("   metadata url:", metadataUrl);
-    
-    // Verify metadata was stored correctly
-    const storedMetadata = await api.sequencer.getMetadata(hash);
-    console.log("   metadata stored successfully:", storedMetadata.title.default);
-    success("Metadata pushed to storage");
-    return metadataUrl;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 8: Create Process via Sequencer API
-// ────────────────────────────────────────────────────────────
-interface ApiFlowResult {
-    censusId: string;
-    participants: TestParticipant[];
-    censusRoot: string;
-    censusSize: number;
-    processId: string;
-    encryptionPubKey: [string, string];
-    stateRoot: string;
-    metadataUri: string;
-}
-
-async function step8_createProcess(
-    api: VocdoniApiService,
-    provider: JsonRpcProvider,
-    wallet: Wallet,
-    censusRoot: string,
+/**
+ * Step 3: Create voting process using SDK
+ */
+async function step3_createProcess(
+    sdk: DavinciSDK, 
+    censusRoot: string, 
     censusSize: number,
-    censusType: CensusOrigin,
-    existingProcessId?: string
-): Promise<Pick<ApiFlowResult, "processId" | "encryptionPubKey" | "stateRoot">> {
-    step(8, "Create process via Sequencer API");
+    censusUri: string
+): Promise<string> {
+    step(3, "Create voting process");
     
-    // Use existing processId for CSP or get new one for MerkleTree
-    let processId: string;
-    if (existingProcessId) {
-        processId = existingProcessId;
-        console.log("   using existing processId for CSP:", processId);
-    } else {
-        const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-        processId = await registry.getNextProcessId(wallet.address);
-        console.log("   nextProcessId from contract:", processId);
-    }
-    
-    console.log("   censusType:", censusType === CensusOrigin.CensusOriginMerkleTree ? 'MerkleTree' : 'CSP');
-    
-    // Use the new signature format
-    const signature = await signProcessCreation(processId, wallet);
-    
-    const { processId: returnedProcessId, encryptionPubKey, stateRoot } =
-        await api.sequencer.createProcess({ processId, censusRoot, ballotMode: BALLOT_MODE, signature, censusOrigin: censusType });
-    
-    console.log("   processId:", returnedProcessId);
-    console.log("   pubKey:", encryptionPubKey);
-    console.log("   stateRoot:", stateRoot);
-    success("Process created via sequencer");
-    return { processId: returnedProcessId, encryptionPubKey, stateRoot };
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 9: Submit newProcess on‐chain (simplified without organization)
-// ────────────────────────────────────────────────────────────
-async function step9_newProcessOnChain(
-    wallet: Wallet,
-    args: ApiFlowResult,
-    censusType: CensusOrigin,
-    publishResult?: { uri: string }
-) {
-    step(9, "Submit newProcess on‐chain");
-    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-    await SmartContractService.executeTx(
-        registry.newProcess(
-            ProcessStatus.READY,
-            Math.floor(Date.now() / 1000) + 60,
-            3600 * 8,
-            BALLOT_MODE,
+    const processResult = await sdk.createProcess({
+        title: "Simplified Test Election " + Date.now(),
+        description: "A simplified test election created with DavinciSDK",
+        census: {
+            type: CensusOrigin.CensusOriginMerkleTree,
+            root: censusRoot,
+            size: censusSize,
+            uri: censusUri
+        },
+        ballot: {
+            numFields: 2,        // Two questions
+            maxValue: "3",       // Four options (0,1,2,3)
+            minValue: "0",
+            uniqueValues: false,
+            costFromWeight: false,
+            costExponent: 0,
+            maxValueSum: "6",    // Sum of max values (3 + 3)
+            minValueSum: "0"
+        },
+        timing: {
+            startDate: new Date(Date.now() + 60 * 1000), // Start in 1 minute
+            duration: 3600 * 8 // 8 hours duration
+        },
+        questions: [
             {
-                censusOrigin: censusType,
-                maxVotes: args.censusSize.toString(),
-                censusRoot: args.censusRoot,
-                censusURI: publishResult?.uri
-            } as Census,
-            args.metadataUri,
-            { x: args.encryptionPubKey[0], y: args.encryptionPubKey[1] } as EncryptionKey,
-            BigInt(args.stateRoot)
-        )
-    );
-    success("On‐chain newProcess mined");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 10: Fetch on‐chain Process
-// ────────────────────────────────────────────────────────────
-async function step10_fetchOnChain(wallet: Wallet, processId: string) {
-    step(10, "Fetch on‐chain process");
-    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-    const stored = await registry.getProcess(processId);
-    console.log(
-        "   on‐chain getProcess:\n",
-        JSON.stringify(stored, (_k, v) =>
-            typeof v === "bigint" ? v.toString() : v, 2
-        )
-    );
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 11: Generate zk‐SNARK inputs (Go/WASM) for each voter
-// ────────────────────────────────────────────────────────────
-async function step11_generateProofInputs(
-    wasmExecUrl: string,
-    wasmUrl: string,
-    participants: TestParticipant[],
-    processId: string,
-    encryptionPubKey: [string, string],
-    ballotMode: ApiBallotMode
-): Promise<Array<{
-    key: string;
-    voteID: string;
-    out: DavinciCryptoOutput;
-    circomInputs: Groth16ProofInputs;
-}>> {
-    step(11, "Generate zk‐SNARK inputs for each participant");
-    const sdk = new DavinciCrypto({ wasmExecUrl, wasmUrl });
-    await sdk.init();
-
-    const list: Array<{
-        key: string;
-        voteID: string;
-        out: DavinciCryptoOutput;
-        circomInputs: Groth16ProofInputs;
-    }> = [];
-
-    for (const p of participants) {
-        const kHex = randomBytes(8).toString("hex");
-        const kStr = BigInt("0x" + kHex).toString();
-
-        // Generate random choices for each question (0-3)
-        const randomChoice1 = Math.floor(Math.random() * 4);
-        const randomChoice2 = Math.floor(Math.random() * 4);
-
-        // Create arrays of 4 positions each (1 for selected choice, 0 for others)
-        const question1Choices = Array(4).fill("0");
-        const question2Choices = Array(4).fill("0");
-        question1Choices[randomChoice1] = "1";
-        question2Choices[randomChoice2] = "1";
-
-        // Log the participant's choices
-        const colorChoice = ["Red", "Blue", "Green", "Yellow"][randomChoice1];
-        const transportChoice = ["Car", "Bike", "Public Transport", "Walking"][randomChoice2];
-        console.log(`   • ${p.key} votes:
-     Q1: ${colorChoice} (choice array: [${question1Choices.join(", ")}])
-     Q2: ${transportChoice} (choice array: [${question2Choices.join(", ")}])`);
-
-        const inputs: DavinciCryptoInputs = {
-            address:       p.key.replace(/^0x/, ""),
-            processID:     processId.replace(/^0x/, ""),
-            encryptionKey: encryptionPubKey,
-            k:             kStr,
-            ballotMode,
-            weight:        p.weight,
-            fieldValues:   [...question1Choices, ...question2Choices], // Array of 8 positions
-        };
-
-        const out = await sdk.proofInputs(inputs);
-        console.log(`   • ${p.key} → voteId=${out.voteId}`);
-        list.push({
-            key:          p.key,
-            voteID:       out.voteId,
-            out,
-            circomInputs: out.circomInputs as Groth16ProofInputs
-        });
-    }
-
-    success("All zk‐SNARK inputs generated");
-    return list;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 12: Run fullProve + verify for each input
-// ────────────────────────────────────────────────────────────
-async function step12_runGroth16Proofs(
-    circuitUrl: string,
-    provingKeyUrl: string,
-    verificationKeyUrl: string,
-    list: Array<{ key: string; voteID: string; circomInputs: Groth16ProofInputs }>
-): Promise<Array<{ key: string; voteID: string; proof: Groth16Proof; publicSignals: string[] }>> {
-    step(12, "Run snarkjs.fullProve + verify for each input");
-    const pg = new CircomProof({
-        wasmUrl: circuitUrl,
-        zkeyUrl: provingKeyUrl,
-        vkeyUrl: verificationKeyUrl
+                title: "What is your favorite color?",
+                description: "Choose your preferred color",
+                choices: [
+                    { title: "Red", value: 0 },
+                    { title: "Blue", value: 1 },
+                    { title: "Green", value: 2 },
+                    { title: "Yellow", value: 3 }
+                ]
+            },
+            {
+                title: "What is your preferred transportation?",
+                description: "Select your most used mode of transportation",
+                choices: [
+                    { title: "Car", value: 0 },
+                    { title: "Bike", value: 1 },
+                    { title: "Public Transport", value: 2 },
+                    { title: "Walking", value: 3 }
+                ]
+            }
+        ]
     });
-
-    const results: Array<{ key: string; voteID: string; proof: Groth16Proof; publicSignals: string[] }> = [];
-    for (const { key, voteID, circomInputs } of list) {
-        info(` - generating proof for ${key}`);
-        const { proof, publicSignals } = await pg.generate(circomInputs);
-        info(` - verifying proof for ${key}`);
-        const ok = await pg.verify(proof, publicSignals);
-        if (!ok) throw new Error(`Proof verification failed for ${key}`);
-        success(`✓ proof OK for ${key}`);
-        results.push({ key, voteID, proof, publicSignals });
-    }
-    success("All proofs generated & verified");
-    return results;
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 13: Wait for process to be ready
-// ────────────────────────────────────────────────────────────
-async function step13_waitForProcess(
-    api: VocdoniApiService,
-    processId: string
-) {
-    step(13, "Wait for process to be ready");
     
-    while (true) {
-        const process = await api.sequencer.getProcess(processId);
-        if (process.isAcceptingVotes) {
-            success("Process is ready to accept votes");
-            break;
-        }
-
-        info("Process not ready yet, checking again in 10 seconds...");
-        await new Promise(r => setTimeout(r, 10000));
-    }
+    success(`Process created with ID: ${processResult.processId}`);
+    info(`Transaction hash: ${processResult.transactionHash}`);
+    
+    return processResult.processId;
 }
 
-// ────────────────────────────────────────────────────────────
-//   STEP 14: Submit one vote per participant
-// ────────────────────────────────────────────────────────────
-export async function step14_submitVotes(
-    api: VocdoniApiService,
-    wallet: Wallet,
-    processId: string,
-    censusRoot: string,
-    participants: TestParticipant[],
-    listProofInputs: Array<{ key: string; voteID: string; out: DavinciCryptoOutput; circomInputs: Groth16ProofInputs }>,
-    proofs: Array<{ proof: Groth16Proof; publicSignals: string[] }>,
-    censusType: CensusOrigin,
-    wasmExecUrl: string,
-    wasmUrl: string
-): Promise<string[]> {
-    step(14, "Submit votes for each participant");
-    const voteIds: string[] = [];
-
-    // Initialize DavinciCrypto for CSP proofs if needed
-    let davinciCrypto: DavinciCrypto | null = null;
-    if (censusType === CensusOrigin.CensusOriginCSP) {
-        davinciCrypto = new DavinciCrypto({ wasmExecUrl, wasmUrl });
-        await davinciCrypto.init();
-        info("DavinciCrypto initialized for CSP proof generation");
-    }
-
-    for (let i = 0; i < participants.length; i++) {
-        const p = participants[i];
-        const { out, voteID } = listProofInputs[i];
-        const { proof }       = proofs[i];
-
-        let censusProof: any;
-
-        if (censusType === CensusOrigin.CensusOriginMerkleTree) {
-            // 1) Merkle proof
-            censusProof = await api.census.getCensusProof(censusRoot, p.key);
-            info(`  [${i + 1}/${participants.length}] Using Merkle census proof for ${p.key}`);
-        } else {
-            // 1) CSP proof - generate using cspSign
-            info(`  [${i + 1}/${participants.length}] Generating CSP census proof for ${p.key}`);
+/**
+ * Step 4: Wait for process to be ready
+ */
+async function step4_waitForProcessReady(sdk: DavinciSDK, processId: string): Promise<void> {
+    step(4, "Wait for process to be ready");
+    
+    // Wait a bit for the process to be indexed by the sequencer
+    info("Waiting for process to be indexed by sequencer...");
+    await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds initially
+    
+    let attempts = 0;
+    const maxAttempts = 20; // Maximum 20 attempts (about 2 minutes)
+    
+    while (attempts < maxAttempts) {
+        try {
+            const process = await sdk.api.sequencer.getProcess(processId);
+            if (process.isAcceptingVotes) {
+                success("Process is ready to accept votes");
+                return;
+            }
             
-            const cspProofData = await davinciCrypto!.cspSign(
-                censusType,
-                CSP_PRIVATE_KEY,
-                processId.replace(/^0x/, ""),
-                p.key.replace(/^0x/, "")
-            );
+            info(`Process found but not ready yet (status: ${process.status}), checking again in 10 seconds...`);
+            await new Promise(r => setTimeout(r, 10000));
             
-            // Create CSP census proof structure (cspProofData is now already parsed)
-            censusProof = {
-                root: cspProofData.root,
-                address: cspProofData.address,
-                weight: p.weight,
-                censusOrigin: censusType,
-                processId: cspProofData.processId,
-                publicKey: cspProofData.publicKey,
-                signature: cspProofData.signature
-            };
-            
-            info(`  [${i + 1}/${participants.length}] CSP proof generated for ${p.key}`);
+        } catch (error: any) {
+            attempts++;
+            if (error.code === 40007) { // Process not found
+                info(`Process not indexed yet (attempt ${attempts}/${maxAttempts}), waiting 10 seconds...`);
+                await new Promise(r => setTimeout(r, 10000));
+            } else {
+                throw error; // Re-throw other errors
+            }
         }
-
-        // 2) Map ciphertexts → VoteBallot shape
-        const voteBallot: VoteBallot = {
-            curveType: out.ballot.curveType,
-            ciphertexts: out.ballot.ciphertexts,
-        };
-
-        // 3) Sign the raw bytes of the voteID
-        const sigBytes = Uint8Array.from(Buffer.from(voteID.replace(/^0x/, ""), "hex"));
-        const participantWallet = new Wallet("0x" + p.secret);
-        const signature = await participantWallet.signMessage(sigBytes);
-
-        // 4) Build and submit
-        const voteRequest = {
-            processId,
-            censusProof,
-            ballot:          voteBallot,
-            ballotProof:     { pi_a: proof.pi_a, pi_b: proof.pi_b, pi_c: proof.pi_c, protocol: proof.protocol },
-            ballotInputsHash: out.ballotInputsHash,
-            address:         participantWallet.address,
-            signature,
-            voteId:          voteID,
-        };
-
-        await api.sequencer.submitVote(voteRequest);
-        success(`  [${i + 1}/${participants.length}] vote submitted successfully`);
-        voteIds.push(voteID);
-
-        // throttle
-        await new Promise((r) => setTimeout(r, 200));
     }
+    
+    throw new Error(`Process ${processId} was not ready after ${maxAttempts} attempts. Please check if the transaction was mined successfully.`);
+}
 
+/**
+ * Step 5: Submit votes for all participants
+ */
+async function step5_submitVotes(
+    sdk: DavinciSDK, 
+    processId: string, 
+    participants: TestParticipant[]
+): Promise<string[]> {
+    step(5, "Submit votes for all participants");
+    
+    const voteIds: string[] = [];
+    
+    for (let i = 0; i < participants.length; i++) {
+        const participant = participants[i];
+        
+        // Generate random choices for each question (0-3)
+        const choice1 = Math.floor(Math.random() * 4);
+        const choice2 = Math.floor(Math.random() * 4);
+        
+        // Create arrays of 4 positions each (1 for selected choice, 0 for others)
+        const question1Choices = Array(4).fill(0);
+        const question2Choices = Array(4).fill(0);
+        question1Choices[choice1] = 1;
+        question2Choices[choice2] = 1;
+        
+        const colorChoice = ["Red", "Blue", "Green", "Yellow"][choice1];
+        const transportChoice = ["Car", "Bike", "Public Transport", "Walking"][choice2];
+        
+        info(`[${i + 1}/${participants.length}] ${participant.address} voting: ${colorChoice}, ${transportChoice}`);
+        info(`   Choice arrays: Q1=[${question1Choices.join(", ")}], Q2=[${question2Choices.join(", ")}]`);
+        
+        try {
+            // Create a temporary SDK instance for this participant
+            const participantSDK = new DavinciSDK(createSDKInstance(participant.privateKey));
+            await participantSDK.init();
+            
+            const voteResult = await participantSDK.submitVote({
+                processId,
+                choices: [...question1Choices, ...question2Choices] // Array of 8 positions
+            });
+            
+            voteIds.push(voteResult.voteId);
+            success(`[${i + 1}/${participants.length}] Vote submitted: ${voteResult.voteId}`);
+            
+            // Small delay between votes
+            await new Promise(r => setTimeout(r, 1000));
+            
+        } catch (error) {
+            console.error(chalk.red(`Failed to submit vote for ${participant.address}:`), error);
+            throw error;
+        }
+    }
+    
+    success(`All ${voteIds.length} votes submitted successfully`);
     return voteIds;
 }
 
-async function step15_checkVotes(
-    api: VocdoniApiService,
-    processId: string,
+/**
+ * Step 6: Wait for all votes to be processed
+ */
+async function step6_waitForVotesProcessed(
+    sdk: DavinciSDK, 
+    processId: string, 
     voteIds: string[]
-) {
-    step(15, "Check vote status for all submitted votes");
-
-    for (let i = 0; i < voteIds.length; i++) {
-        const voteId = voteIds[i];
-        try {
-            const status = await api.sequencer.getVoteStatus(processId, voteId);
-            success(`  [${i + 1}/${voteIds.length}] Vote ${voteId} status: ${status.status}`);
-        } catch (error) {
-            throw new Error(`Failed to get status for vote ${voteId}: ${error}`);
-        }
+): Promise<void> {
+    step(6, "Wait for all votes to be processed");
+    
+    info("Waiting for all votes to reach 'settled' status...");
+    info("Note: This may take several minutes depending on the sequencer processing time.");
+    
+    // Track vote statuses
+    const voteStatuses = new Map<string, string>();
+    const timeoutMs = 600000; // 10 minutes
+    const pollIntervalMs = 5000; // 5 seconds
+    const startTime = Date.now();
+    
+    // Initialize vote statuses
+    for (const voteId of voteIds) {
+        voteStatuses.set(voteId, "unknown");
     }
     
-    success("All vote statuses retrieved successfully");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 16: Wait for votes to be processed
-// ────────────────────────────────────────────────────────────
-async function step16_waitForVotesProcessed(
-    api: VocdoniApiService,
-    processId: string,
-    voteIds: string[]
-) {
-    step(16, "Wait for votes to be settled");
-    
-    while (true) {
+    // Poll until all votes are settled or timeout
+    while (Date.now() - startTime < timeoutMs) {
         let allSettled = true;
         let settledCount = 0;
-
+        
+        // Check each vote status
         for (let i = 0; i < voteIds.length; i++) {
-            const status = await api.sequencer.getVoteStatus(processId, voteIds[i]);
-            if (status.status === "settled") {
-                settledCount++;
-            } else {
-                allSettled = false;
+            const voteId = voteIds[i];
+            const previousStatus = voteStatuses.get(voteId);
+            
+            try {
+                const statusInfo = await sdk.getVoteStatus(processId, voteId);
+                const currentStatus = statusInfo.status;
+                
+                // Print status change
+                if (currentStatus !== previousStatus) {
+                    info(`[${i + 1}/${voteIds.length}] Vote ${voteId}: ${previousStatus} → ${currentStatus}`);
+                    voteStatuses.set(voteId, currentStatus);
+                }
+                
+                if (currentStatus === VoteStatus.Settled) {
+                    settledCount++;
+                } else {
+                    allSettled = false;
+                }
+                
+                // Check for error status
+                if (currentStatus === VoteStatus.Error) {
+                    throw new Error(`Vote ${voteId} failed with error status`);
+                }
+                
+            } catch (error) {
+                throw new Error(`Failed to get status for vote ${voteId}: ${error}`);
             }
         }
-
+        
+        // Check if all votes are settled
         if (allSettled) {
-            success("All votes have been settled");
-            break;
+            success(`All ${voteIds.length} votes have been settled successfully!`);
+            return;
         }
-
-        info(`${settledCount}/${voteIds.length} votes settled, checking again in 10 seconds...`);
-        await new Promise(r => setTimeout(r, 10000));
+        
+        // Show progress
+        info(`Progress: ${settledCount}/${voteIds.length} votes settled`);
+        
+        // Wait before next check
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     }
+    
+    // Timeout reached - throw error
+    const finalStatuses = Array.from(voteStatuses.entries())
+        .map(([voteId, status]) => `${voteId}: ${status}`)
+        .join(', ');
+    
+    throw new Error(`Timeout reached! Not all votes settled within ${timeoutMs / 1000} seconds. Final statuses: ${finalStatuses}`);
 }
 
-// ────────────────────────────────────────────────────────────
-//   STEP 17: Verify votes
-// ────────────────────────────────────────────────────────────
-async function step17_verifyVotes(
-    api: VocdoniApiService,
-    processId: string,
-    participants: TestParticipant[],
-    listProofInputs: Array<{ out: DavinciCryptoOutput }>
-) {
-    step(17, "Verify votes");
+/**
+ * Step 7: End process and show results
+ */
+async function step7_endProcessAndShowResults(
+    sdk: DavinciSDK, 
+    processId: string, 
+    expectedVoteCount: number
+): Promise<void> {
+    step(7, "End process and show results");
     
-    // Check that participants have voted
-    for (let i = 0; i < participants.length; i++) {
-        const hasVoted = await api.sequencer.hasAddressVoted(processId, participants[i].key);
-        if (!hasVoted) {
-            throw new Error(`Expected participant ${participants[i].key} to have voted`);
-        }
-        success(`  [${i + 1}/${participants.length}] Verified participant ${participants[i].key} has voted`);
-    }
-
-    // Note: Nullifier-based verification removed in new version
-    success("Vote verification completed using hasAddressVoted");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 18: End Process
-// ────────────────────────────────────────────────────────────
-async function step18_endProcess(wallet: Wallet, processId: string, expectedVoteCount: number) {
-    step(18, "End the voting process");
-    
-    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-    
-    // Wait for vote count to match expected votes
+    // Wait for all votes to be counted on-chain
     info("Waiting for all votes to be counted on-chain...");
     while (true) {
-        const process = await registry.getProcess(processId);
+        const process = await sdk.getProcess(processId);
         const currentVotes = Number(process.voteCount);
         
         if (currentVotes === expectedVoteCount) {
             success(`Vote count matches expected (${currentVotes}/${expectedVoteCount})`);
             break;
         }
-
+        
         info(`Current vote count: ${currentVotes}/${expectedVoteCount}, checking again in 10 seconds...`);
         await new Promise(r => setTimeout(r, 10000));
     }
     
     // End the process
-    await SmartContractService.executeTx(
-        registry.setProcessStatus(processId, ProcessStatus.ENDED)
-    );
+    info("Ending the voting process...");
+    await sdk.processes.setProcessStatus(processId, ProcessStatus.ENDED);
     success("Process ended successfully");
     
     // Wait for results to be set
     info("Waiting for process results to be set...");
     const resultsReady = new Promise<void>((resolve) => {
-        registry.onProcessResultsSet((id: string, sender: string, result: bigint[]) => {
+        sdk.processes.onProcessResultsSet((id: string, sender: string, result: bigint[]) => {
             if (id.toLowerCase() === processId.toLowerCase()) {
-                console.log(`Results set by ${sender} with ${result.length} values`);
+                console.log(`Results set by ${sender}`);
                 resolve();
             }
         });
     });
     await resultsReady;
     success("Process results have been set");
-}
-
-// ────────────────────────────────────────────────────────────
-//   STEP 19: Show Final Results
-// ────────────────────────────────────────────────────────────
-async function step19_showResults(wallet: Wallet, processId: string) {
-    step(19, "Show final election results");
     
-    const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-    const process = await registry.getProcess(processId);
+    // Show final results
+    const process = await sdk.processes.getProcess(processId);
     
-    console.log(chalk.cyan("\nElection Results:"));
+    console.log(chalk.cyan("\n🗳️  Election Results:"));
     console.log(chalk.yellow("\nQuestion 1: What is your favorite color?"));
     console.log("Red (0):              ", process.result[0].toString());
     console.log("Blue (1):             ", process.result[1].toString());
@@ -910,128 +393,56 @@ async function step19_showResults(wallet: Wallet, processId: string) {
     console.log("Public Transport (2): ", process.result[6].toString());
     console.log("Walking (3):          ", process.result[7].toString());
     
-    success("Results retrieved successfully");
+    success("Results displayed successfully");
 }
 
 // ────────────────────────────────────────────────────────────
-//   ENTRY POINT
+//   MAIN ENTRY POINT
 // ────────────────────────────────────────────────────────────
 async function run() {
-    console.log(chalk.bold.cyan("\n🚀 Starting end-to-end demo…\n"));
-
-    // Get user configuration
-    const userConfig = await getUserConfiguration();
-    console.log(chalk.green(`\n✓ Configuration set: ${userConfig.numParticipants} participants, ${userConfig.censusType === CensusOrigin.CensusOriginMerkleTree ? 'MerkleTree' : 'CSP'} census\n`));
-
-    const { api, provider, wallet } = initClients();
-
-    await step1_ping(api);
-    const info = await step2_fetchInfo(api);
+    console.log(chalk.bold.cyan("\n🚀 Starting DavinciSDK Demo\n"));
     
-    // Set contract addresses based on environment variables and sequencer info
-    PROCESS_REGISTRY_ADDR = getProcessRegistryAddress(info.contracts);
-    ORGANIZATION_REGISTRY_ADDR = getOrganizationRegistryAddress(info.contracts);
-    
-    let censusRoot: string;
-    let censusSize: number;
-    let participants: TestParticipant[];
-    let processIdForCSP: string | undefined;
-    let publishResult: PublishCensusResponse | undefined;
-    
-    if (userConfig.censusType === CensusOrigin.CensusOriginMerkleTree) {
-        // MerkleTree census flow
-        const censusId = await step3_createCensus(api);
-        participants = await step4_addParticipants(api, censusId, userConfig.numParticipants);
-        publishResult = await step5_publishCensus(api, censusId);
-        const censusData = await step6_fetchCensusSize(api, publishResult.root);
-        censusRoot = censusData.censusRoot;
-        censusSize = censusData.censusSize;
-    } else {
-        // CSP census flow - need processId first, so we'll get it and then generate CSP root
-        const registry = new ProcessRegistryService(PROCESS_REGISTRY_ADDR, wallet);
-        processIdForCSP = await registry.getNextProcessId(wallet.address);
+    try {
+        // Get user configuration
+        const userConfig = await getUserConfiguration();
+        console.log(chalk.green(`\n✓ Configuration: ${userConfig.numParticipants} participants, MerkleTree census\n`));
         
-        const cspData = await step3_generateCSPCensusRoot(
-            info.ballotProofWasmHelperExecJsUrl,
-            info.ballotProofWasmHelperUrl,
-            processIdForCSP,
-            userConfig.numParticipants
-        );
-        censusRoot = cspData.censusRoot;
-        censusSize = cspData.censusSize;
-        participants = cspData.participants;
+        // Step 1: Initialize SDK
+        const sdk = await step1_initializeSDK();
+        
+        // Step 2: Create census
+        const { censusRoot, censusSize, censusUri, participants } = await step2_createCensus(sdk, userConfig.numParticipants);
+        
+        // Step 3: Create process
+        const processId = await step3_createProcess(sdk, censusRoot, censusSize, censusUri);
+        
+        // Step 4: Wait for process to be ready
+        await step4_waitForProcessReady(sdk, processId);
+        
+        // Step 5: Submit votes
+        const voteIds = await step5_submitVotes(sdk, processId, participants);
+        
+        // Step 6: Wait for votes to be processed
+        await step6_waitForVotesProcessed(sdk, processId, voteIds);
+        
+        // Step 7: End process and show results
+        await step7_endProcessAndShowResults(sdk, processId, participants.length);
+        
+        console.log(chalk.bold.green("\n✅ Demo completed successfully!\n"));
+        console.log(chalk.cyan(`📊 Process ID: ${processId}`));
+        console.log(chalk.cyan(`🗳️  Total votes: ${participants.length}`));
+        console.log(chalk.cyan(`🎯 Vote IDs: ${voteIds.length} votes submitted`));
+        
+    } catch (error) {
+        console.error(chalk.red("\n❌ Demo failed:"), error);
+        process.exit(1);
     }
-
-    const metadataUri = await step7_pushMetadata(api);
-    const { processId, encryptionPubKey, stateRoot } =
-        await step8_createProcess(api, provider, wallet, censusRoot, censusSize, userConfig.censusType, processIdForCSP);
-
-    // 9–10) on‐chain process registry (simplified without organization)
-    await step9_newProcessOnChain(wallet, {
-        censusId: "",
-        participants,
-        censusRoot,
-        censusSize,
-        processId,
-        encryptionPubKey,
-        stateRoot,
-        metadataUri
-    }, userConfig.censusType, userConfig.censusType === CensusOrigin.CensusOriginMerkleTree ? publishResult : undefined);
-    await step10_fetchOnChain(wallet, processId);
-
-    const listProofInputs = await step11_generateProofInputs(
-        info.ballotProofWasmHelperExecJsUrl,
-        info.ballotProofWasmHelperUrl,
-        participants,
-        processId,
-        encryptionPubKey,
-        BALLOT_MODE
-    );
-
-    const proofs = await step12_runGroth16Proofs(
-        info.circuitUrl,
-        info.provingKeyUrl,
-        info.verificationKeyUrl,
-        listProofInputs
-    );
-
-    // Wait for process to be ready
-    await step13_waitForProcess(api, processId);
-
-    const voteIds = await step14_submitVotes(
-        api,
-        wallet,
-        processId,
-        censusRoot,
-        participants,
-        listProofInputs,
-        proofs,
-        userConfig.censusType,
-        info.ballotProofWasmHelperExecJsUrl,
-        info.ballotProofWasmHelperUrl
-    );
-
-    console.log(chalk.bold.cyan("\nVote IDs:"), voteIds);
-
-    await step15_checkVotes(api, processId, voteIds);
-
-    // Wait for votes to be processed
-    await step16_waitForVotesProcessed(api, processId, voteIds);
-
-    // Verify votes
-    await step17_verifyVotes(api, processId, participants, listProofInputs);
-
-    // End the process
-    await step18_endProcess(wallet, processId, participants.length);
-
-    // Show final results
-    await step19_showResults(wallet, processId);
-
-    console.log(chalk.bold.green("\n✅ All done!\n"));
+    
     process.exit(0);
 }
 
-run().catch((err) => {
-    console.error(chalk.red("❌ Fatal error:"), err);
+// Run the demo
+run().catch((error) => {
+    console.error(chalk.red("❌ Fatal error:"), error);
     process.exit(1);
 });

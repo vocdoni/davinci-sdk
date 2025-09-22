@@ -278,13 +278,8 @@ export class VoteOrchestrationService {
      * Validate user choices based on ballot mode
      */
     private validateChoices(choices: number[], ballotMode: BallotMode): void {
-        const numFields = ballotMode.numFields;
         const maxValue = parseInt(ballotMode.maxValue);
         const minValue = parseInt(ballotMode.minValue);
-        
-        if (choices.length !== numFields) {
-            throw new Error(`Expected ${numFields} choices, got ${choices.length}`);
-        }
 
         // Validate each choice is within the allowed range
         for (let i = 0; i < choices.length; i++) {
