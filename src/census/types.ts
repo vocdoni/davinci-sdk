@@ -44,6 +44,93 @@ export interface CSPCensusProof extends BaseCensusProof {
 
 export type CensusProof = MerkleCensusProof | CSPCensusProof;
 
+/**
+ * Provider function for Merkle census proofs
+ */
+export type MerkleCensusProofProvider = (args: {
+    censusRoot: string;
+    address: string;
+}) => Promise<MerkleCensusProof>;
+
+/**
+ * Provider function for CSP census proofs
+ */
+export type CSPCensusProofProvider = (args: {
+    processId: string;
+    address: string;
+}) => Promise<CSPCensusProof>;
+
+/**
+ * Configuration for census proof providers
+ */
+export interface CensusProviders {
+    /** Optional override for Merkle census proof fetching */
+    merkle?: MerkleCensusProofProvider;
+    /** Required provider for CSP census proof generation */
+    csp?: CSPCensusProofProvider;
+}
+
+/**
+ * Runtime validation functions for census proofs
+ */
+
+/**
+ * Type guard to check if an object is a valid BaseCensusProof
+ */
+function isBaseCensusProof(proof: any): proof is BaseCensusProof {
+    return (
+        !!proof &&
+        typeof proof.root === 'string' &&
+        typeof proof.address === 'string' &&
+        typeof proof.weight === 'string' &&
+        typeof proof.censusOrigin === 'number' &&
+        Object.values(CensusOrigin).includes(proof.censusOrigin)
+    );
+}
+
+/**
+ * Type guard to check if an object is a valid MerkleCensusProof
+ */
+export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
+    return (
+        isBaseCensusProof(proof) &&
+        proof.censusOrigin === CensusOrigin.CensusOriginMerkleTree &&
+        typeof (proof as any).value === 'string' &&
+        typeof (proof as any).siblings === 'string'
+    );
+}
+
+/**
+ * Type guard to check if an object is a valid CSPCensusProof
+ */
+export function isCSPCensusProof(proof: any): proof is CSPCensusProof {
+    return (
+        isBaseCensusProof(proof) &&
+        proof.censusOrigin === CensusOrigin.CensusOriginCSP &&
+        typeof (proof as any).processId === 'string' &&
+        typeof (proof as any).publicKey === 'string' &&
+        typeof (proof as any).signature === 'string'
+    );
+}
+
+/**
+ * Assertion function to validate MerkleCensusProof
+ */
+export function assertMerkleCensusProof(proof: unknown): asserts proof is MerkleCensusProof {
+    if (!isMerkleCensusProof(proof)) {
+        throw new Error("Invalid Merkle census proof payload");
+    }
+}
+
+/**
+ * Assertion function to validate CSPCensusProof
+ */
+export function assertCSPCensusProof(proof: unknown): asserts proof is CSPCensusProof {
+    if (!isCSPCensusProof(proof)) {
+        throw new Error("Invalid CSP census proof payload");
+    }
+}
+
 export interface PublishCensusResponse {
     /** The Merkle root of the published census (hex-prefixed). */
     root: string;

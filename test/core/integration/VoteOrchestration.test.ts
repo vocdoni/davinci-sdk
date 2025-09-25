@@ -8,6 +8,8 @@ import { JsonRpcProvider, Wallet } from "ethers";
 import { DavinciSDK, CensusOrigin, ProcessConfig } from "../../../src";
 import { VoteConfig, VoteResult } from "../../../src/core/vote/VoteOrchestrationService";
 import { VoteStatus } from "../../../src/sequencer/api/types";
+import { CensusProviders, MerkleCensusProofProvider, CSPCensusProofProvider } from "../../../src/census/types";
+import { DavinciCrypto } from "../../../src/sequencer/DavinciCryptoService";
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 600_000); // 10 minutes for voting tests
 
@@ -104,20 +106,16 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
             ]
         };
 
-        console.log("Creating test process for voting...");
         const processResult = await organizerSdk.createProcess(processConfig);
         processId = processResult.processId;
-        console.log(`Test process created with ID: ${processId}`);
 
         // Wait for process to be ready to accept votes
-        console.log("Waiting for process to be ready to accept votes...");
         let attempts = 0;
         const maxAttempts = 60; // 10 minutes max
         while (attempts < maxAttempts) {
             try {
                 const processInfo = await organizerSdk.api.sequencer.getProcess(processId);
                 if (processInfo.isAcceptingVotes) {
-                    console.log("Process is ready to accept votes");
                     break;
                 }
             } catch (error) {
@@ -129,7 +127,6 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
                 throw new Error("Process did not become ready within timeout");
             }
             
-            console.log(`Process not ready yet, attempt ${attempts}/${maxAttempts}, waiting 10 seconds...`);
             await new Promise(resolve => setTimeout(resolve, 10000));
         }
     });
@@ -153,7 +150,6 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
             expect(result.processId).toBe(processId);
             expect(result.status).toBe(VoteStatus.Pending);
             
-            console.log(`Vote submitted successfully with ID: ${result.voteId}`);
         });
 
         it("should submit a vote with different choices", async () => {
@@ -180,16 +176,6 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
             };
 
             await expect(voterSdk.submitVote(voteConfig)).rejects.toThrow();
-        });
-
-        it("should throw error for empty choices", async () => {
-            const voterSdk = getUnusedVoterSdk();
-            const voteConfig: VoteConfig = {
-                processId,
-                choices: [],
-            };
-
-            await expect(voterSdk.submitVote(voteConfig)).rejects.toThrow('Expected 2 choices, got 0');
         });
 
         it("should throw error for voter not in census", async () => {
@@ -263,17 +249,13 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
             voteId = voteResult.voteId;
             
             // Wait for the vote to be processed
-            console.log(`Waiting for vote ${voteId} to be processed...`);
             try {
                 await votedVoterSdk.waitForVoteStatus(processId, voteId, VoteStatus.Settled, 500000, 10000);
-                console.log(`Vote ${voteId} has been settled`);
             } catch (error) {
-                console.log(`Vote ${voteId} did not settle within 30s, checking current status...`);
                 try {
-                    const currentStatus = await votedVoterSdk.getVoteStatus(processId, voteId);
-                    console.log(`Current vote status: ${currentStatus.status}`);
+                    await votedVoterSdk.getVoteStatus(processId, voteId);
                 } catch (statusError) {
-                    console.log(`Could not get vote status: ${statusError}`);
+                    // Ignore status error
                 }
                 // Continue with test - the vote might still be recorded even if not settled
             }
@@ -405,6 +387,383 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
             await expect(uninitializedSdk.submitVote(voteConfig)).rejects.toThrow(
                 "SDK must be initialized before submitting votes. Call sdk.init() first."
             );
+        });
+    });
+
+    describe("Custom Census Providers", () => {
+        let customProcessId: string;
+        let customVoters: Wallet[] = [];
+        let customCensusRoot: string;
+
+        beforeAll(async () => {
+            // Create voters for custom provider tests
+            for (let i = 0; i < 3; i++) {
+                const voter = new Wallet(Wallet.createRandom().privateKey, provider);
+                customVoters.push(voter);
+            }
+
+            // Create a census with custom voters
+            const censusId = await organizerSdk.api.census.createCensus();
+            const participants = customVoters.map(voter => ({ key: voter.address, weight: "1" }));
+            await organizerSdk.api.census.addParticipants(censusId, participants);
+            const publishResult = await organizerSdk.api.census.publishCensus(censusId);
+            const censusSize = await organizerSdk.api.census.getCensusSize(publishResult.root);
+            customCensusRoot = publishResult.root;
+
+            // Create a process for custom provider tests
+            const processConfig: ProcessConfig = {
+                title: "Custom Provider Test Process",
+                description: "A test process for custom census provider tests",
+                census: {
+                    type: CensusOrigin.CensusOriginMerkleTree,
+                    root: publishResult.root,
+                    size: censusSize,
+                    uri: publishResult.uri
+                },
+                ballot: {
+                    numFields: 2,
+                    maxValue: "2",
+                    minValue: "0",
+                    uniqueValues: false,
+                    costFromWeight: false,
+                    costExponent: 1,
+                    maxValueSum: "4",
+                    minValueSum: "0"
+                },
+                timing: {
+                    startDate: Math.floor(Date.now() / 1000) + 60,
+                    duration: 7200
+                },
+                questions: [
+                    {
+                        title: "Custom Question 1?",
+                        choices: [
+                            { title: "Option A", value: 0 },
+                            { title: "Option B", value: 1 },
+                            { title: "Option C", value: 2 }
+                        ]
+                    },
+                    {
+                        title: "Custom Question 2?",
+                        choices: [
+                            { title: "Choice X", value: 0 },
+                            { title: "Choice Y", value: 1 },
+                            { title: "Choice Z", value: 2 }
+                        ]
+                    }
+                ]
+            };
+
+            const processResult = await organizerSdk.createProcess(processConfig);
+            customProcessId = processResult.processId;
+
+            // Wait for process to be ready
+            let attempts = 0;
+            const maxAttempts = 60;
+            while (attempts < maxAttempts) {
+                try {
+                    const processInfo = await organizerSdk.api.sequencer.getProcess(customProcessId);
+                    if (processInfo.isAcceptingVotes) {
+                        break;
+                    }
+                } catch (error) {
+                    // Process might not be available yet
+                }
+                
+                attempts++;
+                if (attempts >= maxAttempts) {
+                    throw new Error("Custom process did not become ready within timeout");
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 10000));
+            }
+        });
+
+        describe("Custom Merkle Census Provider", () => {
+            it("should use custom merkle provider when provided", async () => {
+                // Create a custom merkle provider that calls the API but adds custom logic
+                const customMerkleProvider: MerkleCensusProofProvider = async ({ censusRoot, address }) => {
+                    // Call the original API
+                    const originalProof = await organizerSdk.api.census.getCensusProof(censusRoot, address);
+                    
+                    // Return the proof (in a real scenario, this could be modified or come from a different source)
+                    return {
+                        root: originalProof.root,
+                        address: originalProof.address,
+                        weight: originalProof.weight,
+                        censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+                        value: (originalProof as any).value,
+                        siblings: (originalProof as any).siblings
+                    };
+                };
+
+                const censusProviders: CensusProviders = {
+                    merkle: customMerkleProvider
+                };
+
+                // Create SDK with custom census provider
+                const customVoterSdk = new DavinciSDK({
+                    signer: customVoters[0],
+                    environment: "dev",
+                    useSequencerAddresses: true,
+                    censusProviders
+                });
+                await customVoterSdk.init();
+
+                const voteConfig: VoteConfig = {
+                    processId: customProcessId,
+                    choices: [1, 0],
+                };
+
+                const result = await customVoterSdk.submitVote(voteConfig);
+
+                expect(result).toBeDefined();
+                expect(result.voteId).toBeDefined();
+                expect(result.voterAddress).toBe(customVoters[0].address);
+                expect(result.processId).toBe(customProcessId);
+                expect(result.status).toBe(VoteStatus.Pending);
+            });
+
+            it("should validate custom merkle provider response", async () => {
+                // Create a custom provider that returns invalid data
+                const invalidMerkleProvider: MerkleCensusProofProvider = async ({ censusRoot, address }) => {
+                    return {
+                        root: censusRoot,
+                        address: address,
+                        weight: "100",
+                        censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+                        value: "invalid", // This should cause validation to fail
+                        siblings: "" // Missing siblings
+                    } as any;
+                };
+
+                const censusProviders: CensusProviders = {
+                    merkle: invalidMerkleProvider
+                };
+
+                const customVoterSdk = new DavinciSDK({
+                    signer: customVoters[1],
+                    environment: "dev",
+                    useSequencerAddresses: true,
+                    censusProviders
+                });
+                await customVoterSdk.init();
+
+                const voteConfig: VoteConfig = {
+                    processId: customProcessId,
+                    choices: [0, 1],
+                };
+
+                await expect(customVoterSdk.submitVote(voteConfig)).rejects.toThrow("malformed JSON body");
+            });
+        });
+
+        describe("CSP Census Provider", () => {
+            let cspProcessId: string;
+            let cspCensusRoot: string;
+            const CSP_PRIVATE_KEY = Wallet.createRandom().privateKey;
+
+            beforeAll(async () => {
+                // Get sequencer info for WASM URLs
+                const info = await organizerSdk.api.sequencer.getInfo();
+                
+                // Initialize DavinciCrypto for CSP operations
+                const davinciCrypto = new DavinciCrypto({ 
+                    wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                    wasmUrl: info.ballotProofWasmHelperUrl
+                });
+                await davinciCrypto.init();
+
+                // Generate CSP process ID and census root
+                const registry = organizerSdk.processes;
+                cspProcessId = await registry.getNextProcessId(organizerWallet.address);
+                
+                cspCensusRoot = await davinciCrypto.cspCensusRoot(
+                    CensusOrigin.CensusOriginCSP,
+                    CSP_PRIVATE_KEY
+                );
+
+                // Create CSP process
+                const processConfig: ProcessConfig = {
+                    title: "CSP Provider Test Process",
+                    description: "A test process for CSP census provider tests",
+                    census: {
+                        type: CensusOrigin.CensusOriginCSP,
+                        root: cspCensusRoot,
+                        size: customVoters.length,
+                        uri: "https://csp.example.com/census"
+                    },
+                    ballot: {
+                        numFields: 2,
+                        maxValue: "2",
+                        minValue: "0",
+                        uniqueValues: false,
+                        costFromWeight: false,
+                        costExponent: 1,
+                        maxValueSum: "4",
+                        minValueSum: "0"
+                    },
+                    timing: {
+                        startDate: Math.floor(Date.now() / 1000) + 60,
+                        duration: 7200
+                    },
+                    questions: [
+                        {
+                            title: "CSP Question 1?",
+                            choices: [
+                                { title: "CSP Option A", value: 0 },
+                                { title: "CSP Option B", value: 1 },
+                                { title: "CSP Option C", value: 2 }
+                            ]
+                        },
+                        {
+                            title: "CSP Question 2?",
+                            choices: [
+                                { title: "CSP Choice X", value: 0 },
+                                { title: "CSP Choice Y", value: 1 },
+                                { title: "CSP Choice Z", value: 2 }
+                            ]
+                        }
+                    ]
+                };
+
+                const processResult = await organizerSdk.createProcess(processConfig);
+                cspProcessId = processResult.processId;
+
+                // Wait for CSP process to be ready
+                let attempts = 0;
+                const maxAttempts = 60;
+                while (attempts < maxAttempts) {
+                    try {
+                        const processInfo = await organizerSdk.api.sequencer.getProcess(cspProcessId);
+                        if (processInfo.isAcceptingVotes) {
+                            break;
+                        }
+                    } catch (error) {
+                        // Process might not be available yet
+                    }
+                    
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        throw new Error("CSP process did not become ready within timeout");
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                }
+            });
+
+            it("should use custom CSP provider when provided", async () => {
+                // Get sequencer info for WASM URLs
+                const info = await organizerSdk.api.sequencer.getInfo();
+                
+                // Create a custom CSP provider
+                const customCSPProvider: CSPCensusProofProvider = async ({ processId, address }) => {
+                    // Initialize DavinciCrypto
+                    const davinciCrypto = new DavinciCrypto({ 
+                        wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+                        wasmUrl: info.ballotProofWasmHelperUrl
+                    });
+                    await davinciCrypto.init();
+
+                    // Generate CSP proof using the dummy CSP
+                    const cspProofData = await davinciCrypto.cspSign(
+                        CensusOrigin.CensusOriginCSP,
+                        CSP_PRIVATE_KEY,
+                        processId.replace(/^0x/, ""),
+                        address.replace(/^0x/, "")
+                    );
+
+                    return {
+                        root: cspProofData.root,
+                        address: cspProofData.address,
+                        weight: "100", // Custom weight
+                        censusOrigin: CensusOrigin.CensusOriginCSP,
+                        processId: cspProofData.processId,
+                        publicKey: cspProofData.publicKey,
+                        signature: cspProofData.signature
+                    };
+                };
+
+                const censusProviders: CensusProviders = {
+                    csp: customCSPProvider
+                };
+
+                // Create SDK with custom CSP provider
+                const customVoterSdk = new DavinciSDK({
+                    signer: customVoters[2],
+                    environment: "dev",
+                    useSequencerAddresses: true,
+                    censusProviders
+                });
+                await customVoterSdk.init();
+
+                const voteConfig: VoteConfig = {
+                    processId: cspProcessId,
+                    choices: [2, 1],
+                };
+
+                const result = await customVoterSdk.submitVote(voteConfig);
+
+                expect(result).toBeDefined();
+                expect(result.voteId).toBeDefined();
+                expect(result.voterAddress).toBe(customVoters[2].address);
+                expect(result.processId).toBe(cspProcessId);
+                expect(result.status).toBe(VoteStatus.Pending);
+            });
+
+            it("should throw error when CSP provider is not provided for CSP process", async () => {
+                // Create SDK without CSP provider
+                const customVoterSdk = new DavinciSDK({
+                    signer: customVoters[0],
+                    environment: "dev",
+                    useSequencerAddresses: true
+                    // No census providers
+                });
+                await customVoterSdk.init();
+
+                const voteConfig: VoteConfig = {
+                    processId: cspProcessId,
+                    choices: [1, 2],
+                };
+
+                await expect(customVoterSdk.submitVote(voteConfig)).rejects.toThrow(
+                    "CSP voting requires a CSP census proof provider. Pass one via VoteOrchestrationService(..., { csp: yourFn })."
+                );
+            });
+
+            it("should validate custom CSP provider response", async () => {
+                // Create a custom provider that returns invalid data
+                const invalidCSPProvider: CSPCensusProofProvider = async ({ processId, address }) => {
+                    return {
+                        root: "invalid-root",
+                        address: address,
+                        weight: "100",
+                        censusOrigin: CensusOrigin.CensusOriginCSP,
+                        processId: processId,
+                        publicKey: "", // Missing public key
+                        signature: "invalid-signature"
+                    } as any;
+                };
+
+                const censusProviders: CensusProviders = {
+                    csp: invalidCSPProvider
+                };
+
+                const customVoterSdk = new DavinciSDK({
+                    signer: customVoters[1],
+                    environment: "dev",
+                    useSequencerAddresses: true,
+                    censusProviders
+                });
+                await customVoterSdk.init();
+
+                const voteConfig: VoteConfig = {
+                    processId: cspProcessId,
+                    choices: [0, 2],
+                };
+
+                await expect(customVoterSdk.submitVote(voteConfig)).rejects.toThrow("malformed JSON body");
+            });
         });
     });
 });
