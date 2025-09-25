@@ -80,7 +80,6 @@ describe("VocdoniSequencerService Integration", () => {
     it("should check if an address has voted", async () => {
         const processes = await sequencerService.listProcesses();
         if (processes.length === 0) {
-            console.log('Skipping test: no processes available');
             return;
         }
 
@@ -93,7 +92,6 @@ describe("VocdoniSequencerService Integration", () => {
     it("should get process details with sequencer stats", async () => {
         const processes = await sequencerService.listProcesses();
         if (processes.length === 0) {
-            console.log('Skipping test: no processes available');
             return;
         }
 

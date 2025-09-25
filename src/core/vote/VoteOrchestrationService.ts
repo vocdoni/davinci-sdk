@@ -2,7 +2,7 @@ import { Signer } from "ethers";
 import { VocdoniApiService } from "../api/ApiService";
 import { DavinciCrypto, DavinciCryptoInputs, DavinciCryptoOutput } from "../../sequencer/DavinciCryptoService";
 import { CircomProof, Groth16Proof, ProofInputs as Groth16ProofInputs } from "../../sequencer/CircomProofService";
-import { CensusOrigin, CensusProof } from "../../census/types";
+import { CensusOrigin, CensusProof, CensusProviders, assertMerkleCensusProof, assertCSPCensusProof } from "../../census/types";
 import { VoteRequest, VoteBallot, VoteProof, VoteStatus } from "../../sequencer/api/types";
 import { BallotMode } from "../types";
 
@@ -62,7 +62,8 @@ export class VoteOrchestrationService {
     constructor(
         private apiService: VocdoniApiService,
         private getCrypto: () => Promise<DavinciCrypto>,
-        private signer: Signer
+        private signer: Signer,
+        private censusProviders: CensusProviders = {}
     ) {}
 
     /**
@@ -87,13 +88,7 @@ export class VoteOrchestrationService {
         // 2. Get voter address from signer
         const voterAddress = await this.signer.getAddress();
 
-        // 3. Check if voter has already voted
-        const hasVoted = await this.apiService.sequencer.hasAddressVoted(config.processId, voterAddress);
-        if (hasVoted) {
-            throw new Error("This address has already voted in this process");
-        }
-
-        // 4. Get census proof (weight will be retrieved from the proof)
+        // 3. Get census proof (weight will be retrieved from the proof)
         const censusProof = await this.getCensusProof(
             process.census.censusOrigin,
             process.census.censusRoot,
@@ -101,7 +96,7 @@ export class VoteOrchestrationService {
             config.processId
         );
 
-        // 5. Generate vote proof inputs
+        // 4. Generate vote proof inputs
         const { voteId, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
             config.processId,
             voterAddress,
@@ -112,13 +107,13 @@ export class VoteOrchestrationService {
             config.randomness
         );
 
-        // 6. Generate zk-SNARK proof
+        // 5. Generate zk-SNARK proof
         const { proof } = await this.generateZkProof(circomInputs);
 
-        // 7. Sign the vote
+        // 6. Sign the vote
         const signature = await this.signVote(voteId);
 
-        // 8. Submit the vote
+        // 7. Submit the vote
         await this.submitVoteRequest({
             processId: config.processId,
             censusProof,
@@ -130,7 +125,7 @@ export class VoteOrchestrationService {
             voteId
         });
 
-        // 9. Get initial vote status
+        // 8. Get initial vote status
         const status = await this.apiService.sequencer.getVoteStatus(config.processId, voteId);
 
         return {
@@ -212,18 +207,37 @@ export class VoteOrchestrationService {
         processId: string
     ): Promise<CensusProof> {
         if (censusOrigin === CensusOrigin.CensusOriginMerkleTree) {
-            // Get Merkle proof from census API
-            return this.apiService.census.getCensusProof(censusRoot, voterAddress);
-        } else if (censusOrigin === CensusOrigin.CensusOriginCSP) {
-            // Generate CSP proof using DavinciCrypto
-            const crypto = await this.getCrypto();
-            
-            // For CSP, we need the CSP private key - this should be configured in the service
-            // For now, we'll throw an error indicating this needs to be configured
-            throw new Error("CSP voting requires CSP private key configuration. Please use the full voting workflow for CSP processes.");
-        } else {
-            throw new Error(`Unsupported census origin: ${censusOrigin}`);
+            // Use custom provider if present, otherwise default API
+            if (this.censusProviders.merkle) {
+                const proof = await this.censusProviders.merkle({
+                    censusRoot,
+                    address: voterAddress,
+                });
+                assertMerkleCensusProof(proof);
+                return proof;
+            } else {
+                const proof = await this.apiService.census.getCensusProof(censusRoot, voterAddress);
+                // In case the API returns a looser type, still verify:
+                assertMerkleCensusProof(proof);
+                return proof;
+            }
         }
+
+        if (censusOrigin === CensusOrigin.CensusOriginCSP) {
+            if (!this.censusProviders.csp) {
+                throw new Error(
+                    "CSP voting requires a CSP census proof provider. Pass one via VoteOrchestrationService(..., { csp: yourFn })."
+                );
+            }
+            const proof = await this.censusProviders.csp({
+                processId,
+                address: voterAddress,
+            });
+            assertCSPCensusProof(proof);
+            return proof;
+        }
+
+        throw new Error(`Unsupported census origin: ${censusOrigin}`);
     }
 
     /**

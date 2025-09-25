@@ -8,6 +8,7 @@ import { Environment, EnvironmentOptions, resolveConfiguration } from "./core/co
 import { ProcessOrchestrationService, ProcessConfig, ProcessCreationResult, ProcessInfo } from "./core/process";
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from "./core/vote";
 import { VoteStatus } from "./sequencer/api/types";
+import { CensusProviders } from "./census/types";
 
 /**
  * Configuration interface for the DavinciSDK
@@ -39,6 +40,9 @@ export interface DavinciSDKConfig {
     
     /** Whether to force using contract addresses from sequencer info (optional, defaults to false) */
     useSequencerAddresses?: boolean;
+    
+    /** Custom census proof providers (optional) */
+    censusProviders?: CensusProviders;
 }
 
 
@@ -72,6 +76,7 @@ export class DavinciSDK {
     private _voteOrchestrator?: VoteOrchestrationService;
     private davinciCrypto?: DavinciCrypto;
     private initialized = false;
+    private censusProviders: CensusProviders;
 
     constructor(config: DavinciSDKConfig) {
         // Resolve configuration based on environment and custom overrides
@@ -99,6 +104,9 @@ export class DavinciSDK {
             sequencerURL: this.config.sequencerUrl,
             censusURL: this.config.censusUrl
         });
+
+        // Store census providers
+        this.censusProviders = config.censusProviders || {};
 
         // Contract services will be initialized lazily when accessed
     }
@@ -193,7 +201,8 @@ export class DavinciSDK {
             this._voteOrchestrator = new VoteOrchestrationService(
                 this.apiService,
                 () => this.getCrypto(),
-                this.config.signer
+                this.config.signer,
+                this.censusProviders
             );
         }
         return this._voteOrchestrator;

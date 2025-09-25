@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import { JsonRpcProvider, Wallet } from "ethers";
+import { Wallet } from "ethers";
 import chalk from "chalk";
 import * as readline from "readline";
 import { CensusOrigin } from "../../../src";
@@ -19,6 +19,9 @@ export const CENSUS_API_URL = process.env.CENSUS_API_URL;
 export const RPC_URL = process.env.SEPOLIA_RPC;
 export const PRIVATE_KEY = process.env.PRIVATE_KEY;
 export const USE_SEQUENCER_ADDRESSES = process.env.FORCE_SEQUENCER_ADDRESSES === 'true';
+
+// CSP private key - use from env or generate random one
+export const CSP_PRIVATE_KEY = process.env.CSP_PRIVATE_KEY || Wallet.createRandom().privateKey;
 
 // ────────────────────────────────────────────────────────────
 //   LOGGING HELPERS
@@ -76,9 +79,24 @@ export async function getUserConfiguration(): Promise<UserConfig> {
         console.log(chalk.red("Invalid number of participants. Using default: 5"));
     }
     
-    // For now, only support MerkleTree census (CSP support can be added later)
-    const censusType = CensusOrigin.CensusOriginMerkleTree;
-    console.log(chalk.green("✓ Using MerkleTree Census"));
+    // Ask for census type
+    console.log(chalk.cyan("\nCensus Type Options:"));
+    console.log("1. MerkleTree (default) - Traditional Merkle tree-based census");
+    console.log("2. CSP - Credential Service Provider census");
+    
+    const censusTypeAnswer = await askQuestion(
+        rl,
+        chalk.yellow("Which census type do you want to use? (1 or 2, default: 1): ")
+    );
+    
+    let censusType: CensusOrigin;
+    if (censusTypeAnswer === "2") {
+        censusType = CensusOrigin.CensusOriginCSP;
+        console.log(chalk.green("✓ Selected: CSP Census"));
+    } else {
+        censusType = CensusOrigin.CensusOriginMerkleTree;
+        console.log(chalk.green("✓ Selected: MerkleTree Census"));
+    }
     
     rl.close();
     
