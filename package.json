@@ -37,8 +37,39 @@
     "test:census": "yarn test:census:integration",
     "test:census:integration": "jest 'test/census/integration' --runInBand"
   },
-  "author": "Vocdoni",
+  "description": "A powerful TypeScript SDK for building decentralized voting applications on the Vocdoni DaVinci protocol with homomorphic encryption and zero-knowledge proofs",
+  "keywords": [
+    "vocdoni",
+    "davinci",
+    "voting",
+    "blockchain",
+    "ethereum",
+    "decentralized",
+    "privacy",
+    "homomorphic-encryption",
+    "zero-knowledge",
+    "zk-snarks",
+    "typescript",
+    "sdk",
+    "elections",
+    "governance",
+    "cryptography",
+    "web3"
+  ],
+  "author": {
+    "name": "Vocdoni",
+    "email": "info@vocdoni.io",
+    "url": "https://vocdoni.io"
+  },
   "license": "MIT",
+  "homepage": "https://github.com/vocdoni/davinci-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vocdoni/davinci-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vocdoni/davinci-sdk/issues"
+  },
   "dependencies": {
     "@ethereumjs/common": "^4.4.0",
     "@vocdoni/davinci-contracts": "0.0.18",
