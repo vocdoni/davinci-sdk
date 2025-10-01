@@ -258,11 +258,6 @@ export class VoteOrchestrationService {
     }> {
         const crypto = await this.getCrypto();
 
-        // Generate randomness for vote encryption
-        // TODO: This hardcoded randomness will be replaced with proper random generation in the future
-        const randomness = customRandomness || "a1b2c3d4e5f6789a";
-        const k = BigInt("0x" + randomness).toString();
-
         // Validate choices based on ballot mode
         this.validateChoices(choices, ballotMode);
         
@@ -273,11 +268,18 @@ export class VoteOrchestrationService {
             address: voterAddress.replace(/^0x/, ""),
             processID: processId.replace(/^0x/, ""),
             encryptionKey: [encryptionKey.x, encryptionKey.y],
-            k,
             ballotMode,
             weight,
             fieldValues
         };
+
+        // Only include k if customRandomness is provided
+        if (customRandomness) {
+            // Check if customRandomness already has 0x prefix
+            const hexRandomness = customRandomness.startsWith("0x") ? customRandomness : "0x" + customRandomness;
+            const k = BigInt(hexRandomness).toString();
+            inputs.k = k;
+        }
 
         const cryptoOutput = await crypto.proofInputs(inputs);
 
@@ -332,12 +334,19 @@ export class VoteOrchestrationService {
         return { proof, publicSignals };
     }
 
+    private hexToBytes(hex: string): Uint8Array {
+        const clean = hex.replace(/^0x/, "");
+        if (clean.length % 2) throw new Error("Invalid hex length");
+        const out = new Uint8Array(clean.length / 2);
+        for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i*2, 2), 16);
+        return out;
+    }
+
     /**
      * Sign the vote using the signer
      */
     private async signVote(voteId: string): Promise<string> {
-        const sigBytes = Uint8Array.from(Buffer.from(voteId.replace(/^0x/, ""), "hex"));
-        return this.signer.signMessage(sigBytes);
+        return this.signer.signMessage(this.hexToBytes(voteId));
     }
 
     /**

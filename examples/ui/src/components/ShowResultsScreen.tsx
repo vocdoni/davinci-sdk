@@ -9,10 +9,9 @@ import {
   LinearProgress,
   Typography,
 } from '@mui/material'
-import { ProcessRegistryService, VocdoniApiService } from '@vocdoni/davinci-sdk'
-import { JsonRpcSigner, Wallet } from 'ethers'
+import { DavinciSDK } from '@vocdoni/davinci-sdk'
+import { JsonRpcSigner, Wallet, JsonRpcProvider } from 'ethers'
 import { useEffect, useState } from 'react'
-import { getProcessRegistryAddress, logAddressConfiguration } from '../utils/contractAddresses'
 
 interface ShowResultsScreenProps {
   onBack: () => void
@@ -42,37 +41,46 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
   useEffect(() => {
     const loadResults = async () => {
       try {
-        // Log address configuration
-        logAddressConfiguration()
-        
         const detailsStr = localStorage.getItem('electionDetails')
         if (!detailsStr) throw new Error('Election details not found')
         const details = JSON.parse(detailsStr)
 
-        // Get metadata for question and choice labels
-        const api = new VocdoniApiService({
-          sequencerURL: import.meta.env.SEQUENCER_API_URL,
-          censusURL: import.meta.env.CENSUS_API_URL
+        // Check if wallet already has a provider (e.g., MetaMask)
+        // If not, connect it to the RPC provider from env
+        const walletInstance = wallet as Wallet
+        let signerWithProvider = walletInstance
+        if (!walletInstance.provider) {
+          if (!import.meta.env.RPC_URL) {
+            throw new Error('RPC_URL environment variable is required')
+          }
+          const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
+          signerWithProvider = walletInstance.connect(provider)
+        }
+
+        // Initialize SDK
+        const sdk = new DavinciSDK({
+          signer: signerWithProvider,
+          environment: 'dev',
+          sequencerUrl: import.meta.env.SEQUENCER_API_URL,
+          censusUrl: import.meta.env.CENSUS_API_URL,
+          chain: 'sepolia',
+          useSequencerAddresses: true
         })
-        
-        // Fetch sequencer info to get contract addresses if needed
-        const sequencerInfo = await api.sequencer.getInfo()
+        await sdk.init()
 
-        // Get process results
-        const registry = new ProcessRegistryService(getProcessRegistryAddress(sequencerInfo.contracts), wallet)
-        const electionProcess = await registry.getProcess(details.processId)
-        const metadata = await api.sequencer.getMetadata(details.metadataUrl.split('/').pop() || '')
+        // Get process info using SDK - this includes both metadata and results
+        const processInfo = await sdk.getProcess(details.processId)
 
-        // Map results to questions and choices
-        const questions = metadata.questions.map((question, questionIndex) => {
+        // Map results to questions and choices using process info
+        const questions = processInfo.questions.map((question, questionIndex) => {
           const startIndex = questionIndex * question.choices.length
           const endIndex = startIndex + question.choices.length
-          const questionResults = electionProcess.result.slice(startIndex, endIndex)
+          const questionResults = processInfo.result.slice(startIndex, endIndex)
 
           return {
-            title: question.title.default,
+            title: typeof question.title === 'string' ? question.title : question.title.default,
             choices: question.choices.map((choice, choiceIndex) => ({
-              title: choice.title.default,
+              title: typeof choice.title === 'string' ? choice.title : choice.title.default,
               votes: Number(questionResults[choiceIndex]),
             })),
           }

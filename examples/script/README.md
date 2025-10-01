@@ -54,8 +54,8 @@ Before running this script, ensure you have:
 
 1. **Clone the repository** (if not already done):
    ```bash
-   git clone https://github.com/vocdoni/DAVINCI-sdk.git
-   cd DAVINCI-sdk
+   git clone https://github.com/vocdoni/davinci-sdk.git
+   cd davinci-sdk
    ```
 
 2. **Install root dependencies and build**:
@@ -364,14 +364,22 @@ If you encounter issues:
 1. Check the [troubleshooting section](#troubleshooting) above
 2. Review the console output for specific error messages
 3. Verify all prerequisites are met
-4. Check the [Vocdoni documentation](https://davinci.vote/)
+4. Check the [Vocdoni documentation](https://docs.vocdoni.io/)
 
 ## Additional Resources
 
 ### Documentation
-- [Vocdoni Documentation](https://davinci.vote/)
-- [DAVINCI SDK Reference](https://github.com/vocdoni/davinci-sdk)
+- [Vocdoni Documentation](https://docs.vocdoni.io/)
+- [DaVinci SDK Documentation](https://github.com/vocdoni/davinci-sdk)
+- [API Documentation](https://github.com/vocdoni/davinci-node/tree/main/api)
+- [Protocol Documentation](https://whitepaper.vocdoni.io)
 - [Smart Contract Documentation](https://github.com/vocdoni/davinci-contracts)
+
+### Community
+- [Discord](https://chat.vocdoni.io)
+- [Telegram](https://t.me/vocdoni_community)
+- [Twitter](https://twitter.com/vocdoni)
+- [Website](https://vocdoni.io)
 
 ### Related Examples
 - [UI Example](../ui/) - Web interface for the voting system
@@ -380,7 +388,19 @@ If you encounter issues:
 ### Technical Resources
 - [zk-SNARKs Explained](https://z.cash/technology/zksnarks/)
 - [Ethereum Development](https://ethereum.org/developers/)
-- [Vocdoni Whitepaper](https://whitepaper.vocdoni.io/)
+- [Vocdoni Whitepaper](https://whitepaper.vocdoni.io)
+
+### Support
+
+For issues and questions:
+- Check the [GitHub Issues](https://github.com/vocdoni/davinci-sdk/issues)
+- Join the [Vocdoni Discord](https://chat.vocdoni.io)
+- Join our [Telegram](https://t.me/vocdoni_community)
+- Follow us on [Twitter](https://twitter.com/vocdoni)
+- Read the [Vocdoni Documentation](https://docs.vocdoni.io/)
+- Visit our [Website](https://vocdoni.io)
+
+For enterprise support and custom integrations, contact us at [info@vocdoni.io](mailto:info@vocdoni.io).
 
 ---
 
