@@ -7,7 +7,7 @@ export interface DavinciCryptoInputs {
     address: string;
     processID: string;
     encryptionKey: [string, string];
-    k: string;
+    k?: string;
     weight: string;
     fieldValues: string[];
     ballotMode: BallotMode;
@@ -40,12 +40,12 @@ export interface CSPSignOutput {
 }
 
 // internal shapes returned by the Go runtime
-interface RawResult { error?: string; data?: string; }
+interface RawResult<T = any> { error?: string; data?: T; }
 interface GoDavinciCryptoWasm {
-    proofInputs(inputJson: string): RawResult;
-    cspSign(censusOrigin: number, privKey: string, processId: string, address: string): RawResult;
-    cspVerify(cspProof: string): RawResult;
-    cspCensusRoot(censusOrigin: number, privKey: string): RawResult;
+    proofInputs(inputJson: string): RawResult<DavinciCryptoOutput>;
+    cspSign(censusOrigin: number, privKey: string, processId: string, address: string): RawResult<CSPSignOutput>;
+    cspVerify(cspProof: string): RawResult<boolean>;
+    cspCensusRoot(censusOrigin: number, privKey: string): RawResult<{ root: string }>;
 }
 
 declare global {
@@ -203,7 +203,7 @@ export class DavinciCrypto {
             throw new Error("Go/WASM proofInputs returned no data");
         }
 
-        return JSON.parse(raw.data) as DavinciCryptoOutput;
+        return raw.data;
     }
 
     /**
@@ -230,7 +230,7 @@ export class DavinciCrypto {
             throw new Error("Go/WASM cspSign returned no data");
         }
 
-        return JSON.parse(raw.data) as CSPSignOutput;
+        return raw.data;
     }
 
     /**
@@ -269,14 +269,7 @@ export class DavinciCrypto {
             throw new Error("Go/WASM cspVerify returned no data");
         }
 
-        // Parse the result - it should be a boolean or string representation
-        try {
-            const result = JSON.parse(raw.data);
-            return Boolean(result);
-        } catch {
-            // If it's not JSON, treat as string and check for truthy values
-            return raw.data.toLowerCase() === 'true';
-        }
+        return raw.data;
     }
 
     /**
@@ -301,6 +294,6 @@ export class DavinciCrypto {
             throw new Error("Go/WASM cspCensusRoot returned no data");
         }
 
-        return JSON.parse(raw.data) as string;
+        return raw.data.root;
     }
 }

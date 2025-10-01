@@ -16,8 +16,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { VocdoniApiService } from '@vocdoni/davinci-sdk'
-import { Wallet } from 'ethers'
+import { DavinciSDK } from '@vocdoni/davinci-sdk'
+import { Wallet, JsonRpcProvider } from 'ethers'
 import { useEffect, useState } from 'react'
 
 interface CensusCreationScreenProps {
@@ -93,14 +93,37 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       setError(null)
       setProgress(0)
 
-      const api = new VocdoniApiService({
-        sequencerURL: import.meta.env.SEQUENCER_API_URL,
-        censusURL: import.meta.env.CENSUS_API_URL
+      // Initialize DavinciSDK with first available wallet
+      const firstWallet = Object.values(walletMap)[0]
+      if (!firstWallet) {
+        throw new Error('No wallets available for SDK initialization')
+      }
+
+      // Check if wallet already has a provider (e.g., MetaMask)
+      // If not, connect it to the RPC provider from env
+      const wallet = firstWallet as Wallet
+      let signerWithProvider = wallet
+      if (!wallet.provider) {
+        if (!import.meta.env.RPC_URL) {
+          throw new Error('RPC_URL environment variable is required')
+        }
+        const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
+        signerWithProvider = wallet.connect(provider)
+      }
+
+      const sdk = new DavinciSDK({
+        signer: signerWithProvider,
+        environment: 'dev',
+        sequencerUrl: import.meta.env.SEQUENCER_API_URL,
+        censusUrl: import.meta.env.CENSUS_API_URL,
+        chain: 'sepolia',
+        useSequencerAddresses: true
       })
+      await sdk.init()
 
       // Create census
       setProgress(20)
-      const newCensusId = await api.census.createCensus()
+      const newCensusId = await sdk.api.census.createCensus()
       setCensusId(newCensusId)
 
       // Add voters in batches
@@ -109,7 +132,7 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
         const batch = addresses.slice(i, i + batchSize)
 
         // Add participants using addresses
-        await api.census.addParticipants(
+        await sdk.api.census.addParticipants(
           newCensusId,
           batch.map((address) => ({
             key: address,
@@ -121,9 +144,9 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
 
       // Publish the census and store root & size locally
       setProgress(90)
-      const publishResult = await api.census.publishCensus(newCensusId)
+      const publishResult = await sdk.api.census.publishCensus(newCensusId)
       const censusRoot = publishResult.root
-      const censusSize = await api.census.getCensusSize(censusRoot)
+      const censusSize = await sdk.api.census.getCensusSize(censusRoot)
       
       // Store census details locally for the next screen
       localStorage.setItem('censusDetails', JSON.stringify({

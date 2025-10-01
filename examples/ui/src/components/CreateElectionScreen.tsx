@@ -22,19 +22,11 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import {
-  ProcessRegistryService,
-  ProcessStatus,
-  TxStatus,
-  VocdoniApiService,
-  getElectionMetadataTemplate,
-  signProcessCreation,
+  DavinciSDK,
   CensusOrigin,
-  type Census,
-  type EncryptionKey,
 } from '@vocdoni/davinci-sdk'
-import { JsonRpcSigner, Wallet } from 'ethers'
+import { JsonRpcSigner, Wallet, JsonRpcProvider } from 'ethers'
 import { useState } from 'react'
-import { getProcessRegistryAddress, logAddressConfiguration } from '../utils/contractAddresses'
 import { getTransactionUrl } from '../utils/explorerUrl'
 
 interface CreateElectionScreenProps {
@@ -87,10 +79,8 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
   ])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
   const [electionCreated, setElectionCreated] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [txStatus, setTxStatus] = useState<string>('')
   const [endDate, setEndDate] = useState<Date>(() => {
     const date = new Date()
     date.setHours(date.getHours() + 1) // Default: 1 hour from now
@@ -196,115 +186,83 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
     try {
       setIsLoading(true)
       setError(null)
-      setProgress(0)
 
-      // Log address configuration
-      logAddressConfiguration()
-
-      const api = new VocdoniApiService({
-        sequencerURL: import.meta.env.SEQUENCER_API_URL,
-        censusURL: import.meta.env.CENSUS_API_URL
-      })
-
-      // Step 0: Fetch sequencer info to get contract addresses if needed
-      setProgress(10)
-      const sequencerInfo = await api.sequencer.getInfo()
-
-      // Step 1: Push metadata
-      setProgress(20)
-      const metadata = getElectionMetadataTemplate()
-      metadata.title.default = title
-      metadata.description.default = description
-      metadata.questions = questions
-
-      const metadataHash = await api.sequencer.pushMetadata(metadata)
-      const metadataUrl = api.sequencer.getMetadataUrl(metadataHash)
-
-      // Step 2: Get census root & size from local storage (stored in CensusCreationScreen)
-      setProgress(40)
+      // Get census details from local storage
       const censusDetailsStr = localStorage.getItem('censusDetails')
       if (!censusDetailsStr) {
         throw new Error('Census details not found. Please create a census first.')
       }
       const censusDetails = JSON.parse(censusDetailsStr)
-      const censusRoot = censusDetails.censusRoot
-      const censusSize = censusDetails.censusSize
 
-      // Step 3: Get next process ID from contract using wallet address as organizationId
-      setProgress(50)
-      const registry = new ProcessRegistryService(getProcessRegistryAddress(sequencerInfo.contracts), wallet)
+      // Check if wallet already has a provider (e.g., MetaMask)
+      // If not, connect it to the RPC provider from env
+      const walletInstance = wallet as Wallet
+      let signerWithProvider = walletInstance
+      if (!walletInstance.provider) {
+        if (!import.meta.env.RPC_URL) {
+          throw new Error('RPC_URL environment variable is required')
+        }
+        const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
+        signerWithProvider = walletInstance.connect(provider)
+      }
 
-      const address = await wallet.getAddress()
-      const processId = await registry.getNextProcessId(address)
+      // Initialize SDK
+      const sdk = new DavinciSDK({
+        signer: signerWithProvider,
+        environment: 'dev',
+        sequencerUrl: import.meta.env.SEQUENCER_API_URL,
+        censusUrl: import.meta.env.CENSUS_API_URL,
+        chain: 'sepolia',
+        useSequencerAddresses: true
+      })
+      await sdk.init()
 
-      // Step 4: Create process via Sequencer API with new signature method
-      setProgress(60)
-      const signature = await signProcessCreation(processId, wallet as Wallet)
-
+      // Create process using simplified SDK
       const ballotMode = calculateBallotMode(questions)
-      const {
-        processId: returnedProcessId,
-        encryptionPubKey,
-        stateRoot,
-      } = await api.sequencer.createProcess({
-        processId,
-        censusRoot,
-        ballotMode,
-        signature,
-        censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+      const startTime = new Date(Date.now() + 60 * 1000) // Start in 1 minute
+      const duration = Math.floor((endDate.getTime() - startTime.getTime()) / 1000) // Duration in seconds
+
+      const processResult = await sdk.createProcess({
+        title,
+        description,
+        census: {
+          type: CensusOrigin.CensusOriginMerkleTree,
+          root: censusDetails.censusRoot,
+          size: censusDetails.censusSize,
+          uri: censusDetails.censusUri || `ipfs://census-${Date.now()}`
+        },
+        ballot: ballotMode,
+        timing: {
+          startDate: startTime,
+          duration
+        },
+        questions: questions.map(q => ({
+          title: q.title.default,
+          description: q.description.default,
+          choices: q.choices.map(c => ({
+            title: c.title.default,
+            value: c.value
+          }))
+        }))
       })
 
-      // Step 5: Submit process on-chain (without organizationId)
-      setProgress(80)
-      const startTime = Math.floor(Date.now() / 1000) + 60 // Start time: 1 minute from now
-      const duration = Math.floor(endDate.getTime() / 1000) - startTime // Duration in seconds
-      const censusURI = await api.census.getCensusUri(censusRoot)
+      setTxHash(processResult.transactionHash)
+      setElectionCreated(true)
 
-      const txGenerator = registry.newProcess(
-        ProcessStatus.READY,
-        startTime,
-        duration,
-        ballotMode,
-        {
-          censusOrigin: CensusOrigin.CensusOriginMerkleTree,
-          maxVotes: censusSize.toString(),
-          censusRoot: censusRoot,
-          censusURI: censusURI,
-        } as Census,
-        metadataUrl,
-        { x: encryptionPubKey[0], y: encryptionPubKey[1] } as EncryptionKey,
-        BigInt(stateRoot)
+      // Get the process info to extract metadata URL
+      const processInfo = await sdk.getProcess(processResult.processId)
+      
+      // Store the process details for the next step
+      localStorage.setItem(
+        'electionDetails',
+        JSON.stringify({
+          processId: processResult.processId,
+          metadataUrl: processInfo.raw?.metadataURI || `process-${processResult.processId}-metadata`,
+          censusRoot: censusDetails.censusRoot,
+          censusSize: censusDetails.censusSize,
+          censusId: censusDetails.censusId,
+        })
       )
-
-      for await (const status of txGenerator) {
-        if (status.status === TxStatus.Pending) {
-          setTxStatus('Transaction pending...')
-          setTxHash(status.hash)
-        } else if (status.status === TxStatus.Completed) {
-          setTxStatus('Transaction confirmed!')
-          setProgress(100)
-          setElectionCreated(true)
-
-          // Store the process details for the next step
-          localStorage.setItem(
-            'electionDetails',
-            JSON.stringify({
-              processId,
-              encryptionPubKey,
-              stateRoot,
-              metadataUrl,
-              censusRoot,
-              censusSize,
-              censusId,
-            })
-          )
-          break
-        } else if (status.status === TxStatus.Failed) {
-          throw new Error('Transaction failed')
-        } else if (status.status === TxStatus.Reverted) {
-          throw new Error('Transaction reverted')
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create election')
       console.error('Error creating election:', err)
@@ -493,7 +451,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
             >
               <Box sx={{ textAlign: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                  <Typography variant='body2'>{txStatus}</Typography>
+                  <Typography variant='body2'>Processing transaction...</Typography>
                   <CircularProgress size={16} />
                 </Box>
                 <Box sx={{ mt: 1 }}>
@@ -540,9 +498,9 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
 
           {isLoading && !txHash && (
             <Box sx={{ mb: 2, textAlign: 'center' }}>
-              <CircularProgress variant='determinate' value={progress} sx={{ mb: 1 }} />
+              <CircularProgress sx={{ mb: 1 }} />
               <Typography variant='body2' color='text.secondary'>
-                Creating election... {progress}%
+                Creating election...
               </Typography>
             </Box>
           )}

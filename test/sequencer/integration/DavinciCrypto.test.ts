@@ -89,6 +89,48 @@ describe("DavinciCryptoService Integration", () => {
         expect(fieldsArr).toContain(example.fieldValues[0]);
     });
 
+    it("should produce a complete DavinciCryptoOutput with all fields typed correctly without using k", async () => {
+        const out = await service.proofInputs({ ...example, k: undefined });
+
+        // --- top‐level strings ---
+        expect(typeof out.processId).toBe("string");
+        expect(typeof out.address).toBe("string");
+        expect(typeof out.ballotInputsHash).toBe("string");
+        expect(typeof out.voteId).toBe("string");
+
+        expect(typeof out.ballot.curveType).toBe("string");
+        expect(Array.isArray(out.ballot.ciphertexts)).toBe(true);
+        out.ballot.ciphertexts.forEach((ct) => {
+            expect(Array.isArray(ct.c1)).toBe(true);
+            expect(ct.c1).toHaveLength(2);
+            ct.c1.forEach((x) => expect(typeof x).toBe("string"));
+
+            expect(Array.isArray(ct.c2)).toBe(true);
+            expect(ct.c2).toHaveLength(2);
+            ct.c2.forEach((x) => expect(typeof x).toBe("string"));
+        });
+
+        const ci = out.circomInputs as Record<string, any>;
+        expect(typeof ci).toBe("object");
+
+        const expectedPid = BigInt("0x" + example.processID).toString();
+        expect(ci.process_id).toBe(expectedPid);
+
+        const hexAddr = example.address.startsWith("0x")
+            ? example.address
+            : "0x" + example.address;
+        expect(ci.address).toBe(BigInt(hexAddr).toString());
+
+        expect(typeof ci.k).toBe("string");
+
+        // Check for vote_id in circom inputs (new field)
+        expect(typeof ci.vote_id).toBe("string");
+
+        const fieldsArr = ci.fieldValues ?? ci.fields;
+        expect(Array.isArray(fieldsArr)).toBe(true);
+        expect(fieldsArr).toContain(example.fieldValues[0]);
+    });
+
     describe("CSP (Credential Service Provider) Functions", () => {
         const cspTestData = {
             censusOrigin: CensusOrigin.CensusOriginCSP, // CSP origin type

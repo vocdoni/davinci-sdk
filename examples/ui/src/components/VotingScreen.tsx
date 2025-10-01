@@ -1,8 +1,6 @@
 import { useWallets } from '@/context/WalletContext'
-import { hexStringToUint8Array } from '@/utils/hexStringToUint8Array'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
-import PendingIcon from '@mui/icons-material/Pending'
 import {
   Alert,
   Box,
@@ -21,33 +19,17 @@ import {
   Radio,
   RadioGroup,
   Select,
-  Step,
-  StepLabel,
-  Stepper,
   Typography,
 } from '@mui/material'
 import {
-  DavinciCrypto,
-  CircomProof,
-  VocdoniApiService,
-  type DavinciCryptoInputs,
-  type InfoResponse,
+  DavinciSDK,
+  VoteStatus,
   type IQuestion,
   type MultiLanguage,
-  type ProofInputs,
-  type VoteBallot,
 } from '@vocdoni/davinci-sdk'
+import { Wallet, JsonRpcProvider } from 'ethers'
 import { useEffect, useState } from 'react'
 
-const getCircuitUrls = (info: InfoResponse) => {
-  return {
-    ballotProofExec: info.ballotProofWasmHelperExecJsUrl,
-    ballotProof: info.ballotProofWasmHelperUrl,
-    circuit: info.circuitUrl,
-    provingKey: info.provingKeyUrl,
-    verificationKey: info.verificationKeyUrl,
-  }
-}
 
 interface VotingScreenProps {
   onBack: () => void
@@ -73,36 +55,17 @@ interface Question extends IQuestion {
 interface Vote {
   address: string
   voteId: string
-  status: 'pending' | 'verified' | 'aggregated' | 'processed' | 'settled' | 'error'
+  status: VoteStatus
 }
-
-interface VoteStatus {
-  censusProofGenerated: boolean
-  zkInputsGenerated: boolean
-  proofGenerated: boolean
-  voteSubmitted: boolean
-}
-
-const VOTE_STEPS = ['Generate Census Proof', 'Generate ZK Inputs', 'Generate & Verify Proof', 'Submit Vote']
 
 export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Removed participants state - weights are now extracted from census proofs during voting
   const [addresses, setAddresses] = useState<string[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<number, number>>({})
-  const [voteStatus, setVoteStatus] = useState<VoteStatus>({
-    censusProofGenerated: false,
-    zkInputsGenerated: false,
-    proofGenerated: false,
-    voteSubmitted: false,
-  })
   const [submittedVotes, setSubmittedVotes] = useState<Vote[]>([])
-  const [processingVotes, setProcessingVotes] = useState(false)
-  const [activeStep, setActiveStep] = useState(-1)
-  const [waitTime, setWaitTime] = useState(0)
   const { walletMap } = useWallets()
 
   useEffect(() => {
@@ -115,33 +78,57 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         }
         const details: ElectionDetails = JSON.parse(detailsStr)
 
-        const api = new VocdoniApiService({
-          sequencerURL: import.meta.env.SEQUENCER_API_URL,
-          censusURL: import.meta.env.CENSUS_API_URL
+        // Check if we have wallets available
+        const walletAddresses = Object.keys(walletMap)
+        if (walletAddresses.length === 0) {
+          throw new Error('No wallets available. Please connect a wallet first.')
+        }
+
+        // Use addresses from our stored wallets
+        setAddresses(walletAddresses)
+
+        // Initialize SDK with first available wallet for read-only operations
+        const firstWallet = Object.values(walletMap)[0]
+        if (!firstWallet) {
+          throw new Error('No wallets available for SDK initialization')
+        }
+
+        // Create provider and connect wallet to it
+        const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
+        const walletWithProvider = firstWallet.connect(provider)
+
+        const sdk = new DavinciSDK({
+          signer: walletWithProvider,
+          environment: 'dev',
+          sequencerUrl: import.meta.env.SEQUENCER_API_URL,
+          censusUrl: import.meta.env.CENSUS_API_URL,
+          chain: 'sepolia',
+          useSequencerAddresses: true
         })
+        await sdk.init()
 
-        // Use addresses from our stored wallets (weights will be extracted from census proofs during voting)
-        setAddresses(Object.keys(walletMap))
-
-        // Get election metadata and map to our Question interface
-        // Extract hash from the metadata URL
-        const hash = details.metadataUrl.split('/').pop() || ''
-        const metadata = await api.sequencer.getMetadata(hash)
-        setQuestions(
-          metadata.questions.map((q) => ({
-            ...q,
-            title: q.title || { default: '' },
-            description: q.description || { default: '' },
-            choices: q.choices.map((c) => ({
-              ...c,
-              title: c.title || { default: '' },
-            })),
-          }))
-        )
+        // Get process info using SDK
+        const processInfo = await sdk.getProcess(details.processId)
+        
+        if (!processInfo.questions || processInfo.questions.length === 0) {
+          throw new Error('No questions found in process metadata')
+        }
+        
+        const fetchedQuestions = processInfo.questions.map((q: any) => ({
+          ...q,
+          title: typeof q.title === 'string' ? { default: q.title } : (q.title || { default: '' }),
+          description: typeof q.description === 'string' ? { default: q.description } : (q.description || { default: '' }),
+          choices: q.choices.map((c: any) => ({
+            ...c,
+            title: typeof c.title === 'string' ? { default: c.title } : (c.title || { default: '' }),
+          })),
+        }))
+        
+        setQuestions(fetchedQuestions)
 
         // Initialize answers with -1 (no selection)
         const initialAnswers: Record<number, number> = {}
-        metadata.questions.forEach((_, index) => {
+        fetchedQuestions.forEach((_: any, index: number) => {
           initialAnswers[index] = -1
         })
         setAnswers(initialAnswers)
@@ -153,201 +140,91 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       }
     }
 
-    loadElectionData()
-  }, [walletMap])
-
-  const processVotes = async (processId: string) => {
-    while (true) {
-      let allProcessed = true
-      const updatedVotes = [...submittedVotes]
-
-      for (let i = 0; i < updatedVotes.length; i++) {
-        if (updatedVotes[i].status === 'pending') {
-          const api = new VocdoniApiService({
-            sequencerURL: import.meta.env.SEQUENCER_API_URL,
-            censusURL: import.meta.env.CENSUS_API_URL
-          })
-          const status = await api.sequencer.getVoteStatus(processId, updatedVotes[i].voteId)
-
-          updatedVotes[i].status = status.status as Vote['status']
-
-          if (status.status !== 'processed' && status.status !== 'error') {
-            allProcessed = false
-          }
-        }
-      }
-
-      setSubmittedVotes(updatedVotes)
-
-      if (allProcessed) {
-        setProcessingVotes(false)
-        break
-      }
-
-      await new Promise((r) => setTimeout(r, 2000))
+    if (Object.keys(walletMap).length > 0) {
+      loadElectionData()
     }
-  }
+  }, [walletMap])
 
   const handleVote = async () => {
     try {
       setIsLoading(true)
       setError(null)
-      setActiveStep(0)
 
-      const startTime = Date.now()
-      const updateWaitTime = () => {
-        setWaitTime(Math.floor((Date.now() - startTime) / 1000))
-      }
-      const timer = setInterval(updateWaitTime, 1000)
-
-      const api = new VocdoniApiService({
-        sequencerURL: import.meta.env.SEQUENCER_API_URL,
-        censusURL: import.meta.env.CENSUS_API_URL
-      })
       const details: ElectionDetails = JSON.parse(localStorage.getItem('electionDetails')!)
-
-      // Step 1: Get census proof and extract weight from it
-      const censusProof = await api.census.getCensusProof(details.censusRoot, selectedAddress)
-      const weight = censusProof.weight || '1' // Extract weight from census proof
-      setVoteStatus((prev) => ({ ...prev, censusProofGenerated: true }))
-      setActiveStep(1)
-
-      // Step 2: Get the wallet from the census
       const wallet = walletMap[selectedAddress]
       if (!wallet) {
         throw new Error('Wallet not found for selected address')
       }
-      const kHex = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
-      const kStr = BigInt('0x' + kHex).toString()
 
-      // Get WASM URLs from API info
-      const info = await api.sequencer.getInfo()
-      const urls = getCircuitUrls(info)
-      const sdk = new DavinciCrypto({
-        wasmExecUrl: urls.ballotProofExec,
-        wasmUrl: urls.ballotProof,
+      // Create provider and connect wallet to it
+      const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
+      const walletWithProvider = wallet.connect(provider)
+
+      // Initialize SDK with the connected wallet
+      const sdk = new DavinciSDK({
+        signer: walletWithProvider,
+        environment: 'dev',
+        sequencerUrl: import.meta.env.SEQUENCER_API_URL,
+        censusUrl: import.meta.env.CENSUS_API_URL,
+        chain: 'sepolia',
+        useSequencerAddresses: true
       })
       await sdk.init()
 
-      // Calculate ballot mode values
-      const maxValue = (Math.max(...questions.map((q) => q.choices.length)) - 1).toString() // -1 because choices are 0-based
-      const maxValueSum = questions
-        .map((q) => q.choices.length - 1)
-        .reduce((a, b) => a + b, 0)
-        .toString()
-
-      // Create arrays for each question with length equal to their choices
-      const questionArrays = questions.map((question, questionIndex) => {
-        const choices = Array(question.choices.length).fill('0')
-        const selectedValue = answers[questionIndex]
-        if (selectedValue !== -1) {
-          choices[selectedValue] = '1'
-        }
-        return choices
+      // Prepare vote choices - convert answers to the format expected by SDK
+      // Each question needs an array with 1 at selected position, 0s elsewhere
+      const voteChoices: number[] = []
+      questions.forEach((question, questionIndex) => {
+        const selectedChoiceIndex = answers[questionIndex] !== -1 ? answers[questionIndex] : 0
+        const questionChoices = Array(question.choices.length).fill(0)
+        questionChoices[selectedChoiceIndex] = 1
+        voteChoices.push(...questionChoices)
       })
 
-      // Flatten all arrays into one, preserving order
-      const fieldValues = questionArrays.flat()
-
-      const inputs: DavinciCryptoInputs = {
-        address: selectedAddress,
-        processID: details.processId,
-        ballotMode: {
-          numFields: questions.length,
-          maxValue,
-          minValue: '0',
-          uniqueValues: false,
-          costFromWeight: false,
-          costExponent: 0,
-          maxValueSum,
-          minValueSum: '0',
-        },
-        encryptionKey: [details.encryptionPubKey[0], details.encryptionPubKey[1]],
-        k: kStr,
-        fieldValues,
-        weight, // Use weight extracted from census proof
-      }
-
-      const out = await sdk.proofInputs(inputs)
-      setVoteStatus((prev) => ({ ...prev, zkInputsGenerated: true }))
-      setActiveStep(2)
-
-      // Step 3: Run fullProve + verify
-      const pg = new CircomProof({
-        wasmUrl: urls.circuit,
-        zkeyUrl: urls.provingKey,
-        vkeyUrl: urls.verificationKey,
-      })
-
-      const { proof, publicSignals } = await pg.generate(out.circomInputs as ProofInputs)
-      const ok = await pg.verify(proof, publicSignals)
-      if (!ok) throw new Error('Proof verification failed')
-      setVoteStatus((prev) => ({ ...prev, proofGenerated: true }))
-      setActiveStep(3)
-
-      // Step 4: Submit vote
-      const voteBallot: VoteBallot = {
-        curveType: out.ballot.curveType,
-        ciphertexts: out.ballot.ciphertexts,
-      }
-
-      const signature = await wallet.signMessage(hexStringToUint8Array(out.voteId))
-
-      const voteRequest = {
-        address: selectedAddress,
-        ballot: voteBallot,
-        ballotInputsHash: out.ballotInputsHash,
-        ballotProof: proof,
-        censusProof,
+      // Submit vote using simplified SDK
+      const voteResult = await sdk.submitVote({
         processId: details.processId,
-        signature,
-        voteId: out.voteId,
+        choices: voteChoices
+      })
+
+      // Add vote to submitted votes list
+      const newVote = { 
+        address: selectedAddress, 
+        voteId: voteResult.voteId, 
+        status: VoteStatus.Pending
       }
-
-      await api.sequencer.submitVote(voteRequest)
-      const voteId = out.voteId
-      setVoteStatus((prev) => ({ ...prev, voteSubmitted: true }))
-      setActiveStep(4)
-
-      // Add vote to submitted votes list and start processing
-      const newVote = { address: selectedAddress, voteId, status: 'pending' as const }
       setSubmittedVotes((prev) => [...prev, newVote])
 
       // Reset for next vote
-      setVoteStatus({
-        censusProofGenerated: false,
-        zkInputsGenerated: false,
-        proofGenerated: false,
-        voteSubmitted: false,
-      })
-      setActiveStep(-1)
       setSelectedAddress('')
       setAnswers(Object.fromEntries(Object.keys(answers).map((k) => [k, -1])))
-      clearInterval(timer)
 
-      // Start processing the new vote
+      // Start monitoring vote status
       const checkVoteStatus = async () => {
         let isDone = false
         while (!isDone) {
-          const voteStatus = await api.sequencer.getVoteStatus(details.processId, voteId)
-          setSubmittedVotes((prev) => {
-            const updated = prev.map((v) =>
-              v.voteId === voteId
-                ? {
-                    ...v,
-                    status: voteStatus.status as Vote['status'],
-                  }
-                : v
-            )
-            return updated
-          })
+          try {
+            const voteStatus = await sdk.getVoteStatus(details.processId, voteResult.voteId)
+            setSubmittedVotes((prev) => {
+              const updated = prev.map((v) =>
+                v.voteId === voteResult.voteId
+                  ? {
+                      ...v,
+                      status: voteStatus.status as Vote['status'],
+                    }
+                  : v
+              )
+              return updated
+            })
 
-          if (voteStatus.status === 'processed' || voteStatus.status === 'error') {
+            if (voteStatus.status === VoteStatus.Settled || voteStatus.status === VoteStatus.Error) {
+              isDone = true
+            } else {
+              await new Promise((r) => setTimeout(r, 2000))
+            }
+          } catch (err) {
+            console.error('Error checking vote status:', err)
             isDone = true
-          } else {
-            await new Promise((r) => setTimeout(r, 2000))
           }
         }
       }
@@ -360,15 +237,10 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
     }
   }
 
-  const renderStepIcon = (completed: boolean, active: boolean) => {
-    if (completed) return <CheckCircleIcon color='success' />
-    if (active) return <CircularProgress size={24} />
-    return <PendingIcon color='action' />
-  }
 
   const allQuestionsAnswered = Object.values(answers).every((value) => value !== -1)
-  const allVotesProcessed =
-    submittedVotes.length > 0 && submittedVotes.every((v) => v.status === 'processed' || v.status === 'error')
+  const allVotesSettled =
+    submittedVotes.length > 0 && submittedVotes.every((v) => v.status === VoteStatus.Settled || v.status === VoteStatus.Error)
 
   // Get addresses that haven't voted yet
   const availableAddresses = addresses.filter((address) => {
@@ -440,22 +312,12 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                   </Box>
                 ))}
 
-                {activeStep >= 0 && (
-                  <Box sx={{ width: '100%', mb: 4 }}>
-                    <Stepper activeStep={activeStep}>
-                      {VOTE_STEPS.map((label, index) => (
-                        <Step key={label}>
-                          <StepLabel StepIconComponent={() => renderStepIcon(index < activeStep, index === activeStep)}>
-                            {label}
-                          </StepLabel>
-                        </Step>
-                      ))}
-                    </Stepper>
-                    {activeStep >= 0 && activeStep < VOTE_STEPS.length && (
-                      <Typography variant='body2' color='text.secondary' sx={{ mt: 2 }}>
-                        {VOTE_STEPS[activeStep]}... ({waitTime}s)
-                      </Typography>
-                    )}
+                {isLoading && (
+                  <Box sx={{ width: '100%', mb: 4, textAlign: 'center' }}>
+                    <CircularProgress sx={{ mb: 1 }} />
+                    <Typography variant='body2' color='text.secondary'>
+                      Submitting vote...
+                    </Typography>
                   </Box>
                 )}
 
@@ -526,9 +388,9 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
                   ))}
                 </List>
 
-                {submittedVotes.length > 0 && !allVotesProcessed && (
+                {submittedVotes.length > 0 && !allVotesSettled && (
                   <Alert severity='info' sx={{ mt: 2 }} icon={<CircularProgress size={20} />}>
-                    <Typography>Waiting for all votes to be processed before proceeding...</Typography>
+                    <Typography>Waiting for all votes to be settled before proceeding...</Typography>
                   </Alert>
                 )}
               </>
@@ -541,7 +403,7 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
         <Button variant='outlined' onClick={onBack} disabled={isLoading}>
           Back
         </Button>
-        <Button variant='contained' onClick={onNext} disabled={!allVotesProcessed}>
+        <Button variant='contained' onClick={onNext} disabled={!allVotesSettled}>
           Next
         </Button>
       </Box>

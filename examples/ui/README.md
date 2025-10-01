@@ -1,16 +1,16 @@
 # Vocdoni Davinci SDK - UI Example
 
-A comprehensive demo application showcasing the capabilities of the Vocdoni Davinci SDK. This Next.js application demonstrates how to create organizations, manage censuses, create voting processes, and handle the complete voting lifecycle using the Vocdoni protocol.
+A comprehensive demo application showcasing the capabilities of the Vocdoni Davinci SDK. This Vite React application demonstrates how to create censuses, set up voting processes, cast votes, and view results using the Vocdoni protocol.
 
 ## Features
 
-- **Organization Management**: Create and manage organizations on the Vocdoni network
-- **Census Creation**: Build voter lists with wallet addresses
-- **Election Creation**: Set up voting processes with custom questions and options
-- **Voting Interface**: Cast votes using zero-knowledge proofs
+- **Census Creation**: Generate voter lists with random wallet addresses
+- **Election Creation**: Set up voting processes with custom questions and options  
+- **Voting Interface**: Cast votes using zero-knowledge proofs with generated wallets
 - **Results Display**: View election results and statistics
-- **Wallet Integration**: Connect with MetaMask and other Ethereum wallets
-- **Real-time Updates**: Track transaction status and election progress
+- **Step-by-Step Workflow**: Guided process from census creation to final results
+- **Real-time Updates**: Track vote status and election progress
+- **Vote Status Monitoring**: Wait for votes to be settled before proceeding
 
 ## Prerequisites
 
@@ -18,8 +18,7 @@ Before running this application, make sure you have:
 
 - **Node.js** (version 18 or higher)
 - **Yarn** package manager
-- **MetaMask** or another Ethereum wallet browser extension
-- **Sepolia testnet ETH** for transaction fees
+- **Sepolia testnet access** via RPC endpoint
 
 ## Installation
 
@@ -54,65 +53,39 @@ cp .env.example .env
 Edit the `.env` file with your configuration:
 
 ```env
-# Vocdoni API endpoint
-API_URL=
+# Vocdoni Sequencer API endpoint
+SEQUENCER_API_URL=
 
-# Ethereum RPC endpoint
+# Vocdoni Census API endpoint  
+CENSUS_API_URL=
+
+# Ethereum RPC endpoint (for blockchain interactions)
 RPC_URL=
+
+# Explorer URL for viewing addresses, transactions and contracts
+EXPLORER_URL=https://sepolia.etherscan.io
+
+# Optional: Custom contract addresses (if not provided, will use default deployed addresses)
+ORGANIZATION_REGISTRY_ADDRESS=
+PROCESS_REGISTRY_ADDRESS=
+
+# Force using contract addresses from sequencer info endpoint (default: false)
+FORCE_SEQUENCER_ADDRESSES=false
 ```
 
 #### Environment Variables
 
-- **API_URL**: The Vocdoni sequencer API endpoint
-  
-- **RPC_URL**: Ethereum RPC endpoint
+- **SEQUENCER_API_URL**: The Vocdoni sequencer API endpoint
+- **CENSUS_API_URL**: The Vocdoni census API endpoint
+- **RPC_URL**: Ethereum RPC endpoint for blockchain interactions
   - You can use public endpoints or get your own from providers like:
     - [Infura](https://infura.io/)
     - [Alchemy](https://www.alchemy.com/)
     - [QuickNode](https://www.quicknode.com/)
-
+- **EXPLORER_URL**: Block explorer URL for viewing transactions
 - **ORGANIZATION_REGISTRY_ADDRESS** (Optional): Custom organization registry contract address
-  - If not provided, will use the default deployed address for the network
-
 - **PROCESS_REGISTRY_ADDRESS** (Optional): Custom process registry contract address
-  - If not provided, will use the default deployed address for the network
-
-- **FORCE_SEQUENCER_ADDRESSES** (Optional): Force using contract addresses from sequencer info endpoint
-  - Set to `true` to use addresses from the sequencer's `/info` endpoint
-  - Set to `false` (default) to use environment variables or default addresses
-
-### New Feature: Force Sequencer Addresses
-
-The UI now includes a new environment variable `FORCE_SEQUENCER_ADDRESSES` that allows you to force the use of contract addresses from the sequencer's info endpoint instead of using environment variables or default addresses.
-
-#### How it works:
-
-1. **When `FORCE_SEQUENCER_ADDRESSES=false` (default)**:
-   - The application will first check for `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS` in environment variables
-   - If not found, it will fall back to the default deployed addresses
-
-2. **When `FORCE_SEQUENCER_ADDRESSES=true`**:
-   - The application will fetch contract addresses from the sequencer's `/info` endpoint
-   - It will use the `process` and `organization` addresses from the sequencer response
-   - If the sequencer doesn't provide valid addresses, the application will throw an error
-   - Environment variables and default addresses are ignored when this flag is set
-
-#### Benefits:
-
-- **Dynamic Configuration**: Contract addresses are automatically retrieved from the sequencer
-- **Environment Consistency**: Ensures the application uses the same contract addresses that the sequencer is configured to use
-- **Reduced Configuration**: No need to manually specify contract addresses in environment variables
-
-#### Usage:
-
-To enable the feature, set the environment variable in your `.env` file:
-```env
-FORCE_SEQUENCER_ADDRESSES=true
-```
-
-When enabled, you'll see console output indicating which address source is being used:
-- `Using PROCESS_REGISTRY_ADDRESS from sequencer info: 0x1234...`
-- `Using ORGANIZATION_REGISTRY_ADDRESS from sequencer info: 0x5678...`
+- **FORCE_SEQUENCER_ADDRESSES** (Optional): Use contract addresses from sequencer info endpoint
 
 ## Running the Application
 
@@ -124,7 +97,7 @@ Start the development server:
 yarn dev
 ```
 
-The application will be available at [http://localhost:3000](http://localhost:3000)
+The application will be available at [http://localhost:5173](http://localhost:5173)
 
 ### Production Build
 
@@ -134,147 +107,217 @@ Build the application for production:
 yarn build
 ```
 
-Start the production server:
+Preview the production build:
 
 ```bash
-yarn start
+yarn preview
 ```
 
 ## Usage Guide
 
+The application follows a step-by-step workflow:
+
 ### 1. Welcome Screen
-- Introduction to the Vocdoni Davinci SDK
-- Overview of the demo workflow
+- Introduction to the Vocdoni Davinci SDK demo
+- Overview of the complete voting workflow
 
-### 2. Connect Wallet
-- Connect your MetaMask or compatible Ethereum wallet
-- Ensure you're connected to the Sepolia testnet
-- Make sure you have some Sepolia ETH for transaction fees
+### 2. Connect Wallet  
+- Connect your Ethereum wallet (MetaMask or similar)
+- Ensure you're connected to Sepolia testnet
+- This wallet will be used for creating elections (not for voting)
 
-### 3. Create Organization
-- Create a new organization on the Vocdoni network
-- This organization will manage your voting processes
-- Transaction will be submitted to Ethereum Sepolia testnet
+### 3. Create Census
+- Generate a list of voter wallets automatically
+- 10 random wallets are created by default
+- Add additional random wallets as needed
+- Each wallet gets a private key for voting later
+- Publish the census to make it ready for elections
 
-### 4. Create Census
-- Build a list of eligible voters
-- Add wallet addresses manually or generate random test wallets
-- The census determines who can participate in your elections
+### 4. Create Election
+- Configure election details (title, description, end date)
+- Define voting questions and answer choices
+- Set ballot parameters (number of fields, value ranges)
+- Create the process on-chain using DavinciSDK
 
-### 5. Create Election
-- Set up your voting process
-- Configure election metadata (title, description)
-- Define voting questions and options
-- Set election duration and parameters
+### 5. Check Election Status
+- Verify the election was created successfully
+- View transaction details on block explorer
+- Confirm the process is ready to accept votes
 
-### 6. Check Election Status
-- Monitor your election's status
-- View election details and configuration
-- Confirm the election is ready for voting
+### 6. Voting Interface
+- Select from the generated voter wallets
+- Answer each question by choosing from available options
+- Submit votes using zero-knowledge proofs
+- Track vote status in real-time (pending → verified → settled)
+- **Important**: Must wait for all votes to reach "settled" status before proceeding
 
-### 7. Vote
-- Cast your vote using zero-knowledge proofs
-- Select your preferred options
-- Submit your encrypted ballot
+### 7. End Process & Show Results
+- View final election results with vote counts
+- See percentage breakdown for each choice
+- Results are fetched directly from the blockchain
 
-### 8. End Process
-- Close the voting process when ready
-- Trigger the final tally and result computation
+## Key Technical Details
 
-### 9. Show Results
-- View the final election results
-- See vote counts and statistics
-- Verify the integrity of the voting process
+### Vote Choice Format
+The application uses a specific format for vote choices that matches the Vocdoni protocol:
+- Each question becomes an array filled with 0s
+- A 1 is placed at the index of the selected choice
+- All question arrays are flattened into a single choices array
+
+Example: For 2 questions with 4 choices each, selecting choice 1 for question 1 and choice 2 for question 2:
+```
+Question 1: [0, 1, 0, 0]  // Selected choice 1
+Question 2: [0, 0, 1, 0]  // Selected choice 2
+Final: [0, 1, 0, 0, 0, 0, 1, 0]
+```
+
+### Vote Status Flow
+- **Pending**: Vote submitted, waiting for verification
+- **Verified**: Vote verified by the sequencer
+- **Aggregated**: Vote included in batch processing  
+- **Settled**: Vote fully processed and finalized ✅
+
+The UI requires ALL votes to reach "settled" status before allowing progression to results.
+
+### Generated Wallets
+- The application generates random wallets for voting (not organization management)
+- Each wallet gets a private key displayed in the UI
+- Wallets are automatically connected to the configured RPC provider
+- The organizing wallet (MetaMask) is only used for creating elections
 
 ## Project Structure
 
 ```
 src/
-├── app/                    # Next.js app directory
-│   ├── layout.tsx         # Root layout component
-│   ├── page.tsx           # Main application page
-│   └── globals.css        # Global styles
-├── components/            # React components
-│   ├── layout/           # Layout components
-│   ├── *Screen.tsx       # Step-by-step screens
-│   └── StepIndicator.tsx # Progress indicator
-├── context/              # React context providers
-│   └── WalletContext.tsx # Wallet state management
-└── types/                # TypeScript type definitions
+├── main.tsx              # Application entry point
+├── router.tsx            # React Router configuration  
+├── globals.css           # Global styles
+├── components/           # React components
+│   ├── layout/          # Layout components (Header, Footer, Layout)
+│   ├── WelcomeScreen.tsx
+│   ├── ConnectWalletScreen.tsx
+│   ├── CensusCreationScreen.tsx
+│   ├── CreateElectionScreen.tsx
+│   ├── CheckElectionScreen.tsx
+│   ├── VotingScreen.tsx
+│   ├── EndProcessScreen.tsx
+│   ├── ShowResultsScreen.tsx
+│   ├── StepIndicator.tsx
+│   └── WalletConnect.tsx
+├── context/             # React context providers
+│   └── WalletContext.tsx
+├── pages/               # Page components
+├── utils/               # Utility functions
+└── window.d.ts          # TypeScript declarations
 ```
 
-## Key Components
+## Architecture
 
-- **WelcomeScreen**: Introduction and overview
-- **ConnectWalletScreen**: Wallet connection interface
-- **CreateOrganizationScreen**: Organization creation form
-- **CensusCreationScreen**: Voter list management
-- **CreateElectionScreen**: Election configuration
-- **VotingScreen**: Voting interface with zero-knowledge proofs
-- **ShowResultsScreen**: Results display and verification
+### DavinciSDK Integration
+All screens now exclusively use the DavinciSDK for operations:
+
+- **Census Operations**: `sdk.api.census.createCensus()`, `sdk.api.census.addParticipants()`
+- **Process Creation**: `sdk.createProcess()`  
+- **Voting**: `sdk.submitVote()`, `sdk.getVoteStatus()`
+- **Results**: `sdk.getProcess()` (includes results)
+
+### Wallet Provider Handling
+The application properly handles different wallet scenarios:
+- **MetaMask/Browser Wallets**: Uses existing provider
+- **Generated Wallets**: Connects to RPC provider from environment
+
+### State Management
+- **WalletContext**: Manages generated voter wallets
+- **localStorage**: Persists census and election details between steps
+- **React State**: Handles component-level state and loading states
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **404 Error on Development Server**
-   - Make sure you're accessing `http://localhost:3000` (not `/davinci-sdk`)
-   - The basePath is only applied in production builds
+1. **RPC Connection Issues**
+   - Verify RPC_URL is set correctly in `.env`
+   - Ensure the RPC endpoint is accessible
+   - Check network connectivity
 
-2. **Wallet Connection Issues**
-   - Ensure MetaMask is installed and unlocked
-   - Switch to Sepolia testnet in MetaMask
-   - Check that you have Sepolia ETH for transaction fees
+2. **Vote Status Not Updating**  
+   - Votes need time to be processed by the sequencer
+   - The UI polls every 2 seconds for status updates
+   - Wait for "settled" status before proceeding
 
 3. **Transaction Failures**
-   - Verify you have sufficient Sepolia ETH
-   - Check that the RPC endpoint is working
-   - Ensure you're connected to the correct network
+   - Ensure the organizing wallet has Sepolia ETH
+   - Check that contract addresses are correct
+   - Verify sequencer APIs are accessible
 
 4. **SDK Build Issues**
-   - Try removing `node_modules` and `davinci-sdk.tgz`
-   - Run `yarn install` again to rebuild the SDK
+   - Remove `node_modules` and `davinci-sdk.tgz`
+   - Run `yarn install` to rebuild the SDK
+   - Ensure the parent SDK builds successfully
 
-5. **"Invalid process registry address from sequencer" Error**
-   - **Cause**: `FORCE_SEQUENCER_ADDRESSES=true` but sequencer doesn't provide valid addresses
-   - **Solution**: 
-     - Check sequencer configuration
-     - Set `FORCE_SEQUENCER_ADDRESSES=false` to use environment variables or defaults
-     - Manually set `PROCESS_REGISTRY_ADDRESS` and `ORGANIZATION_REGISTRY_ADDRESS`
+5. **Environment Variable Issues**
+   - Double-check all required variables are set
+   - Restart the dev server after changing `.env`
+   - Verify API endpoints are reachable
 
 ### Getting Sepolia ETH
 
-You can get free Sepolia ETH from these faucets:
+The organizing wallet needs Sepolia ETH for creating elections:
 - [Sepolia Faucet](https://sepoliafaucet.com/)
 - [Alchemy Sepolia Faucet](https://sepoliafaucet.com/)
 - [Infura Sepolia Faucet](https://www.infura.io/faucet/sepolia)
 
+### Vote Status Meanings
+
+- **pending**: Vote submitted to sequencer
+- **verified**: Vote cryptographically verified
+- **aggregated**: Vote included in processing batch
+- **processed**: Vote processed by sequencer  
+- **settled**: Vote finalized on blockchain ✅
+- **error**: Vote processing failed ❌
+
 ## Development
+
+### Technology Stack
+- **Vite**: Build tool and dev server
+- **React 19**: UI framework
+- **TypeScript**: Type safety
+- **Material-UI**: Component library
+- **React Router**: Client-side routing
+- **Ethers.js**: Ethereum interactions (via DavinciSDK)
 
 ### Adding New Features
 
 1. Create new components in `src/components/`
-2. Add new steps to the main workflow in `page.tsx`
-3. Update the step indicator and navigation logic
-4. Test with the development server
+2. Update routing in `src/router.tsx`
+3. Add new steps to the StepIndicator component
+4. Update navigation logic between screens
 
 ### Customization
 
-- Modify the theme in `page.tsx` to change colors and styling
-- Update component layouts and designs
-- Add new voting question types or election configurations
-- Integrate additional wallet providers
+- Modify themes and styling in component files
+- Add new question types in CreateElectionScreen
+- Customize vote status display in VotingScreen
+- Add new result visualizations in ShowResultsScreen
 
 ## Learn More
 
 - [Vocdoni Documentation](https://docs.vocdoni.io/)
-- [Davinci SDK Documentation](https://github.com/vocdoni/davinci-sdk)
-- [Next.js Documentation](https://nextjs.org/docs)
+- [DaVinci SDK Documentation](https://github.com/vocdoni/davinci-sdk)
+- [API Documentation](https://github.com/vocdoni/davinci-node/tree/main/api)
+- [Protocol Documentation](https://whitepaper.vocdoni.io)
+- [Vite Documentation](https://vite.dev/)
+- [React Documentation](https://react.dev/)
 - [Material-UI Documentation](https://mui.com/)
 
 ## Support
 
 For issues and questions:
 - Check the [GitHub Issues](https://github.com/vocdoni/davinci-sdk/issues)
-- Join the [Vocdoni Discord](https://discord.gg/vocdoni)
+- Join the [Vocdoni Discord](https://chat.vocdoni.io)
+- Join our [Telegram](https://t.me/vocdoni_community)
+- Follow us on [Twitter](https://twitter.com/vocdoni)
 - Read the [Vocdoni Documentation](https://docs.vocdoni.io/)
+- Visit our [Website](https://vocdoni.io)
+
+For enterprise support and custom integrations, contact us at [info@vocdoni.io](mailto:info@vocdoni.io).
