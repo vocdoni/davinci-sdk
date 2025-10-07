@@ -658,4 +658,83 @@ describe("Simple Process Creation Integration (Sepolia)", () => {
             "SDK must be initialized before getting processes. Call sdk.init() first."
         );
     });
+
+    it("should create a process using async generator stream and yield transaction status events", async () => {
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Stream API Test Election",
+            description: "Testing the createProcessStream async generator method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 30,
+                uri: `ipfs://stream-test-census-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                startDate: Math.floor(Date.now() / 1000) + 180,
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Do you approve the stream API?",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        const stream = sdk.createProcessStream(processConfig);
+        
+        let hasPendingEvent = false;
+        let hasCompletedEvent = false;
+        let transactionHash = "";
+        let processId = "";
+
+        for await (const event of stream) {
+            if (event.status === "pending") {
+                hasPendingEvent = true;
+                transactionHash = event.hash;
+                
+                expect(event.hash).toBeDefined();
+                expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "completed") {
+                hasCompletedEvent = true;
+                processId = event.response.processId;
+                
+                expect(event.response).toBeDefined();
+                expect(event.response.processId).toBeDefined();
+                expect(event.response.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+                expect(event.response.transactionHash).toBeDefined();
+                expect(event.response.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown"}`);
+            }
+        }
+
+        // Verify that we received both pending and completed events
+        expect(hasPendingEvent).toBe(true);
+        expect(hasCompletedEvent).toBe(true);
+        expect(transactionHash).toBeTruthy();
+        expect(processId).toBeTruthy();
+
+        // Verify the process was actually created on-chain
+        const onChainProcess = await sdk.processes.getProcess(processId);
+        expect(onChainProcess).toBeDefined();
+        expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
+    });
 });

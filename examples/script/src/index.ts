@@ -2,7 +2,7 @@
 
 import chalk from "chalk";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK, CensusOrigin, ProcessStatus, VoteStatus } from "../../../src";
+import { DavinciSDK, CensusOrigin, ProcessStatus, VoteStatus, TxStatus } from "../../../src";
 import { 
     getUserConfiguration, 
     generateTestParticipants,
@@ -158,7 +158,7 @@ async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, cens
 }
 
 /**
- * Step 3: Create voting process using SDK
+ * Step 3: Create voting process using SDK with real-time transaction monitoring
  */
 async function step3_createProcess(
     sdk: DavinciSDK, 
@@ -167,9 +167,9 @@ async function step3_createProcess(
     censusUri: string,
     censusType: CensusOrigin
 ): Promise<string> {
-    step(3, "Create voting process");
+    step(3, "Create voting process (with real-time transaction monitoring)");
     
-    const processResult = await sdk.createProcess({
+    const stream = sdk.createProcessStream({
         title: "Simplified Test Election " + Date.now(),
         description: "A simplified test election created with DavinciSDK",
         census: {
@@ -216,10 +216,40 @@ async function step3_createProcess(
         ]
     });
     
-    success(`Process created with ID: ${processResult.processId}`);
-    info(`Transaction hash: ${processResult.transactionHash}`);
+    let processId = "";
+    let transactionHash = "";
     
-    return processResult.processId;
+    // Monitor transaction status in real-time
+    for await (const event of stream) {
+        switch (event.status) {
+            case TxStatus.Pending:
+                info(chalk.yellow("📝 Transaction submitted to blockchain"));
+                info(chalk.gray(`   Hash: ${event.hash}`));
+                info(chalk.gray("   Waiting for confirmation..."));
+                transactionHash = event.hash;
+                break;
+                
+            case TxStatus.Completed:
+                processId = event.response.processId;
+                transactionHash = event.response.transactionHash;
+                success(chalk.green("✅ Transaction confirmed!"));
+                success(chalk.green(`   Process ID: ${processId}`));
+                info(chalk.gray(`   Transaction: ${transactionHash}`));
+                break;
+                
+            case TxStatus.Failed:
+                console.error(chalk.red("❌ Transaction failed!"));
+                console.error(chalk.red(`   Error: ${event.error.message}`));
+                throw event.error;
+                
+            case TxStatus.Reverted:
+                console.error(chalk.red("⚠️  Transaction reverted!"));
+                console.error(chalk.red(`   Reason: ${event.reason || "Unknown reason"}`));
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown reason"}`);
+        }
+    }
+    
+    return processId;
 }
 
 /**
