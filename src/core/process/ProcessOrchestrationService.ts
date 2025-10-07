@@ -7,6 +7,7 @@ import { signProcessCreation } from "../../sequencer/api/helpers";
 import { BallotMode, Census, EncryptionKey } from "../types";
 import { CensusOrigin } from "../../census/types";
 import { getElectionMetadataTemplate } from "../types/metadata";
+import { TxStatusEvent, TxStatus } from "../../contracts/SmartContractService";
 
 /**
  * Base interface with shared fields between ProcessConfig and ProcessInfo
@@ -67,6 +68,23 @@ export interface ProcessCreationResult {
     processId: string;
     /** Transaction hash of the on-chain process creation */
     transactionHash: string;
+}
+
+/**
+ * Internal data needed during process creation
+ */
+interface ProcessCreationData {
+    processId: string;
+    startTime: number;
+    duration: number;
+    censusRoot: string;
+    ballotMode: BallotMode;
+    metadataUri: string;
+    sequencerResult: {
+        encryptionPubKey: [string, string];
+        stateRoot: string;
+    };
+    census: Census;
 }
 
 /**
@@ -210,10 +228,125 @@ export class ProcessOrchestrationService {
     }
 
     /**
-     * Creates a complete voting process with minimal configuration
-     * This method handles all the complex orchestration internally
+     * Creates a complete voting process and returns an async generator that yields transaction status events.
+     * This method allows you to monitor the transaction progress in real-time.
+     * 
+     * @param config - Process configuration
+     * @returns AsyncGenerator yielding transaction status events with ProcessCreationResult
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.createProcessStream({
+     *   title: "My Election",
+     *   description: "A simple election",
+     *   census: { ... },
+     *   ballot: { ... },
+     *   timing: { ... },
+     *   questions: [ ... ]
+     * });
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case "pending":
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case "completed":
+     *       console.log("Process created:", event.response.processId);
+     *       console.log("Transaction hash:", event.response.transactionHash);
+     *       break;
+     *     case "failed":
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case "reverted":
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *createProcessStream(config: ProcessConfig): AsyncGenerator<TxStatusEvent<ProcessCreationResult>> {
+        // Prepare all data needed for process creation
+        const data = await this.prepareProcessCreation(config);
+
+        // Create encryption key object
+        const encryptionKey: EncryptionKey = {
+            x: data.sequencerResult.encryptionPubKey[0],
+            y: data.sequencerResult.encryptionPubKey[1]
+        };
+
+        // Submit on-chain transaction and yield events
+        const txStream = this.processRegistry.newProcess(
+            ProcessStatus.READY,
+            data.startTime,
+            data.duration,
+            data.ballotMode,
+            data.census,
+            data.metadataUri,
+            encryptionKey,
+            BigInt(data.sequencerResult.stateRoot)
+        );
+
+        let transactionHash = "unknown";
+        
+        for await (const event of txStream) {
+            if (event.status === TxStatus.Pending) {
+                transactionHash = event.hash;
+                yield { status: TxStatus.Pending, hash: event.hash };
+            } else if (event.status === TxStatus.Completed) {
+                yield {
+                    status: TxStatus.Completed,
+                    response: {
+                        processId: data.processId,
+                        transactionHash
+                    }
+                };
+                break;
+            } else if (event.status === TxStatus.Failed) {
+                yield { status: TxStatus.Failed, error: event.error };
+                break;
+            } else if (event.status === TxStatus.Reverted) {
+                yield { status: TxStatus.Reverted, reason: event.reason };
+                break;
+            }
+        }
+    }
+
+    /**
+     * Creates a complete voting process with minimal configuration.
+     * This is the ultra-easy method for end users that handles all the complex orchestration internally.
+     * 
+     * For real-time transaction status updates, use createProcessStream() instead.
+     * 
+     * The method automatically:
+     * - Gets encryption keys and initial state root from the sequencer
+     * - Handles process creation signatures
+     * - Coordinates between sequencer API and on-chain contract calls
+     * - Creates and pushes metadata
+     * - Submits the on-chain transaction
+     * 
+     * @param config - Simplified process configuration
+     * @returns Promise resolving to the process creation result
      */
     async createProcess(config: ProcessConfig): Promise<ProcessCreationResult> {
+        // Use the stream internally and consume it to get the final result
+        for await (const event of this.createProcessStream(config)) {
+            if (event.status === "completed") {
+                return event.response;
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
+            }
+        }
+        
+        throw new Error("Process creation stream ended unexpectedly");
+    }
+
+    /**
+     * Prepares all data needed for process creation
+     * @private
+     */
+    private async prepareProcessCreation(config: ProcessConfig): Promise<ProcessCreationData> {
         // 1. Validate and calculate timing
         const { startTime, duration } = this.calculateTiming(config.timing);
 
@@ -250,41 +383,15 @@ export class ProcessOrchestrationService {
             censusURI: config.census.uri
         };
 
-        // 8. Create encryption key object
-        const encryptionKey: EncryptionKey = {
-            x: sequencerResult.encryptionPubKey[0],
-            y: sequencerResult.encryptionPubKey[1]
-        };
-
-        // 9. Submit on-chain transaction
-        const txStream = this.processRegistry.newProcess(
-            ProcessStatus.READY,
-            startTime,
-            duration,
-            ballotMode,
-            census,
-            metadataUri,
-            encryptionKey,
-            BigInt(sequencerResult.stateRoot)
-        );
-
-        // Execute the transaction and capture the hash
-        let transactionHash = "unknown";
-        for await (const event of txStream) {
-            if (event.status === "pending") {
-                transactionHash = event.hash;
-            } else if (event.status === "completed") {
-                break;
-            } else if (event.status === "failed") {
-                throw event.error;
-            } else if (event.status === "reverted") {
-                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
-            }
-        }
-
         return {
             processId,
-            transactionHash
+            startTime,
+            duration,
+            censusRoot,
+            ballotMode,
+            metadataUri,
+            sequencerResult,
+            census
         };
     }
 

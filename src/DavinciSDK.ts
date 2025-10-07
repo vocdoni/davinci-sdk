@@ -248,8 +248,86 @@ export class DavinciSDK {
     }
 
     /**
+     * Creates a complete voting process and returns an async generator that yields transaction status events.
+     * This method allows you to monitor the transaction progress in real-time, including pending, completed,
+     * failed, and reverted states.
+     * 
+     * @param config - Simplified process configuration
+     * @returns AsyncGenerator yielding transaction status events
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.createProcessStream({
+     *   title: "My Election",
+     *   description: "A simple election",
+     *   census: {
+     *     type: CensusOrigin.CensusOriginMerkleTree,
+     *     root: "0x1234...",
+     *     size: 100,
+     *     uri: "ipfs://..."
+     *   },
+     *   ballot: {
+     *     numFields: 2,
+     *     maxValue: "3",
+     *     minValue: "0",
+     *     uniqueValues: false,
+     *     costFromWeight: false,
+     *     costExponent: 10000,
+     *     maxValueSum: "6",
+     *     minValueSum: "0"
+     *   },
+     *   timing: {
+     *     startDate: new Date("2024-12-01T10:00:00Z"),
+     *     duration: 3600 * 24
+     *   },
+     *   questions: [
+     *     {
+     *       title: "What is your favorite color?",
+     *       choices: [
+     *         { title: "Red", value: 0 },
+     *         { title: "Blue", value: 1 }
+     *       ]
+     *     }
+     *   ]
+     * });
+     * 
+     * // Monitor transaction progress
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case TxStatus.Pending:
+     *       console.log("Transaction pending:", event.hash);
+     *       // Update UI to show pending state
+     *       break;
+     *     case TxStatus.Completed:
+     *       console.log("Process created:", event.response.processId);
+     *       console.log("Transaction hash:", event.response.transactionHash);
+     *       // Update UI to show success
+     *       break;
+     *     case TxStatus.Failed:
+     *       console.error("Transaction failed:", event.error);
+     *       // Update UI to show error
+     *       break;
+     *     case TxStatus.Reverted:
+     *       console.error("Transaction reverted:", event.reason);
+     *       // Update UI to show revert reason
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    createProcessStream(config: ProcessConfig) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before creating processes. Call sdk.init() first.");
+        }
+        
+        return this.processOrchestrator.createProcessStream(config);
+    }
+
+    /**
      * Creates a complete voting process with minimal configuration.
      * This is the ultra-easy method for end users that handles all the complex orchestration internally.
+     * 
+     * For real-time transaction status updates, use createProcessStream() instead.
      * 
      * The method automatically:
      * - Gets encryption keys and initial state root from the sequencer

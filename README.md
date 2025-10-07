@@ -195,7 +195,7 @@ await sdk.init();
 
 ### Process Management
 
-#### Creating a Process
+#### Creating a Process (Simple)
 
 ```typescript
 const processResult = await sdk.createProcess({
@@ -243,6 +243,51 @@ const processResult = await sdk.createProcess({
 
 console.log('Process created:', processResult.processId);
 ```
+
+#### Creating a Process with Real-Time Status (Stream)
+
+For applications that need to show real-time transaction progress to users, use `createProcessStream()`:
+
+```typescript
+import { TxStatus } from '@vocdoni/davinci-sdk';
+
+const stream = sdk.createProcessStream({
+  title: "Election Title",
+  // ... same configuration as above
+});
+
+// Monitor transaction status in real-time
+for await (const event of stream) {
+  switch (event.status) {
+    case TxStatus.Pending:
+      console.log("📝 Transaction submitted:", event.hash);
+      // Update UI to show pending state
+      break;
+      
+    case TxStatus.Completed:
+      console.log("✅ Process created:", event.response.processId);
+      console.log("   Transaction:", event.response.transactionHash);
+      // Update UI to show success
+      break;
+      
+    case TxStatus.Failed:
+      console.error("❌ Transaction failed:", event.error);
+      // Update UI to show error
+      break;
+      
+    case TxStatus.Reverted:
+      console.error("⚠️ Transaction reverted:", event.reason);
+      // Update UI to show revert reason
+      break;
+  }
+}
+```
+
+**When to use each method:**
+
+- Use `createProcess()` for simple scripts and when you don't need transaction progress updates
+- Use `createProcessStream()` for UI applications where users need real-time feedback during transaction processing
+
 
 #### Retrieving Process Information
 
