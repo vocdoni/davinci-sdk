@@ -57,9 +57,10 @@ function createCSPCensusProvider(sdk: DavinciSDK): CSPCensusProofProvider {
 // ────────────────────────────────────────────────────────────
 //   SDK FACTORY
 // ────────────────────────────────────────────────────────────
-function createSDKInstance(privateKey: string) {
-    const provider = new JsonRpcProvider(RPC_URL);
-    const signer = new Wallet(privateKey, provider);
+function createSDKInstance(privateKey: string, withProvider: boolean = true) {
+    const signer = withProvider 
+        ? new Wallet(privateKey, new JsonRpcProvider(RPC_URL))
+        : new Wallet(privateKey);
     
     return {
         signer,
@@ -323,21 +324,16 @@ async function step5_submitVotes(
         info(`   Choice arrays: Q1=[${question1Choices.join(", ")}], Q2=[${question2Choices.join(", ")}]`);
         
         try {
-            // Create a temporary SDK instance for this participant
-            const baseConfig = createSDKInstance(participant.privateKey);
+            const baseConfig = createSDKInstance(participant.privateKey, false);
             
-            // Add CSP census provider if needed
-            const participantConfig = censusType === CensusOrigin.CensusOriginCSP 
-                ? { 
-                    ...baseConfig, 
-                    censusProviders: { csp: createCSPCensusProvider(sdk) } as CensusProviders 
-                  }
+            const voterConfig: any = censusType === CensusOrigin.CensusOriginCSP 
+                ? { ...baseConfig, censusProviders: { csp: createCSPCensusProvider(sdk) } as CensusProviders }
                 : baseConfig;
             
-            const participantSDK = new DavinciSDK(participantConfig);
-            await participantSDK.init();
+            const voterSDK = new DavinciSDK(voterConfig);
+            await voterSDK.init();
             
-            const voteResult = await participantSDK.submitVote({
+            const voteResult = await voterSDK.submitVote({
                 processId,
                 choices: [...question1Choices, ...question2Choices] // Array of 8 positions
             });

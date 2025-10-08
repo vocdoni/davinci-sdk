@@ -14,7 +14,11 @@ import { CensusProviders } from "./census/types";
  * Configuration interface for the DavinciSDK
  */
 export interface DavinciSDKConfig {
-    /** Ethers.js Signer (can be from MetaMask, Wallet, or any other provider) */
+    /** 
+     * Ethers.js Signer for signing operations.
+     * - For voting only: Can be a bare Wallet (no provider needed)
+     * - For process/organization operations: Must be connected to a provider
+     */
     signer: Signer;
     
     /** Environment to use (dev, stg, prod) - used to set default URLs and chain if not explicitly provided */
@@ -137,9 +141,13 @@ export class DavinciSDK {
     }
 
     /**
-     * Get the process registry service for process management
+     * Get the process registry service for process management.
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @throws Error if signer does not have a provider
      */
     get processes(): ProcessRegistryService {
+        this.ensureProvider();
         if (!this._processRegistry) {
             const processRegistryAddress = this.resolveContractAddress('processRegistry');
             this._processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
@@ -148,9 +156,13 @@ export class DavinciSDK {
     }
 
     /**
-     * Get the organization registry service for organization management
+     * Get the organization registry service for organization management.
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @throws Error if signer does not have a provider
      */
     get organizations(): OrganizationRegistryService {
+        this.ensureProvider();
         if (!this._organizationRegistry) {
             const organizationRegistryAddress = this.resolveContractAddress('organizationRegistry');
             this._organizationRegistry = new OrganizationRegistryService(organizationRegistryAddress, this.config.signer);
@@ -178,9 +190,13 @@ export class DavinciSDK {
     }
 
     /**
-     * Get the process orchestration service for simplified process creation
+     * Get the process orchestration service for simplified process creation.
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @throws Error if signer does not have a provider
      */
     get processOrchestrator(): ProcessOrchestrationService {
+        this.ensureProvider();
         if (!this._processOrchestrator) {
             this._processOrchestrator = new ProcessOrchestrationService(
                 this.processes,
@@ -213,8 +229,11 @@ export class DavinciSDK {
      * This method fetches raw contract data and transforms it into a user-friendly format
      * that matches the ProcessConfig interface used for creation, plus additional runtime data.
      * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
      * @param processId - The process ID to fetch
      * @returns Promise resolving to user-friendly process information
+     * @throws Error if signer does not have a provider
      * 
      * @example
      * ```typescript
@@ -243,6 +262,7 @@ export class DavinciSDK {
         if (!this.initialized) {
             throw new Error("SDK must be initialized before getting processes. Call sdk.init() first.");
         }
+        this.ensureProvider();
         
         return this.processOrchestrator.getProcess(processId);
     }
@@ -252,8 +272,11 @@ export class DavinciSDK {
      * This method allows you to monitor the transaction progress in real-time, including pending, completed,
      * failed, and reverted states.
      * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
      * @param config - Simplified process configuration
      * @returns AsyncGenerator yielding transaction status events
+     * @throws Error if signer does not have a provider
      * 
      * @example
      * ```typescript
@@ -319,6 +342,7 @@ export class DavinciSDK {
         if (!this.initialized) {
             throw new Error("SDK must be initialized before creating processes. Call sdk.init() first.");
         }
+        this.ensureProvider();
         
         return this.processOrchestrator.createProcessStream(config);
     }
@@ -329,6 +353,8 @@ export class DavinciSDK {
      * 
      * For real-time transaction status updates, use createProcessStream() instead.
      * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
      * The method automatically:
      * - Gets encryption keys and initial state root from the sequencer
      * - Handles process creation signatures
@@ -338,6 +364,7 @@ export class DavinciSDK {
      * 
      * @param config - Simplified process configuration
      * @returns Promise resolving to the process creation result
+     * @throws Error if signer does not have a provider
      * 
      * @example
      * ```typescript
@@ -390,6 +417,7 @@ export class DavinciSDK {
         if (!this.initialized) {
             throw new Error("SDK must be initialized before creating processes. Call sdk.init() first.");
         }
+        this.ensureProvider();
         
         return this.processOrchestrator.createProcess(config);
     }
@@ -397,6 +425,8 @@ export class DavinciSDK {
     /**
      * Submit a vote with simplified configuration.
      * This is the ultra-easy method for end users that handles all the complex voting workflow internally.
+     * 
+     * Does NOT require a provider - can be used with a bare Wallet for signing only.
      * 
      * The method automatically:
      * - Fetches process information and validates voting is allowed
@@ -441,6 +471,8 @@ export class DavinciSDK {
     /**
      * Get the status of a submitted vote.
      * 
+     * Does NOT require a provider - uses API calls only.
+     * 
      * @param processId - The process ID
      * @param voteId - The vote ID returned from submitVote()
      * @returns Promise resolving to vote status information
@@ -462,6 +494,8 @@ export class DavinciSDK {
 
     /**
      * Check if an address has voted in a process.
+     * 
+     * Does NOT require a provider - uses API calls only.
      * 
      * @param processId - The process ID
      * @param address - The voter's address
@@ -487,6 +521,8 @@ export class DavinciSDK {
      * Watch vote status changes in real-time using an async generator.
      * This method yields each status change as it happens, perfect for showing 
      * progress indicators in UI applications.
+     * 
+     * Does NOT require a provider - uses API calls only.
      * 
      * @param processId - The process ID
      * @param voteId - The vote ID
@@ -542,6 +578,8 @@ export class DavinciSDK {
      * Wait for a vote to reach a specific status.
      * This is a simpler alternative to watchVoteStatus() that returns only the final status.
      * Useful for waiting for vote confirmation and processing without needing to handle each intermediate status.
+     * 
+     * Does NOT require a provider - uses API calls only.
      * 
      * @param processId - The process ID
      * @param voteId - The vote ID
@@ -677,5 +715,21 @@ export class DavinciSDK {
      */
     isInitialized(): boolean {
         return this.initialized;
+    }
+
+    /**
+     * Ensures that the signer has a provider for blockchain operations.
+     * @throws Error if the signer does not have a provider
+     * @private
+     */
+    private ensureProvider(): void {
+        if (!this.config.signer.provider) {
+            throw new Error(
+                "Provider required for blockchain operations (process/organization management). " +
+                "The signer must be connected to a provider. " +
+                "Use wallet.connect(provider) or a browser signer like MetaMask. " +
+                "Note: Voting operations do not require a provider."
+            );
+        }
     }
 }
