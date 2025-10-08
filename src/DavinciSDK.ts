@@ -484,8 +484,64 @@ export class DavinciSDK {
     }
 
     /**
+     * Watch vote status changes in real-time using an async generator.
+     * This method yields each status change as it happens, perfect for showing 
+     * progress indicators in UI applications.
+     * 
+     * @param processId - The process ID
+     * @param voteId - The vote ID
+     * @param options - Optional configuration
+     * @returns AsyncGenerator yielding vote status updates
+     * 
+     * @example
+     * ```typescript
+     * // Submit vote
+     * const voteResult = await sdk.submitVote({
+     *   processId: "0x1234567890abcdef...",
+     *   choices: [1]
+     * });
+     * 
+     * // Watch status changes in real-time
+     * for await (const statusInfo of sdk.watchVoteStatus(voteResult.processId, voteResult.voteId)) {
+     *   console.log(`Vote status: ${statusInfo.status}`);
+     *   
+     *   switch (statusInfo.status) {
+     *     case VoteStatus.Pending:
+     *       console.log("⏳ Processing...");
+     *       break;
+     *     case VoteStatus.Verified:
+     *       console.log("✓ Vote verified");
+     *       break;
+     *     case VoteStatus.Aggregated:
+     *       console.log("📊 Vote aggregated");
+     *       break;
+     *     case VoteStatus.Settled:
+     *       console.log("✅ Vote settled");
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    watchVoteStatus(
+        processId: string,
+        voteId: string,
+        options?: {
+            targetStatus?: VoteStatus;
+            timeoutMs?: number;
+            pollIntervalMs?: number;
+        }
+    ) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before watching vote status. Call sdk.init() first.");
+        }
+        
+        return this.voteOrchestrator.watchVoteStatus(processId, voteId, options);
+    }
+
+    /**
      * Wait for a vote to reach a specific status.
-     * Useful for waiting for vote confirmation and processing.
+     * This is a simpler alternative to watchVoteStatus() that returns only the final status.
+     * Useful for waiting for vote confirmation and processing without needing to handle each intermediate status.
      * 
      * @param processId - The process ID
      * @param voteId - The vote ID
@@ -499,15 +555,14 @@ export class DavinciSDK {
      * // Submit vote and wait for it to be settled
      * const voteResult = await sdk.submitVote({
      *   processId: "0x1234567890abcdef...",
-     *   choices: [1],
-     *   voterKey: "0x..."
+     *   choices: [1]
      * });
      * 
      * // Wait for the vote to be fully processed
      * const finalStatus = await sdk.waitForVoteStatus(
      *   voteResult.processId,
      *   voteResult.voteId,
-     *   "settled", // Wait until vote is settled
+     *   VoteStatus.Settled, // Wait until vote is settled
      *   300000,    // 5 minute timeout
      *   5000       // Check every 5 seconds
      * );

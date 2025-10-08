@@ -283,6 +283,105 @@ describe("Vote Orchestration Integration (Sepolia)", () => {
         });
     });
 
+    describe("watchVoteStatus", () => {
+        let watchTestVoteId: string;
+        let watchTestVoterSdk: DavinciSDK;
+
+        beforeAll(async () => {
+            // Submit a vote for watch status tests
+            watchTestVoterSdk = getUnusedVoterSdk();
+            const voteConfig: VoteConfig = {
+                processId,
+                choices: [0, 1], // Red for color, Bike for transportation
+            };
+            
+            const voteResult = await watchTestVoterSdk.submitVote(voteConfig);
+            watchTestVoteId = voteResult.voteId;
+        });
+
+        it("should watch vote status changes and yield each status", async () => {
+            const statuses: VoteStatus[] = [];
+            
+            try {
+                const stream = watchTestVoterSdk.watchVoteStatus(processId, watchTestVoteId, {
+                    targetStatus: VoteStatus.Settled,
+                    timeoutMs: 30000, // 30 seconds
+                    pollIntervalMs: 2000 // 2 seconds
+                });
+
+                for await (const statusInfo of stream) {
+                    expect(statusInfo.voteId).toBe(watchTestVoteId);
+                    expect(statusInfo.processId).toBe(processId);
+                    expect(Object.values(VoteStatus)).toContain(statusInfo.status);
+                    
+                    statuses.push(statusInfo.status);
+                    
+                    // Stop if we reach settled or error
+                    if (statusInfo.status === VoteStatus.Settled || statusInfo.status === VoteStatus.Error) {
+                        break;
+                    }
+                }
+            } catch (error: any) {
+                // Timeout is acceptable for this test
+                if (!error.message.includes('Vote did not reach status')) {
+                    throw error;
+                }
+            }
+
+            // Should have received at least one status
+            expect(statuses.length).toBeGreaterThan(0);
+            
+            // First status should be Pending
+            expect(statuses[0]).toBe(VoteStatus.Pending);
+            
+            // Statuses should be unique (no duplicates)
+            const uniqueStatuses = new Set(statuses);
+            expect(uniqueStatuses.size).toBe(statuses.length);
+        });
+
+        it("should stop watching when target status is reached", async () => {
+            const stream = watchTestVoterSdk.watchVoteStatus(processId, watchTestVoteId, {
+                targetStatus: VoteStatus.Verified,
+                timeoutMs: 15000,
+                pollIntervalMs: 1000
+            });
+
+            const statuses: VoteStatus[] = [];
+            for await (const statusInfo of stream) {
+                statuses.push(statusInfo.status);
+            }
+
+            // Should receive at least the current status
+            expect(statuses.length).toBeGreaterThan(0);
+        });
+
+        it("should throw error for invalid vote ID", async () => {
+            const stream = watchTestVoterSdk.watchVoteStatus(processId, 'invalid-vote-id', {
+                timeoutMs: 1000
+            });
+
+            await expect(async () => {
+                for await (const statusInfo of stream) {
+                    // Should not get here
+                }
+            }).rejects.toThrow();
+        });
+
+        it("should timeout if target status not reached", async () => {
+            const stream = watchTestVoterSdk.watchVoteStatus(processId, watchTestVoteId, {
+                targetStatus: VoteStatus.Settled,
+                timeoutMs: 1000, // Very short timeout
+                pollIntervalMs: 500
+            });
+
+            await expect(async () => {
+                for await (const statusInfo of stream) {
+                    // Continue iterating
+                }
+            }).rejects.toThrow('Vote did not reach status settled within 1000ms');
+        });
+    });
+
     describe("waitForVoteStatus", () => {
         let testVoteId: string;
         let testVoterSdk: DavinciSDK;

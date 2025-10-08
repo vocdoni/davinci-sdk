@@ -359,84 +359,72 @@ async function step5_submitVotes(
 }
 
 /**
- * Step 6: Wait for all votes to be processed
+ * Step 6: Wait for all votes to be processed using watchVoteStatus
  */
 async function step6_waitForVotesProcessed(
     sdk: DavinciSDK, 
     processId: string, 
     voteIds: string[]
 ): Promise<void> {
-    step(6, "Wait for all votes to be processed");
+    step(6, "Wait for all votes to be processed (with real-time status monitoring)");
     
-    info("Waiting for all votes to reach 'settled' status...");
+    info("Watching vote status changes in real-time...");
     info("Note: This may take several minutes depending on the sequencer processing time.");
     
-    // Track vote statuses
-    const voteStatuses = new Map<string, string>();
-    const timeoutMs = 600000; // 10 minutes
-    const pollIntervalMs = 5000; // 5 seconds
-    const startTime = Date.now();
+    // Track settled votes
+    const settledVotes = new Set<string>();
+    const timeoutMs = 600000; // 10 minutes per vote
     
-    // Initialize vote statuses
-    for (const voteId of voteIds) {
-        voteStatuses.set(voteId, "unknown");
-    }
-    
-    // Poll until all votes are settled or timeout
-    while (Date.now() - startTime < timeoutMs) {
-        let allSettled = true;
-        let settledCount = 0;
-        
-        // Check each vote status
-        for (let i = 0; i < voteIds.length; i++) {
-            const voteId = voteIds[i];
-            const previousStatus = voteStatuses.get(voteId);
+    // Watch each vote's status changes
+    const watchPromises = voteIds.map(async (voteId, index) => {
+        try {
+            const stream = sdk.watchVoteStatus(processId, voteId, {
+                targetStatus: VoteStatus.Settled,
+                timeoutMs: timeoutMs,
+                pollIntervalMs: 5000
+            });
             
-            try {
-                const statusInfo = await sdk.getVoteStatus(processId, voteId);
-                const currentStatus = statusInfo.status;
+            for await (const statusInfo of stream) {
+                // Display status change with color coding
+                const statusEmoji = {
+                    [VoteStatus.Pending]: "⏳",
+                    [VoteStatus.Verified]: "✓",
+                    [VoteStatus.Aggregated]: "📊",
+                    [VoteStatus.Processed]: "⚙️",
+                    [VoteStatus.Settled]: "✅",
+                    [VoteStatus.Error]: "❌"
+                };
                 
-                // Print status change
-                if (currentStatus !== previousStatus) {
-                    info(`[${i + 1}/${voteIds.length}] Vote ${voteId}: ${previousStatus} → ${currentStatus}`);
-                    voteStatuses.set(voteId, currentStatus);
-                }
-                
-                if (currentStatus === VoteStatus.Settled) {
-                    settledCount++;
-                } else {
-                    allSettled = false;
-                }
+                const emoji = statusEmoji[statusInfo.status] || "•";
+                // Show first 4 and last 6 chars of voteId for uniqueness
+                const shortVoteId = `${voteId.substring(0, 4)}...${voteId.substring(voteId.length - 6)}`;
+                // Pad index for alignment
+                const indexStr = `[${(index + 1).toString().padStart(voteIds.length.toString().length, ' ')}/${voteIds.length}]`;
+                info(`${indexStr} ${emoji} Vote ${shortVoteId} → ${statusInfo.status}`);
                 
                 // Check for error status
-                if (currentStatus === VoteStatus.Error) {
+                if (statusInfo.status === VoteStatus.Error) {
                     throw new Error(`Vote ${voteId} failed with error status`);
                 }
                 
-            } catch (error) {
-                throw new Error(`Failed to get status for vote ${voteId}: ${error}`);
+                // Mark as settled when reached
+                if (statusInfo.status === VoteStatus.Settled) {
+                    settledVotes.add(voteId);
+                    
+                    // Show progress
+                    info(`Progress: ${settledVotes.size}/${voteIds.length} votes settled`);
+                }
             }
+        } catch (error: any) {
+            console.error(chalk.red(`Failed to watch vote ${voteId}:`), error.message);
+            throw error;
         }
-        
-        // Check if all votes are settled
-        if (allSettled) {
-            success(`All ${voteIds.length} votes have been settled successfully!`);
-            return;
-        }
-        
-        // Show progress
-        info(`Progress: ${settledCount}/${voteIds.length} votes settled`);
-        
-        // Wait before next check
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-    }
+    });
     
-    // Timeout reached - throw error
-    const finalStatuses = Array.from(voteStatuses.entries())
-        .map(([voteId, status]) => `${voteId}: ${status}`)
-        .join(', ');
+    // Wait for all votes to be settled
+    await Promise.all(watchPromises);
     
-    throw new Error(`Timeout reached! Not all votes settled within ${timeoutMs / 1000} seconds. Final statuses: ${finalStatuses}`);
+    success(`All ${voteIds.length} votes have been settled successfully!`);
 }
 
 /**

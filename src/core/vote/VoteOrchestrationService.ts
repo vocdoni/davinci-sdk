@@ -166,7 +166,74 @@ export class VoteOrchestrationService {
     }
 
     /**
-     * Wait for a vote to reach a specific status
+     * Watch vote status changes in real-time using an async generator.
+     * Yields each status change as it happens, allowing for reactive UI updates.
+     * 
+     * @param processId - The process ID
+     * @param voteId - The vote ID
+     * @param options - Optional configuration
+     * @returns AsyncGenerator yielding vote status updates
+     * 
+     * @example
+     * ```typescript
+     * const vote = await sdk.submitVote({ processId, choices: [1] });
+     * 
+     * for await (const statusInfo of sdk.watchVoteStatus(vote.processId, vote.voteId)) {
+     *   console.log(`Vote status: ${statusInfo.status}`);
+     *   
+     *   switch (statusInfo.status) {
+     *     case VoteStatus.Pending:
+     *       console.log("⏳ Processing...");
+     *       break;
+     *     case VoteStatus.Verified:
+     *       console.log("✓ Verified");
+     *       break;
+     *     case VoteStatus.Settled:
+     *       console.log("✅ Settled");
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *watchVoteStatus(
+        processId: string,
+        voteId: string,
+        options?: {
+            targetStatus?: VoteStatus;
+            timeoutMs?: number;
+            pollIntervalMs?: number;
+        }
+    ): AsyncGenerator<VoteStatusInfo> {
+        const targetStatus = options?.targetStatus ?? VoteStatus.Settled;
+        const timeoutMs = options?.timeoutMs ?? 300000;
+        const pollIntervalMs = options?.pollIntervalMs ?? 5000;
+        
+        const startTime = Date.now();
+        let previousStatus: VoteStatus | null = null;
+        
+        while (Date.now() - startTime < timeoutMs) {
+            const statusInfo = await this.getVoteStatus(processId, voteId);
+            
+            // Only yield if status has changed
+            if (statusInfo.status !== previousStatus) {
+                previousStatus = statusInfo.status;
+                yield statusInfo;
+                
+                // Stop if we reached target status or error
+                if (statusInfo.status === targetStatus || statusInfo.status === VoteStatus.Error) {
+                    return;
+                }
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        }
+        
+        throw new Error(`Vote did not reach status ${targetStatus} within ${timeoutMs}ms`);
+    }
+
+    /**
+     * Wait for a vote to reach a specific status.
+     * This is a simpler alternative to watchVoteStatus() that returns only the final status.
      * 
      * @param processId - The process ID
      * @param voteId - The vote ID
@@ -182,19 +249,22 @@ export class VoteOrchestrationService {
         timeoutMs: number = 300000,
         pollIntervalMs: number = 5000
     ): Promise<VoteStatusInfo> {
-        const startTime = Date.now();
+        // Use watchVoteStatus internally and return final status
+        let finalStatus: VoteStatusInfo | null = null;
         
-        while (Date.now() - startTime < timeoutMs) {
-            const statusInfo = await this.getVoteStatus(processId, voteId);
-            
-            if (statusInfo.status === targetStatus || statusInfo.status === VoteStatus.Error) {
-                return statusInfo;
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        for await (const statusInfo of this.watchVoteStatus(processId, voteId, {
+            targetStatus,
+            timeoutMs,
+            pollIntervalMs
+        })) {
+            finalStatus = statusInfo;
         }
         
-        throw new Error(`Vote did not reach status ${targetStatus} within ${timeoutMs}ms`);
+        if (!finalStatus) {
+            throw new Error(`Vote did not reach status ${targetStatus} within ${timeoutMs}ms`);
+        }
+        
+        return finalStatus;
     }
 
     /**
