@@ -373,4 +373,296 @@ describe('DavinciSDK Integration Tests', () => {
             expect(config.chain).toBe('mainnet');
         });
     });
+
+    describe('Bare Wallet Support (No Provider)', () => {
+        let bareWallet: Wallet;
+
+        beforeEach(() => {
+            // Create a wallet without a provider
+            bareWallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234');
+        });
+
+        it('should accept bare wallet (no provider) during SDK construction', () => {
+            expect(() => {
+                new DavinciSDK({
+                    signer: bareWallet,
+                    environment: 'dev'
+                });
+            }).not.toThrow();
+        });
+
+        it('should allow SDK initialization without provider', async () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            await expect(sdk.init()).resolves.not.toThrow();
+            expect(sdk.isInitialized()).toBe(true);
+        });
+
+        it('should allow access to API service without provider', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.api).not.toThrow();
+            expect(sdk.api).toBeDefined();
+        });
+
+        it('should allow access to vote orchestrator without provider', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.voteOrchestrator).not.toThrow();
+            expect(sdk.voteOrchestrator).toBeDefined();
+        });
+
+        it('should throw error when accessing processes getter without provider', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.processes).toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should throw error when accessing organizations getter without provider', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.organizations).toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should throw error when accessing processOrchestrator getter without provider', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.processOrchestrator).toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should throw error when calling getProcess without provider', async () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            await sdk.init();
+
+            await expect(
+                sdk.getProcess('0x1234567890abcdef1234567890abcdef12345678')
+            ).rejects.toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should throw error when calling createProcess without provider', async () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            await sdk.init();
+
+            const processConfig = {
+                title: 'Test Process',
+                description: 'Test',
+                census: {
+                    type: 1,
+                    root: '0x1234567890abcdef1234567890abcdef12345678',
+                    size: 100,
+                    uri: 'ipfs://test'
+                },
+                ballot: {
+                    numFields: 1,
+                    maxValue: '1',
+                    minValue: '0',
+                    uniqueValues: false,
+                    costFromWeight: false,
+                    costExponent: 10000,
+                    maxValueSum: '1',
+                    minValueSum: '0'
+                },
+                timing: {
+                    duration: 3600
+                },
+                questions: [{
+                    title: 'Test Question',
+                    choices: [
+                        { title: 'Yes', value: 0 },
+                        { title: 'No', value: 1 }
+                    ]
+                }]
+            };
+
+            await expect(
+                sdk.createProcess(processConfig as any)
+            ).rejects.toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should throw error when calling createProcessStream without provider', async () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            await sdk.init();
+
+            const processConfig = {
+                title: 'Test Process',
+                census: {
+                    type: 1,
+                    root: '0x1234567890abcdef1234567890abcdef12345678',
+                    size: 100,
+                    uri: 'ipfs://test'
+                },
+                ballot: {
+                    numFields: 1,
+                    maxValue: '1',
+                    minValue: '0',
+                    uniqueValues: false,
+                    costFromWeight: false,
+                    costExponent: 10000,
+                    maxValueSum: '1',
+                    minValueSum: '0'
+                },
+                timing: {
+                    duration: 3600
+                },
+                questions: [{
+                    title: 'Test Question',
+                    choices: [
+                        { title: 'Yes', value: 0 },
+                        { title: 'No', value: 1 }
+                    ]
+                }]
+            };
+
+            expect(() => sdk.createProcessStream(processConfig as any)).toThrow(
+                'Provider required for blockchain operations (process/organization management)'
+            );
+        });
+
+        it('should provide helpful error message mentioning wallet.connect(provider)', () => {
+            const sdk = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            try {
+                sdk.processes;
+                fail('Should have thrown an error');
+            } catch (error: any) {
+                expect(error.message).toContain('wallet.connect(provider)');
+                expect(error.message).toContain('MetaMask');
+                expect(error.message).toContain('Voting operations do not require a provider');
+            }
+        });
+    });
+
+    describe('Connected Wallet Support (With Provider)', () => {
+        let connectedWallet: Wallet;
+
+        beforeEach(() => {
+            const provider = new JsonRpcProvider('http://localhost:8545');
+            connectedWallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234', provider);
+        });
+
+        it('should accept connected wallet during SDK construction', () => {
+            expect(() => {
+                new DavinciSDK({
+                    signer: connectedWallet,
+                    environment: 'dev'
+                });
+            }).not.toThrow();
+        });
+
+        it('should allow access to all services with connected wallet', () => {
+            const sdk = new DavinciSDK({
+                signer: connectedWallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.api).not.toThrow();
+            expect(() => sdk.voteOrchestrator).not.toThrow();
+            expect(() => sdk.processes).not.toThrow();
+            expect(() => sdk.organizations).not.toThrow();
+            expect(() => sdk.processOrchestrator).not.toThrow();
+
+            expect(sdk.api).toBeDefined();
+            expect(sdk.voteOrchestrator).toBeDefined();
+            expect(sdk.processes).toBeDefined();
+            expect(sdk.organizations).toBeDefined();
+            expect(sdk.processOrchestrator).toBeDefined();
+        });
+
+        it('should verify connected wallet has provider', () => {
+            expect(connectedWallet.provider).toBeDefined();
+            expect(connectedWallet.provider).not.toBeNull();
+        });
+    });
+
+    describe('Provider Validation Edge Cases', () => {
+        it('should handle wallet with undefined provider (bare wallet)', () => {
+            const wallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234');
+            
+            // Verify wallet has no provider
+            expect(wallet.provider).toBeNull();
+
+            const sdk = new DavinciSDK({
+                signer: wallet,
+                environment: 'dev'
+            });
+
+            expect(() => sdk.processes).toThrow(
+                'Provider required for blockchain operations'
+            );
+        });
+
+        it('should differentiate between bare and connected wallets', () => {
+            const bareWallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234');
+            const provider = new JsonRpcProvider('http://localhost:8545');
+            const connectedWallet = bareWallet.connect(provider);
+
+            // Verify bare wallet has no provider
+            expect(bareWallet.provider).toBeNull();
+            
+            // Verify connected wallet has provider
+            expect(connectedWallet.provider).toBeDefined();
+            expect(connectedWallet.provider).toBe(provider);
+
+            const sdkBare = new DavinciSDK({
+                signer: bareWallet,
+                environment: 'dev'
+            });
+
+            const sdkConnected = new DavinciSDK({
+                signer: connectedWallet,
+                environment: 'dev'
+            });
+
+            // Bare wallet should fail
+            expect(() => sdkBare.processes).toThrow(
+                'Provider required for blockchain operations'
+            );
+
+            // Connected wallet should work
+            expect(() => sdkConnected.processes).not.toThrow();
+        });
+    });
 });
