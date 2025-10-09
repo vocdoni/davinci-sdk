@@ -159,7 +159,7 @@ async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, cens
 }
 
 /**
- * Step 3: Create voting process using SDK with real-time transaction monitoring
+ * Step 3: Create voting process
  */
 async function step3_createProcess(
     sdk: DavinciSDK, 
@@ -448,9 +448,35 @@ async function step7_endProcessAndShowResults(
         await new Promise(r => setTimeout(r, 10000));
     }
     
-    // End the process
+    // End the process with real-time transaction monitoring
     info("Ending the voting process...");
-    await sdk.processes.setProcessStatus(processId, ProcessStatus.ENDED);
+    const stream = sdk.endProcessStream(processId);
+    
+    for await (const event of stream) {
+        switch (event.status) {
+            case TxStatus.Pending:
+                info(chalk.yellow("📝 Transaction submitted to blockchain"));
+                info(chalk.gray(`   Hash: ${event.hash}`));
+                info(chalk.gray("   Waiting for confirmation..."));
+                break;
+                
+            case TxStatus.Completed:
+                success(chalk.green("✅ Transaction confirmed!"));
+                info(chalk.gray("   Process has been ended"));
+                break;
+                
+            case TxStatus.Failed:
+                console.error(chalk.red("❌ Transaction failed!"));
+                console.error(chalk.red(`   Error: ${event.error.message}`));
+                throw event.error;
+                
+            case TxStatus.Reverted:
+                console.error(chalk.red("⚠️  Transaction reverted!"));
+                console.error(chalk.red(`   Reason: ${event.reason || "Unknown reason"}`));
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown reason"}`);
+        }
+    }
+    
     success("Process ended successfully");
     
     // Wait for results to be set
@@ -467,7 +493,7 @@ async function step7_endProcessAndShowResults(
     success("Process results have been set");
     
     // Show final results
-    const process = await sdk.processes.getProcess(processId);
+    const process = await sdk.getProcess(processId);
     
     console.log(chalk.cyan("\n🗳️  Election Results:"));
     console.log(chalk.yellow("\nQuestion 1: What is your favorite color?"));

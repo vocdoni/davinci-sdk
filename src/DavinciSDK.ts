@@ -623,6 +623,75 @@ export class DavinciSDK {
     }
 
     /**
+     * Ends a voting process by setting its status to ENDED and returns an async generator 
+     * that yields transaction status events. This method allows you to monitor the 
+     * transaction progress in real-time.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to end
+     * @returns AsyncGenerator yielding transaction status events
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.endProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case TxStatus.Pending:
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case TxStatus.Completed:
+     *       console.log("Process ended successfully");
+     *       break;
+     *     case TxStatus.Failed:
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case TxStatus.Reverted:
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    endProcessStream(processId: string) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before ending processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.endProcessStream(processId);
+    }
+
+    /**
+     * Ends a voting process by setting its status to ENDED.
+     * This is the simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use endProcessStream() instead.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to end
+     * @returns Promise resolving when the process is ended
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * await sdk.endProcess("0x1234567890abcdef...");
+     * console.log("Process ended successfully");
+     * ```
+     */
+    async endProcess(processId: string): Promise<void> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before ending processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.endProcess(processId);
+    }
+
+    /**
      * Resolve contract address based on configuration priority:
      * 1. If useSequencerAddresses is true: addresses from sequencer (highest priority)
      * 2. Custom addresses from config (if provided by user)
