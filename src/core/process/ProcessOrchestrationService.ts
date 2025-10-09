@@ -580,4 +580,252 @@ export class ProcessOrchestrationService {
         
         throw new Error("End process stream ended unexpectedly");
     }
+
+    /**
+     * Pauses a voting process by setting its status to PAUSED.
+     * Returns an async generator that yields transaction status events.
+     * 
+     * @param processId - The process ID to pause
+     * @returns AsyncGenerator yielding transaction status events
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.pauseProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case "pending":
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case "completed":
+     *       console.log("Process paused successfully");
+     *       break;
+     *     case "failed":
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case "reverted":
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *pauseProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+        // Submit on-chain transaction to pause the process
+        const txStream = this.processRegistry.setProcessStatus(processId, ProcessStatus.PAUSED);
+
+        for await (const event of txStream) {
+            if (event.status === TxStatus.Pending) {
+                yield { status: TxStatus.Pending, hash: event.hash };
+            } else if (event.status === TxStatus.Completed) {
+                yield {
+                    status: TxStatus.Completed,
+                    response: { success: true }
+                };
+                break;
+            } else if (event.status === TxStatus.Failed) {
+                yield { status: TxStatus.Failed, error: event.error };
+                break;
+            } else if (event.status === TxStatus.Reverted) {
+                yield { status: TxStatus.Reverted, reason: event.reason };
+                break;
+            }
+        }
+    }
+
+    /**
+     * Pauses a voting process by setting its status to PAUSED.
+     * This is a simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use pauseProcessStream() instead.
+     * 
+     * @param processId - The process ID to pause
+     * @returns Promise resolving when the process is paused
+     * 
+     * @example
+     * ```typescript
+     * await sdk.pauseProcess("0x1234567890abcdef...");
+     * console.log("Process paused successfully");
+     * ```
+     */
+    async pauseProcess(processId: string): Promise<void> {
+        // Use the stream internally and consume it to get the final result
+        for await (const event of this.pauseProcessStream(processId)) {
+            if (event.status === "completed") {
+                return;
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
+            }
+        }
+        
+        throw new Error("Pause process stream ended unexpectedly");
+    }
+
+    /**
+     * Cancels a voting process by setting its status to CANCELED.
+     * Returns an async generator that yields transaction status events.
+     * 
+     * @param processId - The process ID to cancel
+     * @returns AsyncGenerator yielding transaction status events
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.cancelProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case "pending":
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case "completed":
+     *       console.log("Process canceled successfully");
+     *       break;
+     *     case "failed":
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case "reverted":
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *cancelProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+        // Submit on-chain transaction to cancel the process
+        const txStream = this.processRegistry.setProcessStatus(processId, ProcessStatus.CANCELED);
+
+        for await (const event of txStream) {
+            if (event.status === TxStatus.Pending) {
+                yield { status: TxStatus.Pending, hash: event.hash };
+            } else if (event.status === TxStatus.Completed) {
+                yield {
+                    status: TxStatus.Completed,
+                    response: { success: true }
+                };
+                break;
+            } else if (event.status === TxStatus.Failed) {
+                yield { status: TxStatus.Failed, error: event.error };
+                break;
+            } else if (event.status === TxStatus.Reverted) {
+                yield { status: TxStatus.Reverted, reason: event.reason };
+                break;
+            }
+        }
+    }
+
+    /**
+     * Cancels a voting process by setting its status to CANCELED.
+     * This is a simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use cancelProcessStream() instead.
+     * 
+     * @param processId - The process ID to cancel
+     * @returns Promise resolving when the process is canceled
+     * 
+     * @example
+     * ```typescript
+     * await sdk.cancelProcess("0x1234567890abcdef...");
+     * console.log("Process canceled successfully");
+     * ```
+     */
+    async cancelProcess(processId: string): Promise<void> {
+        // Use the stream internally and consume it to get the final result
+        for await (const event of this.cancelProcessStream(processId)) {
+            if (event.status === "completed") {
+                return;
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
+            }
+        }
+        
+        throw new Error("Cancel process stream ended unexpectedly");
+    }
+
+    /**
+     * Resumes a voting process by setting its status to READY.
+     * This is typically used to resume a paused process.
+     * Returns an async generator that yields transaction status events.
+     * 
+     * @param processId - The process ID to resume
+     * @returns AsyncGenerator yielding transaction status events
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.resumeProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case "pending":
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case "completed":
+     *       console.log("Process resumed successfully");
+     *       break;
+     *     case "failed":
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case "reverted":
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *resumeProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+        // Submit on-chain transaction to resume the process
+        const txStream = this.processRegistry.setProcessStatus(processId, ProcessStatus.READY);
+
+        for await (const event of txStream) {
+            if (event.status === TxStatus.Pending) {
+                yield { status: TxStatus.Pending, hash: event.hash };
+            } else if (event.status === TxStatus.Completed) {
+                yield {
+                    status: TxStatus.Completed,
+                    response: { success: true }
+                };
+                break;
+            } else if (event.status === TxStatus.Failed) {
+                yield { status: TxStatus.Failed, error: event.error };
+                break;
+            } else if (event.status === TxStatus.Reverted) {
+                yield { status: TxStatus.Reverted, reason: event.reason };
+                break;
+            }
+        }
+    }
+
+    /**
+     * Resumes a voting process by setting its status to READY.
+     * This is typically used to resume a paused process.
+     * This is a simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use resumeProcessStream() instead.
+     * 
+     * @param processId - The process ID to resume
+     * @returns Promise resolving when the process is resumed
+     * 
+     * @example
+     * ```typescript
+     * await sdk.resumeProcess("0x1234567890abcdef...");
+     * console.log("Process resumed successfully");
+     * ```
+     */
+    async resumeProcess(processId: string): Promise<void> {
+        // Use the stream internally and consume it to get the final result
+        for await (const event of this.resumeProcessStream(processId)) {
+            if (event.status === "completed") {
+                return;
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
+            }
+        }
+        
+        throw new Error("Resume process stream ended unexpectedly");
+    }
 }
