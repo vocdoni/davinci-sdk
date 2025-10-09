@@ -59,7 +59,6 @@ describe("Simple Process Creation Integration (Sepolia)", () => {
                 minValueSum: "0"
             },
             timing: {
-                startDate: Math.floor(Date.now() / 1000) + 120, // Start in 2 minutes
                 duration: 3600 // 1 hour
             },
             questions: [
@@ -905,6 +904,518 @@ describe("Simple Process Creation Integration (Sepolia)", () => {
 
         expect(() => uninitializedSdk.endProcessStream("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).toThrow(
             "SDK must be initialized before ending processes. Call sdk.init() first."
+        );
+    });
+
+    it("should pause a process using async generator stream and yield transaction status events", async () => {
+        // First create a process to pause
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Pause Process Stream Test",
+            description: "Testing the pauseProcessStream async generator method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 20,
+                uri: `ipfs://pause-process-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Should this process be paused?",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforePause = await sdk.processes.getProcess(processId);
+        expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Now pause the process using the stream
+        const pauseStream = sdk.pauseProcessStream(processId);
+        
+        let hasPendingEvent = false;
+        let hasCompletedEvent = false;
+        let transactionHash = "";
+
+        for await (const event of pauseStream) {
+            if (event.status === "pending") {
+                hasPendingEvent = true;
+                transactionHash = event.hash;
+                
+                expect(event.hash).toBeDefined();
+                expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "completed") {
+                hasCompletedEvent = true;
+                
+                expect(event.response).toBeDefined();
+                expect(event.response.success).toBe(true);
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown"}`);
+            }
+        }
+
+        // Verify that we received both pending and completed events
+        expect(hasPendingEvent).toBe(true);
+        expect(hasCompletedEvent).toBe(true);
+        expect(transactionHash).toBeTruthy();
+
+        // Verify the process status was changed to PAUSED on-chain
+        const processAfterPause = await sdk.processes.getProcess(processId);
+        expect(processAfterPause.status).toBe(BigInt(ProcessStatus.PAUSED));
+    });
+
+    it("should pause a process using the simplified pauseProcess method", async () => {
+        // First create a process to pause
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Simple Pause Process Test",
+            description: "Testing the simplified pauseProcess method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 15,
+                uri: `ipfs://simple-pause-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Simple pause test question",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforePause = await sdk.processes.getProcess(processId);
+        expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Pause the process using the simplified method
+        await sdk.pauseProcess(processId);
+
+        // Verify the process status was changed to PAUSED on-chain
+        const processAfterPause = await sdk.processes.getProcess(processId);
+        expect(processAfterPause.status).toBe(BigInt(ProcessStatus.PAUSED));
+    });
+
+    it("should validate SDK initialization requirement for pauseProcess", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        await expect(uninitializedSdk.pauseProcess("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).rejects.toThrow(
+            "SDK must be initialized before pausing processes. Call sdk.init() first."
+        );
+    });
+
+    it("should validate SDK initialization requirement for pauseProcessStream", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        expect(() => uninitializedSdk.pauseProcessStream("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).toThrow(
+            "SDK must be initialized before pausing processes. Call sdk.init() first."
+        );
+    });
+
+    it("should cancel a process using async generator stream and yield transaction status events", async () => {
+        // First create a process to cancel
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Cancel Process Stream Test",
+            description: "Testing the cancelProcessStream async generator method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 20,
+                uri: `ipfs://cancel-process-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Should this process be canceled?",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforeCancel = await sdk.processes.getProcess(processId);
+        expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Now cancel the process using the stream
+        const cancelStream = sdk.cancelProcessStream(processId);
+        
+        let hasPendingEvent = false;
+        let hasCompletedEvent = false;
+        let transactionHash = "";
+
+        for await (const event of cancelStream) {
+            if (event.status === "pending") {
+                hasPendingEvent = true;
+                transactionHash = event.hash;
+                
+                expect(event.hash).toBeDefined();
+                expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "completed") {
+                hasCompletedEvent = true;
+                
+                expect(event.response).toBeDefined();
+                expect(event.response.success).toBe(true);
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown"}`);
+            }
+        }
+
+        // Verify that we received both pending and completed events
+        expect(hasPendingEvent).toBe(true);
+        expect(hasCompletedEvent).toBe(true);
+        expect(transactionHash).toBeTruthy();
+
+        // Verify the process status was changed to CANCELED on-chain
+        const processAfterCancel = await sdk.processes.getProcess(processId);
+        expect(processAfterCancel.status).toBe(BigInt(ProcessStatus.CANCELED));
+    });
+
+    it("should cancel a process using the simplified cancelProcess method", async () => {
+        // First create a process to cancel
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Simple Cancel Process Test",
+            description: "Testing the simplified cancelProcess method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 15,
+                uri: `ipfs://simple-cancel-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Simple cancel test question",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforeCancel = await sdk.processes.getProcess(processId);
+        expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Cancel the process using the simplified method
+        await sdk.cancelProcess(processId);
+
+        // Verify the process status was changed to CANCELED on-chain
+        const processAfterCancel = await sdk.processes.getProcess(processId);
+        expect(processAfterCancel.status).toBe(BigInt(ProcessStatus.CANCELED));
+    });
+
+    it("should validate SDK initialization requirement for cancelProcess", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        await expect(uninitializedSdk.cancelProcess("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).rejects.toThrow(
+            "SDK must be initialized before canceling processes. Call sdk.init() first."
+        );
+    });
+
+    it("should validate SDK initialization requirement for cancelProcessStream", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        expect(() => uninitializedSdk.cancelProcessStream("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).toThrow(
+            "SDK must be initialized before canceling processes. Call sdk.init() first."
+        );
+    });
+
+    it("should resume a paused process using async generator stream and yield transaction status events", async () => {
+        // First create a process
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Resume Process Stream Test",
+            description: "Testing the resumeProcessStream async generator method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 20,
+                uri: `ipfs://resume-process-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Should this process be resumed?",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforePause = await sdk.processes.getProcess(processId);
+        expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Pause the process first
+        await sdk.pauseProcess(processId);
+
+        // Verify the process is paused
+        const processAfterPause = await sdk.processes.getProcess(processId);
+        expect(processAfterPause.status).toBe(BigInt(ProcessStatus.PAUSED));
+
+        // Now resume the process using the stream
+        const resumeStream = sdk.resumeProcessStream(processId);
+        
+        let hasPendingEvent = false;
+        let hasCompletedEvent = false;
+        let transactionHash = "";
+
+        for await (const event of resumeStream) {
+            if (event.status === "pending") {
+                hasPendingEvent = true;
+                transactionHash = event.hash;
+                
+                expect(event.hash).toBeDefined();
+                expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "completed") {
+                hasCompletedEvent = true;
+                
+                expect(event.response).toBeDefined();
+                expect(event.response.success).toBe(true);
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown"}`);
+            }
+        }
+
+        // Verify that we received both pending and completed events
+        expect(hasPendingEvent).toBe(true);
+        expect(hasCompletedEvent).toBe(true);
+        expect(transactionHash).toBeTruthy();
+
+        // Verify the process status was changed to READY on-chain
+        const processAfterResume = await sdk.processes.getProcess(processId);
+        expect(processAfterResume.status).toBe(BigInt(ProcessStatus.READY));
+    });
+
+    it("should resume a paused process using the simplified resumeProcess method", async () => {
+        // First create a process
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Simple Resume Process Test",
+            description: "Testing the simplified resumeProcess method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 15,
+                uri: `ipfs://simple-resume-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Simple resume test question",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforePause = await sdk.processes.getProcess(processId);
+        expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Pause the process first
+        await sdk.pauseProcess(processId);
+
+        // Verify the process is paused
+        const processAfterPause = await sdk.processes.getProcess(processId);
+        expect(processAfterPause.status).toBe(BigInt(ProcessStatus.PAUSED));
+
+        // Resume the process using the simplified method
+        await sdk.resumeProcess(processId);
+
+        // Verify the process status was changed to READY on-chain
+        const processAfterResume = await sdk.processes.getProcess(processId);
+        expect(processAfterResume.status).toBe(BigInt(ProcessStatus.READY));
+    });
+
+    it("should validate SDK initialization requirement for resumeProcess", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        await expect(uninitializedSdk.resumeProcess("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).rejects.toThrow(
+            "SDK must be initialized before resuming processes. Call sdk.init() first."
+        );
+    });
+
+    it("should validate SDK initialization requirement for resumeProcessStream", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        expect(() => uninitializedSdk.resumeProcessStream("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).toThrow(
+            "SDK must be initialized before resuming processes. Call sdk.init() first."
         );
     });
 });

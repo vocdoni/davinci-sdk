@@ -692,6 +692,213 @@ export class DavinciSDK {
     }
 
     /**
+     * Pauses a voting process by setting its status to PAUSED and returns an async generator 
+     * that yields transaction status events. This method allows you to monitor the 
+     * transaction progress in real-time.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to pause
+     * @returns AsyncGenerator yielding transaction status events
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.pauseProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case TxStatus.Pending:
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case TxStatus.Completed:
+     *       console.log("Process paused successfully");
+     *       break;
+     *     case TxStatus.Failed:
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case TxStatus.Reverted:
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    pauseProcessStream(processId: string) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before pausing processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.pauseProcessStream(processId);
+    }
+
+    /**
+     * Pauses a voting process by setting its status to PAUSED.
+     * This is the simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use pauseProcessStream() instead.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to pause
+     * @returns Promise resolving when the process is paused
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * await sdk.pauseProcess("0x1234567890abcdef...");
+     * console.log("Process paused successfully");
+     * ```
+     */
+    async pauseProcess(processId: string): Promise<void> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before pausing processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.pauseProcess(processId);
+    }
+
+    /**
+     * Cancels a voting process by setting its status to CANCELED and returns an async generator 
+     * that yields transaction status events. This method allows you to monitor the 
+     * transaction progress in real-time.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to cancel
+     * @returns AsyncGenerator yielding transaction status events
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.cancelProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case TxStatus.Pending:
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case TxStatus.Completed:
+     *       console.log("Process canceled successfully");
+     *       break;
+     *     case TxStatus.Failed:
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case TxStatus.Reverted:
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    cancelProcessStream(processId: string) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before canceling processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.cancelProcessStream(processId);
+    }
+
+    /**
+     * Cancels a voting process by setting its status to CANCELED.
+     * This is the simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use cancelProcessStream() instead.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to cancel
+     * @returns Promise resolving when the process is canceled
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * await sdk.cancelProcess("0x1234567890abcdef...");
+     * console.log("Process canceled successfully");
+     * ```
+     */
+    async cancelProcess(processId: string): Promise<void> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before canceling processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.cancelProcess(processId);
+    }
+
+    /**
+     * Resumes a voting process by setting its status to READY and returns an async generator 
+     * that yields transaction status events. This is typically used to resume a paused process.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to resume
+     * @returns AsyncGenerator yielding transaction status events
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.resumeProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case TxStatus.Pending:
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case TxStatus.Completed:
+     *       console.log("Process resumed successfully");
+     *       break;
+     *     case TxStatus.Failed:
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case TxStatus.Reverted:
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    resumeProcessStream(processId: string) {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before resuming processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.resumeProcessStream(processId);
+    }
+
+    /**
+     * Resumes a voting process by setting its status to READY.
+     * This is typically used to resume a paused process.
+     * This is the simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use resumeProcessStream() instead.
+     * 
+     * Requires a signer with a provider for blockchain interactions.
+     * 
+     * @param processId - The process ID to resume
+     * @returns Promise resolving when the process is resumed
+     * @throws Error if signer does not have a provider
+     * 
+     * @example
+     * ```typescript
+     * await sdk.resumeProcess("0x1234567890abcdef...");
+     * console.log("Process resumed successfully");
+     * ```
+     */
+    async resumeProcess(processId: string): Promise<void> {
+        if (!this.initialized) {
+            throw new Error("SDK must be initialized before resuming processes. Call sdk.init() first.");
+        }
+        this.ensureProvider();
+        
+        return this.processOrchestrator.resumeProcess(processId);
+    }
+
+    /**
      * Resolve contract address based on configuration priority:
      * 1. If useSequencerAddresses is true: addresses from sequencer (highest priority)
      * 2. Custom addresses from config (if provided by user)
