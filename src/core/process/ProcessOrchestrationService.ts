@@ -498,4 +498,86 @@ export class ProcessOrchestrationService {
 
         return metadata;
     }
+
+    /**
+     * Ends a voting process by setting its status to ENDED.
+     * Returns an async generator that yields transaction status events.
+     * 
+     * @param processId - The process ID to end
+     * @returns AsyncGenerator yielding transaction status events
+     * 
+     * @example
+     * ```typescript
+     * const stream = sdk.endProcessStream("0x1234567890abcdef...");
+     * 
+     * for await (const event of stream) {
+     *   switch (event.status) {
+     *     case "pending":
+     *       console.log("Transaction pending:", event.hash);
+     *       break;
+     *     case "completed":
+     *       console.log("Process ended successfully");
+     *       break;
+     *     case "failed":
+     *       console.error("Transaction failed:", event.error);
+     *       break;
+     *     case "reverted":
+     *       console.error("Transaction reverted:", event.reason);
+     *       break;
+     *   }
+     * }
+     * ```
+     */
+    async *endProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+        // Submit on-chain transaction to end the process
+        const txStream = this.processRegistry.setProcessStatus(processId, ProcessStatus.ENDED);
+
+        for await (const event of txStream) {
+            if (event.status === TxStatus.Pending) {
+                yield { status: TxStatus.Pending, hash: event.hash };
+            } else if (event.status === TxStatus.Completed) {
+                yield {
+                    status: TxStatus.Completed,
+                    response: { success: true }
+                };
+                break;
+            } else if (event.status === TxStatus.Failed) {
+                yield { status: TxStatus.Failed, error: event.error };
+                break;
+            } else if (event.status === TxStatus.Reverted) {
+                yield { status: TxStatus.Reverted, reason: event.reason };
+                break;
+            }
+        }
+    }
+
+    /**
+     * Ends a voting process by setting its status to ENDED.
+     * This is a simplified method that waits for transaction completion.
+     * 
+     * For real-time transaction status updates, use endProcessStream() instead.
+     * 
+     * @param processId - The process ID to end
+     * @returns Promise resolving when the process is ended
+     * 
+     * @example
+     * ```typescript
+     * await sdk.endProcess("0x1234567890abcdef...");
+     * console.log("Process ended successfully");
+     * ```
+     */
+    async endProcess(processId: string): Promise<void> {
+        // Use the stream internally and consume it to get the final result
+        for await (const event of this.endProcessStream(processId)) {
+            if (event.status === "completed") {
+                return;
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "unknown reason"}`);
+            }
+        }
+        
+        throw new Error("End process stream ended unexpectedly");
+    }
 }

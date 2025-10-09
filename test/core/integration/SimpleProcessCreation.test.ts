@@ -737,4 +737,174 @@ describe("Simple Process Creation Integration (Sepolia)", () => {
         expect(onChainProcess).toBeDefined();
         expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
     });
+
+    it("should end a process using async generator stream and yield transaction status events", async () => {
+        // First create a process to end
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "End Process Stream Test",
+            description: "Testing the endProcessStream async generator method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 20,
+                uri: `ipfs://end-process-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                startDate: Math.floor(Date.now() / 1000) + 10, // Start in 10 seconds to avoid underflow
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Should this process be ended?",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforeEnd = await sdk.processes.getProcess(processId);
+        expect(processBeforeEnd.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start to avoid underflow error (block.timestamp - p.startTime)
+        // The contract calculates newDuration = block.timestamp - p.startTime when ending
+        // If current time < start time, this causes Panic(17) overflow
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // Now end the process using the stream
+        const endStream = sdk.endProcessStream(processId);
+        
+        let hasPendingEvent = false;
+        let hasCompletedEvent = false;
+        let transactionHash = "";
+
+        for await (const event of endStream) {
+            if (event.status === "pending") {
+                hasPendingEvent = true;
+                transactionHash = event.hash;
+                
+                expect(event.hash).toBeDefined();
+                expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+            } else if (event.status === "completed") {
+                hasCompletedEvent = true;
+                
+                expect(event.response).toBeDefined();
+                expect(event.response.success).toBe(true);
+            } else if (event.status === "failed") {
+                throw event.error;
+            } else if (event.status === "reverted") {
+                throw new Error(`Transaction reverted: ${event.reason || "Unknown"}`);
+            }
+        }
+
+        // Verify that we received both pending and completed events
+        expect(hasPendingEvent).toBe(true);
+        expect(hasCompletedEvent).toBe(true);
+        expect(transactionHash).toBeTruthy();
+
+        // Verify the process status was changed to ENDED on-chain
+        const processAfterEnd = await sdk.processes.getProcess(processId);
+        expect(processAfterEnd.status).toBe(BigInt(ProcessStatus.ENDED));
+    });
+
+    it("should end a process using the simplified endProcess method", async () => {
+        // First create a process to end
+        const censusRoot = randomHex(32);
+        
+        const processConfig: ProcessConfig = {
+            title: "Simple End Process Test",
+            description: "Testing the simplified endProcess method",
+            census: {
+                type: CensusOrigin.CensusOriginMerkleTree,
+                root: censusRoot,
+                size: 15,
+                uri: `ipfs://simple-end-test-${Date.now()}`
+            },
+            ballot: {
+                numFields: 1,
+                maxValue: "1",
+                minValue: "0",
+                uniqueValues: false,
+                costFromWeight: false,
+                costExponent: 1,
+                maxValueSum: "1",
+                minValueSum: "0"
+            },
+            timing: {
+                startDate: Math.floor(Date.now() / 1000) + 10, // Start in 10 seconds to avoid underflow
+                duration: 3600
+            },
+            questions: [
+                {
+                    title: "Simple end test question",
+                    choices: [
+                        { title: "Yes", value: 0 },
+                        { title: "No", value: 1 }
+                    ]
+                }
+            ]
+        };
+
+        // Create the process
+        const createResult = await sdk.createProcess(processConfig);
+        expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        
+        const processId = createResult.processId;
+
+        // Verify initial process status is READY
+        const processBeforeEnd = await sdk.processes.getProcess(processId);
+        expect(processBeforeEnd.status).toBe(BigInt(ProcessStatus.READY));
+
+        // Wait for process to start to avoid underflow error
+        await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+
+        // End the process using the simplified method
+        await sdk.endProcess(processId);
+
+        // Verify the process status was changed to ENDED on-chain
+        const processAfterEnd = await sdk.processes.getProcess(processId);
+        expect(processAfterEnd.status).toBe(BigInt(ProcessStatus.ENDED));
+    });
+
+    it("should validate SDK initialization requirement for endProcess", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        await expect(uninitializedSdk.endProcess("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).rejects.toThrow(
+            "SDK must be initialized before ending processes. Call sdk.init() first."
+        );
+    });
+
+    it("should validate SDK initialization requirement for endProcessStream", async () => {
+        const uninitializedSdk = new DavinciSDK({
+            signer: wallet,
+            environment: "dev"
+        });
+
+        expect(() => uninitializedSdk.endProcessStream("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")).toThrow(
+            "SDK must be initialized before ending processes. Call sdk.init() first."
+        );
+    });
 });
