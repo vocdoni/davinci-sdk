@@ -208,48 +208,55 @@ export class ProcessRegistryService extends SmartContractService {
     // ─── EVENT LISTENERS ───────────────────────────────────────────────────────
 
     onProcessCreated(cb: ProcessCreatedCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, string]>(
+            this.contract,
             this.contract.filters.ProcessCreated(),
-            this.normalizeListener<[string, string]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up ProcessCreated listener:', err));
     }
 
     onProcessStatusChanged(cb: ProcessStatusChangedCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, bigint, bigint]>(
+            this.contract,
             this.contract.filters.ProcessStatusChanged(),
-            this.normalizeListener<[string, bigint, bigint]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up ProcessStatusChanged listener:', err));
     }
 
     onCensusUpdated(cb: ProcessCensusUpdatedCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, string, string, bigint]>(
+            this.contract,
             this.contract.filters.CensusUpdated(),
-            this.normalizeListener<[string, string, string, bigint]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up CensusUpdated listener:', err));
     }
 
     onProcessDurationChanged(cb: ProcessDurationChangedCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, bigint]>(
+            this.contract,
             this.contract.filters.ProcessDurationChanged(),
-            this.normalizeListener<[string, bigint]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up ProcessDurationChanged listener:', err));
     }
 
     onStateRootUpdated(cb: ProcessStateRootUpdatedCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, string, bigint]>(
+            this.contract,
             this.contract.filters.ProcessStateRootUpdated(),
-            this.normalizeListener<[string, string, bigint]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up StateRootUpdated listener:', err));
     }
 
     onProcessResultsSet(cb: ProcessResultsSetCallback): void {
-        this.contract.on(
+        this.setupEventListener<[string, string, bigint[]]>(
+            this.contract,
             this.contract.filters.ProcessResultsSet(),
-            this.normalizeListener<[string, string, bigint[]]>(cb)
-        );
+            cb
+        ).catch(err => console.error('Error setting up ProcessResultsSet listener:', err));
     }
 
     removeAllListeners(): void {
         this.contract.removeAllListeners();
+        this.clearPollingIntervals();
     }
 }

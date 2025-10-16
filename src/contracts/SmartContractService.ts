@@ -1,4 +1,4 @@
-import type { ContractTransactionResponse } from "ethers";
+import type { ContractTransactionResponse, BaseContract, EventFilter, Provider, ContractEventName, EventLog } from "ethers";
 import addressesJson from "@vocdoni/davinci-contracts/deployed_contracts_addresses.json";
 
 /**
@@ -79,9 +79,14 @@ export type TxStatusEvent<T = any> =
 
 /**
  * Abstract base class providing common functionality for smart contract interactions.
- * Implements transaction handling, status monitoring, and event normalization.
+ * Implements transaction handling, status monitoring, event normalization, and
+ * event listener management with automatic fallback for RPCs that don't support eth_newFilter.
  */
 export abstract class SmartContractService {
+    /** Active polling intervals for event listeners using fallback mode */
+    private pollingIntervals: NodeJS.Timeout[] = [];
+    /** Default polling interval in milliseconds for event listener fallback */
+    protected eventPollingInterval: number = 5000;
     /**
      * Sends a transaction and yields status events during its lifecycle.
      * This method handles the complete transaction flow from submission to completion,
@@ -203,5 +208,198 @@ export abstract class SmartContractService {
             }
             callback(...(args as Args));
         };
+    }
+
+    /**
+     * Sets up an event listener with automatic fallback for RPCs that don't support eth_newFilter.
+     * First attempts to use contract.on() which relies on eth_newFilter. If the RPC doesn't support
+     * this method (error code -32601), automatically falls back to polling with queryFilter.
+     * 
+     * @template Args - Tuple type representing the event arguments
+     * @param contract - The contract instance to listen to
+     * @param eventFilter - The event filter to listen for
+     * @param callback - The callback function to invoke when the event occurs
+     * 
+     * @example
+     * ```typescript
+     * this.setupEventListener(
+     *   this.contract,
+     *   this.contract.filters.Transfer(),
+     *   (from: string, to: string, amount: bigint) => {
+     *     console.log(`Transfer: ${from} -> ${to}: ${amount}`);
+     *   }
+     * );
+     * ```
+     */
+    protected async setupEventListener<Args extends any[]>(
+        contract: BaseContract,
+        eventFilter: ContractEventName | EventFilter,
+        callback: (...args: Args) => void
+    ): Promise<void> {
+        const normalizedCallback = this.normalizeListener(callback);
+        
+        // First, test if eth_newFilter is supported by trying to create a filter
+        const provider = contract.runner?.provider as Provider | undefined;
+        if (!provider) {
+            console.warn('No provider available for event listeners');
+            return;
+        }
+
+        try {
+            // Test if the provider supports eth_newFilter
+            // We do this by attempting to get logs with a filter
+            // If it fails, we'll catch the error and use polling
+            const testFilter = {
+                address: await contract.getAddress(),
+                topics: []
+            };
+            
+            // Try to create a filter - this will fail if eth_newFilter is not supported
+            // We use the provider's internal method if available
+            if ('send' in provider && typeof provider.send === 'function') {
+                try {
+                    await provider.send('eth_newFilter', [testFilter]);
+                    // If we get here, eth_newFilter is supported
+                    contract.on(eventFilter as ContractEventName, normalizedCallback);
+                    return;
+                } catch (error: any) {
+                    if (this.isUnsupportedMethodError(error)) {
+                        // eth_newFilter not supported, use polling
+                        console.warn(
+                            'RPC does not support eth_newFilter, falling back to polling for events. ' +
+                            'This may result in delayed event notifications.'
+                        );
+                        this.setupPollingListener(contract, eventFilter, callback);
+                        return;
+                    }
+                    // Other error, try normal approach
+                }
+            }
+            
+            // Default: try to use contract.on()
+            // Set up an error handler to catch async errors
+            const errorHandler = (error: any) => {
+                if (this.isUnsupportedMethodError(error)) {
+                    // Remove the failing listener
+                    contract.off(eventFilter as ContractEventName, normalizedCallback);
+                    contract.off('error', errorHandler);
+                    
+                    console.warn(
+                        'RPC does not support eth_newFilter, falling back to polling for events. ' +
+                        'This may result in delayed event notifications.'
+                    );
+                    this.setupPollingListener(contract, eventFilter, callback);
+                }
+            };
+            
+            // Listen for errors
+            contract.once('error', errorHandler);
+            
+            // Set up the listener
+            contract.on(eventFilter as ContractEventName, normalizedCallback);
+            
+        } catch (error: any) {
+            // Fallback to polling on any setup error
+            console.warn('Error setting up event listener, falling back to polling:', error.message);
+            this.setupPollingListener(contract, eventFilter, callback);
+        }
+    }
+
+    /**
+     * Checks if an error indicates that the RPC method is unsupported (eth_newFilter).
+     * 
+     * @param error - The error to check
+     * @returns true if the error indicates unsupported method
+     */
+    private isUnsupportedMethodError(error: any): boolean {
+        // Check for error code -32601 (method not found) at various levels
+        return (
+            error?.code === -32601 ||
+            error?.error?.code === -32601 ||
+            error?.data?.code === -32601 ||
+            (typeof error?.message === 'string' && error.message.includes('unsupported method'))
+        );
+    }
+
+    /**
+     * Sets up a polling-based event listener as fallback when eth_newFilter is not supported.
+     * Periodically queries for new events and invokes the callback for each new event found.
+     * 
+     * @template Args - Tuple type representing the event arguments
+     * @param contract - The contract instance to poll
+     * @param eventFilter - The event filter to poll for
+     * @param callback - The callback function to invoke for each event
+     */
+    private setupPollingListener<Args extends any[]>(
+        contract: BaseContract,
+        eventFilter: ContractEventName | EventFilter,
+        callback: (...args: Args) => void
+    ): void {
+        let lastProcessedBlock = 0;
+        
+        const poll = async () => {
+            try {
+                const provider = contract.runner?.provider as Provider | undefined;
+                if (!provider) {
+                    console.warn('No provider available for polling events');
+                    return;
+                }
+
+                // Get current block number
+                const currentBlock = await provider.getBlockNumber();
+                
+                // Initialize lastProcessedBlock on first poll
+                if (lastProcessedBlock === 0) {
+                    lastProcessedBlock = currentBlock - 1;
+                }
+
+                // Query for events since last processed block
+                if (currentBlock > lastProcessedBlock) {
+                    const events = await contract.queryFilter(
+                        eventFilter as ContractEventName,
+                        lastProcessedBlock + 1,
+                        currentBlock
+                    );
+
+                    // Process each event - filter to only EventLog types that have args
+                    for (const event of events) {
+                        if ('args' in event && event.args) {
+                            callback(...(event.args as any as Args));
+                        }
+                    }
+
+                    lastProcessedBlock = currentBlock;
+                }
+            } catch (error) {
+                console.error('Error polling for events:', error);
+            }
+        };
+
+        // Start polling
+        const intervalId = setInterval(poll, this.eventPollingInterval);
+        this.pollingIntervals.push(intervalId);
+
+        // Do an initial poll
+        poll();
+    }
+
+    /**
+     * Clears all active polling intervals.
+     * Should be called when removing all listeners or cleaning up the service.
+     */
+    protected clearPollingIntervals(): void {
+        for (const intervalId of this.pollingIntervals) {
+            clearInterval(intervalId);
+        }
+        this.pollingIntervals = [];
+    }
+
+    /**
+     * Sets the polling interval for event listeners using the fallback mechanism.
+     * 
+     * @param intervalMs - Polling interval in milliseconds
+     */
+    setEventPollingInterval(intervalMs: number): void {
+        this.eventPollingInterval = intervalMs;
     }
 }
