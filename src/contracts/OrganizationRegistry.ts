@@ -121,34 +121,39 @@ export class OrganizationRegistryService extends SmartContractService {
   // ─── EVENT LISTENERS ───────────────────────────────────────────────────────
 
   onOrganizationCreated(cb: OrganizationCreatedCallback): void {
-    this.contract.on(
+    this.setupEventListener<[string]>(
+      this.contract,
       this.contract.filters.OrganizationCreated(),
-      this.normalizeListener<[string]>(cb),
-    );
+      cb
+    ).catch(err => console.error('Error setting up OrganizationCreated listener:', err));
   }
 
   onOrganizationUpdated(cb: OrganizationUpdatedCallback): void {
-    this.contract.on(
+    this.setupEventListener<[string, string]>(
+      this.contract,
       this.contract.filters.OrganizationUpdated(),
-      this.normalizeListener<[string, string]>(cb),
-    );
+      cb
+    ).catch(err => console.error('Error setting up OrganizationUpdated listener:', err));
   }
 
   onAdministratorAdded(cb: OrganizationAdministratorAddedCallback): void {
-    this.contract.on(
+    this.setupEventListener<[string, string]>(
+      this.contract,
       this.contract.filters.AdministratorAdded(),
-      this.normalizeListener<[string, string]>(cb)
-    );
+      cb
+    ).catch(err => console.error('Error setting up AdministratorAdded listener:', err));
   }
 
   onAdministratorRemoved(cb: OrganizationAdministratorRemovedCallback): void {
-    this.contract.on(
+    this.setupEventListener<[string, string, string]>(
+      this.contract,
       this.contract.filters.AdministratorRemoved(),
-      this.normalizeListener<[string, string, string]>(cb)
-    );
+      cb
+    ).catch(err => console.error('Error setting up AdministratorRemoved listener:', err));
   }
 
   removeAllListeners(): void {
     this.contract.removeAllListeners();
+    this.clearPollingIntervals();
   }
 }
