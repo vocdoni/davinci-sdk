@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2025-01-16
+
 ### Added
 - Initial public release preparation
 - Complete TypeScript SDK for Vocdoni DaVinci protocol
 - Support for both MerkleTree and CSP census types
 - Comprehensive examples (script and UI)
 - Full test coverage with unit and integration tests
+
+### Changed
+- Updated build configuration for better module compatibility
+- Improved error handling and type definitions
+
+### Fixed
+- Various bug fixes and stability improvements
 
 ## [0.0.1] - 2024-12-01
 
