@@ -69,16 +69,34 @@ export interface VoteStatusInfo {
 }
 
 /**
+ * Configuration options for VoteOrchestrationService
+ */
+export interface VoteOrchestrationConfig {
+  /** Whether to verify downloaded circuit files match expected hashes (default: true) */
+  verifyCircuitFiles?: boolean;
+  /** Whether to verify the generated proof is valid before submission (default: true) */
+  verifyProof?: boolean;
+}
+
+/**
  * Service that orchestrates the complete voting workflow
  * Handles all the complex cryptographic operations and API calls internally
  */
 export class VoteOrchestrationService {
+  private readonly verifyCircuitFiles: boolean;
+  private readonly verifyProof: boolean;
+
   constructor(
     private apiService: VocdoniApiService,
     private getCrypto: () => Promise<DavinciCrypto>,
     private signer: Signer,
-    private censusProviders: CensusProviders = {}
-  ) {}
+    private censusProviders: CensusProviders = {},
+    config: VoteOrchestrationConfig = {}
+  ) {
+    // Default to true - verify circuit files and proof by default for security
+    this.verifyCircuitFiles = config.verifyCircuitFiles ?? true;
+    this.verifyProof = config.verifyProof ?? true;
+  }
 
   /**
    * Submit a vote with simplified configuration
@@ -400,21 +418,30 @@ export class VoteOrchestrationService {
     proof: Groth16Proof;
     publicSignals: string[];
   }> {
-    // Get circuit URLs from sequencer info
+    // Get circuit URLs and hashes from sequencer info
     const info = await this.apiService.sequencer.getInfo();
 
+    // Create CircomProof instance with optional hash verification
     const circomProof = new CircomProof({
       wasmUrl: info.circuitUrl,
       zkeyUrl: info.provingKeyUrl,
       vkeyUrl: info.verificationKeyUrl,
+      // Only pass hashes if verifyCircuitFiles is enabled
+      ...(this.verifyCircuitFiles && {
+        wasmHash: info.circuitHash,
+        zkeyHash: info.provingKeyHash,
+        vkeyHash: info.verificationKeyHash,
+      }),
     });
 
     const { proof, publicSignals } = await circomProof.generate(circomInputs);
 
-    // Verify the proof
-    const isValid = await circomProof.verify(proof, publicSignals);
-    if (!isValid) {
-      throw new Error('Generated proof is invalid');
+    // Optionally verify the generated proof based on configuration
+    if (this.verifyProof) {
+      const isValid = await circomProof.verify(proof, publicSignals);
+      if (!isValid) {
+        throw new Error('Generated proof is invalid');
+      }
     }
 
     return { proof, publicSignals };

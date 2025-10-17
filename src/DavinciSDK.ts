@@ -52,6 +52,12 @@ export interface DavinciSDKConfig {
 
   /** Custom census proof providers (optional) */
   censusProviders?: CensusProviders;
+
+  /** Whether to verify downloaded circuit files match expected hashes (optional, defaults to true) */
+  verifyCircuitFiles?: boolean;
+
+  /** Whether to verify the generated proof is valid before submission (optional, defaults to true) */
+  verifyProof?: boolean;
 }
 
 /**
@@ -70,6 +76,8 @@ interface InternalDavinciSDKConfig {
     sequencerRegistry?: string;
   };
   useSequencerAddresses: boolean;
+  verifyCircuitFiles: boolean;
+  verifyProof: boolean;
 }
 
 /**
@@ -105,6 +113,8 @@ export class DavinciSDK {
       chain: config.chain ?? resolvedConfig.chain,
       contractAddresses: config.contractAddresses || {},
       useSequencerAddresses: config.useSequencerAddresses || false,
+      verifyCircuitFiles: config.verifyCircuitFiles ?? true, // Default to true for security
+      verifyProof: config.verifyProof ?? true, // Default to true for security
     };
 
     // Initialize API service
@@ -228,7 +238,11 @@ export class DavinciSDK {
         this.apiService,
         () => this.getCrypto(),
         this.config.signer,
-        this.censusProviders
+        this.censusProviders,
+        {
+          verifyCircuitFiles: this.config.verifyCircuitFiles,
+          verifyProof: this.config.verifyProof,
+        }
       );
     }
     return this._voteOrchestrator;
