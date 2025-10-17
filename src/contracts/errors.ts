@@ -1,6 +1,6 @@
 /**
  * @fileoverview Standardized error classes for contract services
- * 
+ *
  * This module provides a consistent error hierarchy for all contract service operations.
  * All errors extend from ContractServiceError and include operation context for better debugging.
  */
@@ -12,11 +12,14 @@
 export abstract class ContractServiceError extends Error {
   /**
    * Creates a new ContractServiceError instance.
-   * 
+   *
    * @param message - The error message describing what went wrong
    * @param operation - The operation that was being performed when the error occurred
    */
-  constructor(message: string, public readonly operation: string) {
+  constructor(
+    message: string,
+    public readonly operation: string
+  ) {
     super(message);
     this.name = this.constructor.name;
   }

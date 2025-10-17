@@ -14,7 +14,7 @@ import {
 
 jest.setTimeout(Number(process.env.TIMEOUT) || 60000);
 
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC!);
+const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
 provider.pollingInterval = 1_000;
 const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
 const contractAddress = addresses.organizationRegistry.sepolia;
@@ -29,9 +29,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     // Ensure any leftover org is cleaned up before tests run
     try {
       // This will either complete (org deleted) or throw on revert (org didn't exist)
-      await SmartContractService.executeTx(
-        service.deleteOrganization(admin)
-      );
+      await SmartContractService.executeTx(service.deleteOrganization(admin));
     } catch {
       // ignore whatever went wrong (likely: org wasn’t there)
     }
@@ -76,9 +74,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     // Ensure any leftover org is cleaned up before tests run
     try {
       // This will either complete (org deleted) or throw on revert (org didn't exist)
-      await SmartContractService.executeTx(
-        service.deleteOrganization(admin)
-      );
+      await SmartContractService.executeTx(service.deleteOrganization(admin));
     } catch {
       // ignore whatever went wrong (likely: org wasn’t there)
     }
@@ -122,9 +118,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     // Ensure any leftover org is cleaned up before tests run
     try {
       // This will either complete (org deleted) or throw on revert (org didn't exist)
-      await SmartContractService.executeTx(
-        service.deleteOrganization(admin)
-      );
+      await SmartContractService.executeTx(service.deleteOrganization(admin));
     } catch {
       // ignore whatever went wrong (likely: org wasn’t there)
     }
@@ -136,7 +130,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     //
     // 1) wait for OrganizationCreated
     //
-    const createdPromise = new Promise<void>((resolve) => {
+    const createdPromise = new Promise<void>(resolve => {
       service.onOrganizationCreated((id: string) => {
         if (id.toLowerCase() === admin.toLowerCase()) {
           resolve();
@@ -145,9 +139,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     });
 
     // fire the tx
-    await SmartContractService.executeTx(
-      service.createOrganization(name, metadataURI, [admin])
-    );
+    await SmartContractService.executeTx(service.createOrganization(name, metadataURI, [admin]));
     await createdPromise;
 
     // confirm on‐chain state
@@ -160,7 +152,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     //
     // 2) wait for OrganizationUpdated
     //
-    const updatedPromise = new Promise<void>((resolve) => {
+    const updatedPromise = new Promise<void>(resolve => {
       service.onOrganizationUpdated((id: string, updater: string) => {
         if (
           id.toLowerCase() === admin.toLowerCase() &&
@@ -171,9 +163,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
       });
     });
 
-    await SmartContractService.executeTx(
-      service.updateOrganization(admin, name, updatedMetadata)
-    );
+    await SmartContractService.executeTx(service.updateOrganization(admin, name, updatedMetadata));
     await updatedPromise;
 
     const updated = await service.getOrganization(admin);
@@ -184,7 +174,7 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
     //
     extraAdmin = Wallet.createRandom().address;
 
-    const addedPromise = new Promise<void>((resolve) => {
+    const addedPromise = new Promise<void>(resolve => {
       service.onAdministratorAdded((id: string, administrator: string) => {
         if (
           id.toLowerCase() === admin.toLowerCase() &&
@@ -195,38 +185,30 @@ describe('OrganizationRegistryService Integration (Sepolia)', () => {
       });
     });
 
-    await SmartContractService.executeTx(
-      service.addAdministrator(admin, extraAdmin)
-    );
+    await SmartContractService.executeTx(service.addAdministrator(admin, extraAdmin));
     await addedPromise;
     expect(await service.isAdministrator(admin, extraAdmin)).toBe(true);
 
-    const removedPromise = new Promise<void>((resolve) => {
-      service.onAdministratorRemoved(
-        (id: string, administrator: string, remover: string) => {
-          if (
-            id.toLowerCase() === admin.toLowerCase() &&
-            administrator.toLowerCase() === extraAdmin.toLowerCase() &&
-            remover.toLowerCase() === admin.toLowerCase()
-          ) {
-            resolve();
-          }
+    const removedPromise = new Promise<void>(resolve => {
+      service.onAdministratorRemoved((id: string, administrator: string, remover: string) => {
+        if (
+          id.toLowerCase() === admin.toLowerCase() &&
+          administrator.toLowerCase() === extraAdmin.toLowerCase() &&
+          remover.toLowerCase() === admin.toLowerCase()
+        ) {
+          resolve();
         }
-      );
+      });
     });
 
-    await SmartContractService.executeTx(
-      service.removeAdministrator(admin, extraAdmin)
-    );
+    await SmartContractService.executeTx(service.removeAdministrator(admin, extraAdmin));
     await removedPromise;
     expect(await service.isAdministrator(admin, extraAdmin)).toBe(false);
 
     //
     // 4) delete org
     //
-    await SmartContractService.executeTx(
-      service.deleteOrganization(admin)
-    );
+    await SmartContractService.executeTx(service.deleteOrganization(admin));
     const deleted = await service.getOrganization(admin);
     expect(deleted.name).toBe('');
     // after delete, org should not exist

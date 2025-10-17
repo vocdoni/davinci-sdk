@@ -1,152 +1,150 @@
-import {BaseService} from "../core/api/BaseService";
+import { BaseService } from '../core/api/BaseService';
 import {
-    CreateProcessRequest,
-    CreateProcessResponse,
-    GetProcessResponse,
-    InfoResponse,
-    ListProcessesResponse,
-    SequencerStats,
-    VoteBallot,
-    VoteRequest, 
-    VoteStatusResponse,
-    WorkersResponse,
-} from "./api/types";
-import { validateProcessId } from "./api/helpers";
-import { ElectionMetadata } from "../core";
+  CreateProcessRequest,
+  CreateProcessResponse,
+  GetProcessResponse,
+  InfoResponse,
+  ListProcessesResponse,
+  SequencerStats,
+  VoteBallot,
+  VoteRequest,
+  VoteStatusResponse,
+  WorkersResponse,
+} from './api/types';
+import { validateProcessId } from './api/helpers';
+import { ElectionMetadata } from '../core';
 
 function isHexString(str: string): boolean {
-    return /^0x[0-9a-f]{64}$/i.test(str);
+  return /^0x[0-9a-f]{64}$/i.test(str);
 }
 
 export class VocdoniSequencerService extends BaseService {
-    constructor(baseURL: string) {
-        super(baseURL);
+  constructor(baseURL: string) {
+    super(baseURL);
+  }
+
+  async ping(): Promise<void> {
+    await this.request({ method: 'GET', url: '/ping' });
+  }
+
+  createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
+    // Validate processId format
+    if (!validateProcessId(body.processId)) {
+      throw new Error('Invalid processId format. Must be a 64-character hex string (32 bytes)');
     }
 
-    async ping(): Promise<void> {
-        await this.request({ method: "GET", url: "/ping" });
-    }
+    return this.request({
+      method: 'POST',
+      url: '/processes',
+      data: body,
+    });
+  }
 
-    createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
-        // Validate processId format
-        if (!validateProcessId(body.processId)) {
-            throw new Error("Invalid processId format. Must be a 64-character hex string (32 bytes)");
+  getProcess(processId: string): Promise<GetProcessResponse> {
+    return this.request({
+      method: 'GET',
+      url: `/processes/${processId}`,
+    });
+  }
+
+  listProcesses(): Promise<string[]> {
+    return this.request<ListProcessesResponse>({
+      method: 'GET',
+      url: '/processes',
+    }).then(res => res.processes);
+  }
+
+  async submitVote(vote: VoteRequest): Promise<void> {
+    await this.request({
+      method: 'POST',
+      url: '/votes',
+      data: vote,
+    });
+  }
+
+  getVoteStatus(processId: string, voteId: string): Promise<VoteStatusResponse> {
+    return this.request<VoteStatusResponse>({
+      method: 'GET',
+      url: `/votes/${processId}/voteId/${voteId}`,
+    });
+  }
+
+  async hasAddressVoted(processId: string, address: string): Promise<boolean> {
+    try {
+      await this.request({
+        method: 'GET',
+        url: `/votes/${processId}/address/${address}`,
+      });
+      return true;
+    } catch (error: any) {
+      if (error?.code === 40001) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  getInfo(): Promise<InfoResponse> {
+    return this.request<InfoResponse>({
+      method: 'GET',
+      url: '/info',
+    });
+  }
+
+  pushMetadata(metadata: ElectionMetadata): Promise<string> {
+    return this.request<{ hash: string }>({
+      method: 'POST',
+      url: '/metadata',
+      data: metadata,
+    }).then(res => res.hash);
+  }
+
+  async getMetadata(hashOrUrl: string): Promise<ElectionMetadata> {
+    // Check if it's a URL
+    if (hashOrUrl.startsWith('http://') || hashOrUrl.startsWith('https://')) {
+      // Make direct HTTP request to the URL
+      try {
+        const response = await fetch(hashOrUrl);
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch metadata from URL: ${response.status} ${response.statusText}`
+          );
         }
-
-        return this.request({
-            method: "POST",
-            url: "/processes",
-            data: body
-        });
+        return await response.json();
+      } catch (error) {
+        throw new Error(
+          `Failed to fetch metadata from URL: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
     }
 
-    getProcess(processId: string): Promise<GetProcessResponse> {
-        return this.request({
-            method: "GET",
-            url: `/processes/${processId}`
-        });
+    // Treat as hash
+    if (!isHexString(hashOrUrl)) {
+      throw new Error('Invalid metadata hash format');
     }
 
-    listProcesses(): Promise<string[]> {
-        return this.request<ListProcessesResponse>({
-            method: "GET",
-            url: "/processes"
-        }).then(res => res.processes);
-    }
+    return this.request<ElectionMetadata>({
+      method: 'GET',
+      url: `/metadata/${hashOrUrl}`,
+    });
+  }
 
-    async submitVote(vote: VoteRequest): Promise<void> {
-        await this.request({
-            method: "POST",
-            url: "/votes",
-            data: vote,
-        });
-    }
+  getMetadataUrl(hash: string): string {
+    if (!isHexString(hash)) throw new Error('Invalid metadata hash format');
+    return `${this.axios.defaults.baseURL}/metadata/${hash}`;
+  }
 
-    getVoteStatus(
-        processId: string,
-        voteId: string
-    ): Promise<VoteStatusResponse> {
-        return this.request<VoteStatusResponse>({
-            method: "GET",
-            url: `/votes/${processId}/voteId/${voteId}`,
-        });
-    }
+  getStats(): Promise<SequencerStats> {
+    return this.request<SequencerStats>({
+      method: 'GET',
+      url: '/sequencer/stats',
+    });
+  }
 
-    async hasAddressVoted(
-        processId: string,
-        address: string
-    ): Promise<boolean> {
-        try {
-            await this.request({
-                method: "GET",
-                url: `/votes/${processId}/address/${address}`,
-            });
-            return true;
-        } catch (error: any) {
-            if (error?.code === 40001) {
-                return false;
-            }
-            throw error;
-        }
-    }
-
-    getInfo(): Promise<InfoResponse> {
-        return this.request<InfoResponse>({
-            method: "GET",
-            url: "/info"
-        });
-    }
-
-    pushMetadata(metadata: ElectionMetadata): Promise<string> {
-        return this.request<{ hash: string }>({
-            method: "POST",
-            url: "/metadata",
-            data: metadata
-        }).then(res => res.hash);
-    }
-
-    async getMetadata(hashOrUrl: string): Promise<ElectionMetadata> {
-        // Check if it's a URL
-        if (hashOrUrl.startsWith('http://') || hashOrUrl.startsWith('https://')) {
-            // Make direct HTTP request to the URL
-            try {
-                const response = await fetch(hashOrUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch metadata from URL: ${response.status} ${response.statusText}`);
-                }
-                return await response.json();
-            } catch (error) {
-                throw new Error(`Failed to fetch metadata from URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-        }
-        
-        // Treat as hash
-        if (!isHexString(hashOrUrl)) {
-            throw new Error("Invalid metadata hash format");
-        }
-
-        return this.request<ElectionMetadata>({
-            method: "GET",
-            url: `/metadata/${hashOrUrl}`
-        });
-    }
-
-    getMetadataUrl(hash: string): string {
-        if (!isHexString(hash)) throw new Error("Invalid metadata hash format");
-        return `${this.axios.defaults.baseURL}/metadata/${hash}`;
-    }
-
-    getStats(): Promise<SequencerStats> {
-        return this.request<SequencerStats>({
-            method: "GET",
-            url: "/sequencer/stats"
-        });
-    }
-
-    getWorkers(): Promise<WorkersResponse> {
-        return this.request<WorkersResponse>({
-            method: "GET",
-            url: "/sequencer/workers"
-        });
-    }
+  getWorkers(): Promise<WorkersResponse> {
+    return this.request<WorkersResponse>({
+      method: 'GET',
+      url: '/sequencer/workers',
+    });
+  }
 }
