@@ -61,7 +61,7 @@
     "email": "info@vocdoni.io",
     "url": "https://vocdoni.io"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "homepage": "https://github.com/vocdoni/davinci-sdk#readme",
   "repository": {
     "type": "git",
