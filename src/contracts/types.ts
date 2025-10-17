@@ -1,6 +1,6 @@
 /**
  * @fileoverview Standardized types and interfaces for contract services
- * 
+ *
  * This module provides consistent type definitions for callbacks, interfaces,
  * and common data structures used across contract services.
  */

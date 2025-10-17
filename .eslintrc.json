@@ -25,5 +25,11 @@
     "no-shadow": "off",
     "@typescript-eslint/no-shadow": ["error"]
   },
-  "ignorePatterns": ["dist", "node_modules", "jest.config.js", "rollup.config.js"]
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "examples",
+    "jest.config.js",
+    "rollup.config.js"
+  ]
 }

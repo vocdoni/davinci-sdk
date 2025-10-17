@@ -1,21 +1,21 @@
 import {
   OrganizationRegistry__factory,
   type OrganizationRegistry,
-} from "@vocdoni/davinci-contracts";
-import { SmartContractService } from "./SmartContractService";
-import type { ContractRunner } from "ethers";
+} from '@vocdoni/davinci-contracts';
+import { SmartContractService } from './SmartContractService';
+import type { ContractRunner } from 'ethers';
 import {
   OrganizationCreateError,
   OrganizationUpdateError,
   OrganizationDeleteError,
   OrganizationAdministratorError,
-} from "./errors";
+} from './errors';
 import type {
   OrganizationCreatedCallback,
   OrganizationUpdatedCallback,
   OrganizationAdministratorAddedCallback,
   OrganizationAdministratorRemovedCallback,
-} from "./types";
+} from './types';
 
 export interface OrganizationInfo {
   name: string;
@@ -27,10 +27,7 @@ export class OrganizationRegistryService extends SmartContractService {
 
   constructor(contractAddress: string, runner: ContractRunner) {
     super();
-    this.contract = OrganizationRegistry__factory.connect(
-      contractAddress,
-      runner,
-    );
+    this.contract = OrganizationRegistry__factory.connect(contractAddress, runner);
   }
 
   // ─── READ OPERATIONS ───────────────────────────────────────────────────────
@@ -42,7 +39,7 @@ export class OrganizationRegistryService extends SmartContractService {
 
   async existsOrganization(id: string): Promise<boolean> {
     return this.contract.exists(id);
-  }  
+  }
 
   async isAdministrator(id: string, address: string): Promise<boolean> {
     return this.contract.isAdministrator(id, address);
@@ -55,66 +52,48 @@ export class OrganizationRegistryService extends SmartContractService {
 
   // ─── WRITE OPERATIONS ──────────────────────────────────────────────────────
 
-  createOrganization(
-    name: string,
-    metadataURI: string,
-    administrators: string[],
-  ) {
+  createOrganization(name: string, metadataURI: string, administrators: string[]) {
     return this.sendTx(
-      this.contract
-        .createOrganization(name, metadataURI, administrators)
-        .catch((e) => {
-          throw new OrganizationCreateError(e.message, 'create');
-        }),
-      async () => ({ success: true }),
+      this.contract.createOrganization(name, metadataURI, administrators).catch(e => {
+        throw new OrganizationCreateError(e.message, 'create');
+      }),
+      async () => ({ success: true })
     );
   }
 
-  updateOrganization(
-    id: string,
-    name: string,
-    metadataURI: string,
-  ) {
+  updateOrganization(id: string, name: string, metadataURI: string) {
     return this.sendTx(
-      this.contract
-        .updateOrganization(id, name, metadataURI)
-        .catch((e) => {
-          throw new OrganizationUpdateError(e.message, 'update');
-        }),
-      async () => ({ success: true }),
+      this.contract.updateOrganization(id, name, metadataURI).catch(e => {
+        throw new OrganizationUpdateError(e.message, 'update');
+      }),
+      async () => ({ success: true })
     );
   }
 
   addAdministrator(id: string, administrator: string) {
     return this.sendTx(
-      this.contract
-        .addAdministrator(id, administrator)
-        .catch((e) => {
-          throw new OrganizationAdministratorError(e.message, 'addAdministrator');
-        }),
-      async () => ({ success: true }),
+      this.contract.addAdministrator(id, administrator).catch(e => {
+        throw new OrganizationAdministratorError(e.message, 'addAdministrator');
+      }),
+      async () => ({ success: true })
     );
   }
 
   removeAdministrator(id: string, administrator: string) {
     return this.sendTx(
-      this.contract
-        .removeAdministrator(id, administrator)
-        .catch((e) => {
-          throw new OrganizationAdministratorError(e.message, 'removeAdministrator');
-        }),
-      async () => ({ success: true }),
+      this.contract.removeAdministrator(id, administrator).catch(e => {
+        throw new OrganizationAdministratorError(e.message, 'removeAdministrator');
+      }),
+      async () => ({ success: true })
     );
   }
 
   deleteOrganization(id: string) {
     return this.sendTx(
-      this.contract
-        .deleteOrganization(id)
-        .catch((e) => {
-          throw new OrganizationDeleteError(e.message, 'delete');
-        }),
-      async () => ({ success: true }),
+      this.contract.deleteOrganization(id).catch(e => {
+        throw new OrganizationDeleteError(e.message, 'delete');
+      }),
+      async () => ({ success: true })
     );
   }
 
