@@ -1,7 +1,7 @@
 # Vocdoni DaVinci SDK
 
 [![npm version](https://badge.fury.io/js/%40vocdoni%2Fdavinci-sdk.svg)](https://badge.fury.io/js/%40vocdoni%2Fdavinci-sdk)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 
@@ -645,7 +645,9 @@ yarn format
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
+
+The AGPL-3.0 is a copyleft license that requires anyone who distributes your code or a derivative work to make the source available under the same terms. If your application is a web service, users interacting with it remotely must also be able to access the source code.
 
 ## 🆘 Support
 
