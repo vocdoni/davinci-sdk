@@ -4,7 +4,7 @@ import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRe
 import { OrganizationRegistryService } from '../../contracts/OrganizationRegistry';
 import { DavinciCrypto } from '../../sequencer/DavinciCryptoService';
 import { signProcessCreation } from '../../sequencer/api/helpers';
-import { BallotMode, Census, EncryptionKey } from '../types';
+import { BallotMode, CensusData, EncryptionKey } from '../types';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
@@ -84,7 +84,7 @@ interface ProcessCreationData {
     encryptionPubKey: [string, string];
     stateRoot: string;
   };
-  census: Census;
+  census: CensusData;
 }
 
 /**
@@ -379,7 +379,7 @@ export class ProcessOrchestrationService {
     });
 
     // 7. Create census object for on-chain call
-    const census: Census = {
+    const census: CensusData = {
       censusOrigin: config.census.type,
       maxVotes: config.census.size.toString(),
       censusRoot,
