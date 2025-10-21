@@ -6,7 +6,7 @@ import {
 } from '@vocdoni/davinci-contracts';
 import { SmartContractService } from './SmartContractService';
 import type { ContractRunner } from 'ethers';
-import { BallotMode, Census, EncryptionKey } from '../core';
+import { BallotMode, CensusData, EncryptionKey } from '../core';
 import {
   ProcessCreateError,
   ProcessStatusError,
@@ -103,12 +103,12 @@ export class ProcessRegistryService extends SmartContractService {
     startTime: number,
     duration: number,
     ballotMode: BallotMode,
-    census: Census,
+    census: CensusData,
     metadata: string,
     encryptionKey: EncryptionKey,
     initStateRoot: bigint
   ) {
-    // Convert Census type from core to contract format
+    // Convert CensusData type from core to contract format
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
       maxVotes: BigInt(census.maxVotes),
@@ -144,8 +144,8 @@ export class ProcessRegistryService extends SmartContractService {
     );
   }
 
-  setProcessCensus(processID: string, census: Census) {
-    // Convert Census type from core to contract format
+  setProcessCensus(processID: string, census: CensusData) {
+    // Convert CensusData type from core to contract format
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
       maxVotes: BigInt(census.maxVotes),

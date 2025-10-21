@@ -11,7 +11,7 @@ export interface BallotMode {
   minValueSum: string;
 }
 
-export interface Census {
+export interface CensusData {
   censusOrigin: CensusOrigin;
   maxVotes: string;
   censusRoot: string;

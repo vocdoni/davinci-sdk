@@ -11,7 +11,7 @@ import {
   ProcessCreateError,
   deployedAddresses as addresses,
 } from '../../../src/contracts';
-import { BallotMode, Census, EncryptionKey } from '../../../src/core';
+import { BallotMode, CensusData, EncryptionKey } from '../../../src/core';
 import { CensusOrigin } from '../../../src/census';
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
@@ -35,7 +35,7 @@ describe('ProcessRegistryService Integration (Sepolia)', () => {
   let processId: string;
   let initStateRoot: string;
   let initDuration: number;
-  let initCensus: Census;
+  let initCensus: CensusData;
   const metadataURI = `ipfs://meta-${Date.now()}`;
 
   beforeAll(() => {
@@ -131,7 +131,7 @@ describe('ProcessRegistryService Integration (Sepolia)', () => {
     //
     // 3) UPDATE CENSUS & WAIT CensusUpdated
     //
-    const newCensus: Census = {
+    const newCensus: CensusData = {
       ...initCensus,
       maxVotes: '10',
       censusURI: initCensus.censusURI + '-v2',
@@ -243,7 +243,7 @@ describe('ProcessRegistryService Integration (Sepolia)', () => {
   });
 
   it('should yield failure status when creating process with invalid parameters', async () => {
-    const invalidCensus: Census = {
+    const invalidCensus: CensusData = {
       censusOrigin: CensusOrigin.CensusOriginMerkleTree,
       maxVotes: '0', // Invalid: maxVotes should be > 0
       censusRoot: randomHex(32),

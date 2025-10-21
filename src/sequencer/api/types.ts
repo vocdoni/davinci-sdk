@@ -1,4 +1,4 @@
-import { BallotMode, Census, EncryptionKey } from '../../core/types';
+import { BallotMode, CensusData, EncryptionKey } from '../../core/types';
 import { CensusOrigin, CensusProof } from '../../census/types';
 
 export interface CreateProcessRequest {
@@ -31,7 +31,7 @@ export interface GetProcessResponse {
   duration: number;
   metadataURI: string;
   ballotMode: BallotMode;
-  census: Census;
+  census: CensusData;
   metadata: {
     title: Record<string, string>;
     description: Record<string, string>;
