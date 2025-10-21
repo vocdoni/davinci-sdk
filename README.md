@@ -20,7 +20,7 @@ yarn add @vocdoni/davinci-sdk
 ### Basic Usage
 
 ```typescript
-import { DavinciSDK, CensusOrigin } from '@vocdoni/davinci-sdk';
+import { DavinciSDK, PlainCensus, WeightedCensus } from '@vocdoni/davinci-sdk';
 import { Wallet } from 'ethers';
 
 // Initialize the SDK
@@ -33,31 +33,18 @@ const sdk = new DavinciSDK({
 await sdk.init();
 
 // 1. Create a census with eligible voters
-const censusId = await sdk.api.census.createCensus();
-
-// Add participants to the census
-const participants = [
-  { key: "0x1234567890123456789012345678901234567890", weight: "1" },
-  { key: "0x2345678901234567890123456789012345678901", weight: "1" },
-  { key: "0x3456789012345678901234567890123456789012", weight: "2" } // Higher weight
-];
-
-await sdk.api.census.addParticipants(censusId, participants);
-
-// Publish the census to get the root
-const publishResult = await sdk.api.census.publishCensus(censusId);
-const censusSize = await sdk.api.census.getCensusSize(publishResult.root);
+const census = new PlainCensus(); // or WeightedCensus for custom voting power
+census.add([
+  '0x1234567890123456789012345678901234567890',
+  '0x2345678901234567890123456789012345678901',
+  '0x3456789012345678901234567890123456789012'
+]);
 
 // 2. Create a voting process
 const process = await sdk.createProcess({
   title: "Community Decision",
   description: "Vote on our next community initiative",
-  census: {
-    type: CensusOrigin.CensusOriginMerkleTree,
-    root: publishResult.root,
-    size: censusSize,
-    uri: publishResult.uri
-  },
+  census: census,
   timing: {
     startDate: new Date("2024-12-01T10:00:00Z"),
     duration: 86400 // 24 hours in seconds
@@ -156,6 +143,189 @@ pnpm add @vocdoni/davinci-sdk ethers
 - **Ballot**: Vote structure defining questions and possible answers
 - **Process**: Container for all voting parameters and metadata
 - **Proof**: Cryptographic evidence that a vote is valid
+
+## 📋 Census Management
+
+The SDK provides simple-to-use census classes that make voter management easy. Census objects are **automatically published** when creating a process - no manual steps required!
+
+### Census Types
+
+#### PlainCensus - Equal Voting Power
+
+Everyone gets the same voting weight (weight = 1).
+
+```typescript
+import { PlainCensus } from '@vocdoni/davinci-sdk';
+
+const census = new PlainCensus();
+census.add([
+  '0x1234567890123456789012345678901234567890',
+  '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+  '0x9876543210987654321098765432109876543210'
+]);
+
+// Use directly in process creation - SDK auto-publishes!
+const process = await sdk.createProcess({
+  census: census, // ✨ Auto-published!
+  // ... rest of config
+});
+```
+
+#### WeightedCensus - Custom Voting Power
+
+Assign different voting weights to participants. Supports flexible weight types: **string**, **number**, or **bigint**.
+
+```typescript
+import { WeightedCensus } from '@vocdoni/davinci-sdk';
+
+const census = new WeightedCensus();
+
+census.add([
+  { key: '0x123...', weight: "1" },    // string
+  { key: '0x456...', weight: 5 },      // number
+  { key: '0x789...', weight: 100n },   // bigint
+]);
+
+// Auto-published when creating process
+const process = await sdk.createProcess({
+  census: census,
+  // ... rest of config
+});
+```
+
+#### CspCensus - Certificate Service Provider
+
+For external authentication systems.
+
+```typescript
+import { CspCensus } from '@vocdoni/davinci-sdk';
+
+const census = new CspCensus(
+  "0x1234567890abcdef", // Root hash
+  "https://csp-server.com" // CSP URL
+);
+
+const process = await sdk.createProcess({
+  census: census,
+  // ... rest of config
+});
+```
+
+#### PublishedCensus - Use Pre-Published Census
+
+For censuses already published to the network.
+
+```typescript
+import { PublishedCensus, CensusType } from '@vocdoni/davinci-sdk';
+
+const census = new PublishedCensus(
+  CensusType.WEIGHTED,
+  "0xroot...",
+  "ipfs://uri...",
+  100 // size
+);
+
+const process = await sdk.createProcess({
+  census: census,
+  // ... rest of config
+});
+```
+
+### Auto-Publishing Feature
+
+The SDK automatically publishes unpublished censuses when creating a process:
+
+```typescript
+const census = new PlainCensus();
+census.add(['0x123...', '0x456...']);
+
+console.log(census.isPublished); // false
+
+// SDK automatically publishes during process creation
+const process = await sdk.createProcess({
+  census: census,
+  // ... config
+});
+
+console.log(census.isPublished); // true ✅
+console.log(census.censusRoot);   // Published root hash
+console.log(census.censusURI);    // Published URI
+```
+
+### Flexible Weight Types
+
+WeightedCensus accepts weights as strings, numbers, or bigints for maximum flexibility:
+
+```typescript
+const census = new WeightedCensus();
+
+// String weights (recommended for very large numbers)
+census.add({ key: '0x123...', weight: "999999999999" });
+
+// Number weights (easy to use, good for reasonable values)
+census.add({ key: '0x456...', weight: 100 });
+
+// BigInt weights (for JavaScript bigint support)
+census.add({ key: '0x789...', weight: 1000000n });
+
+// Mix them all!
+census.add([
+  { key: '0xaaa...', weight: "1" },
+  { key: '0xbbb...', weight: 5 },
+  { key: '0xccc...', weight: 10n }
+]);
+```
+
+### Census Operations
+
+```typescript
+const census = new WeightedCensus();
+
+// Add single participant
+census.add({ key: '0x123...', weight: 5 });
+
+// Add multiple participants
+census.add([
+  { key: '0x456...', weight: 10 },
+  { key: '0x789...', weight: 15 }
+]);
+
+// Remove participant
+census.remove('0x123...');
+
+// Get participant weight
+const weight = census.getWeight('0x456...'); // Returns: "10"
+
+// Get all addresses
+const addresses = census.addresses; // ['0x456...', '0x789...']
+
+// Get all participants with weights
+const participants = census.participants;
+// [{ key: '0x456...', weight: '10' }, { key: '0x789...', weight: '15' }]
+
+// Check if published
+if (census.isPublished) {
+  console.log('Root:', census.censusRoot);
+  console.log('URI:', census.censusURI);
+  console.log('Size:', census.size);
+}
+```
+
+### Manual Census Configuration (Advanced)
+
+For advanced use cases, you can still provide census data manually:
+
+```typescript
+const process = await sdk.createProcess({
+  census: {
+    type: CensusOrigin.CensusOriginMerkleTree,
+    root: "0xabc...",
+    size: 100,
+    uri: "ipfs://..."
+  },
+  // ... rest of config
+});
+```
 
 ## 📖 API Reference
 

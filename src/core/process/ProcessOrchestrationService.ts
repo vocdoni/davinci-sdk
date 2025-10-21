@@ -8,6 +8,10 @@ import { BallotMode, CensusData, EncryptionKey } from '../types';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
+import { Census } from '../../census/classes/Census';
+import { PlainCensus } from '../../census/classes/PlainCensus';
+import { WeightedCensus } from '../../census/classes/WeightedCensus';
+import { CensusOrchestrator } from '../../census/CensusOrchestrator';
 
 /**
  * Base interface with shared fields between ProcessConfig and ProcessInfo
@@ -48,7 +52,23 @@ export interface BaseProcess {
 /**
  * Configuration for creating a process
  */
-export interface ProcessConfig extends BaseProcess {
+export interface ProcessConfig extends Omit<BaseProcess, 'census'> {
+  /** 
+   * Census - either a Census object (PlainCensus, WeightedCensus, CspCensus, PublishedCensus)
+   * or manual configuration. If a Census object is provided and not published, it will be 
+   * automatically published.
+   */
+  census: Census | {
+    /** Census type - MerkleTree or CSP */
+    type: CensusOrigin;
+    /** Census root */
+    root: string;
+    /** Census size */
+    size: number;
+    /** Census URI */
+    uri: string;
+  };
+  
   /** Process timing - use either duration-based or date-based configuration */
   timing: {
     /** Start date/time (Date object, ISO string, or Unix timestamp, default: now + 60 seconds) */
@@ -132,13 +152,53 @@ export interface ProcessInfo extends BaseProcess {
  * Service that orchestrates the complete process creation workflow
  */
 export class ProcessOrchestrationService {
+  private censusOrchestrator: CensusOrchestrator;
+
   constructor(
     private processRegistry: ProcessRegistryService,
     private apiService: VocdoniApiService,
     private organizationRegistry: OrganizationRegistryService,
     private getCrypto: () => Promise<DavinciCrypto>,
     private signer: Signer
-  ) {}
+  ) {
+    // Initialize CensusOrchestrator with VocdoniCensusService from apiService
+    this.censusOrchestrator = new CensusOrchestrator(apiService.census);
+  }
+
+  /**
+   * Handles census - auto-publishes if needed and returns census config
+   * @private
+   */
+  private async handleCensus(census: ProcessConfig['census']): Promise<{
+    type: CensusOrigin;
+    root: string;
+    size: number;
+    uri: string;
+  }> {
+    // Check if it's a Census object
+    if ('isPublished' in census) {
+      // It's a Census object
+      // Only PlainCensus and WeightedCensus need publishing (CSP and Published are already published)
+      if (census instanceof PlainCensus || census instanceof WeightedCensus) {
+        // Auto-publish if not published
+        if (!census.isPublished) {
+          await this.censusOrchestrator.publish(census);
+        }
+      }
+      
+      // Extract census data
+      const censusData = this.censusOrchestrator.getCensusData(census);
+      return {
+        type: censusData.type,
+        root: censusData.root,
+        size: censusData.size,
+        uri: censusData.uri,
+      };
+    }
+    
+    // It's manual config - return as-is
+    return census;
+  }
 
   /**
    * Gets user-friendly process information by transforming raw contract data
@@ -357,8 +417,9 @@ export class ProcessOrchestrationService {
     const signerAddress = await this.signer.getAddress();
     const processId = await this.processRegistry.getNextProcessId(signerAddress);
 
-    // 3. Use provided census values directly
-    const censusRoot = config.census.root;
+    // 3. Handle census (auto-publish if needed)
+    const censusConfig = await this.handleCensus(config.census);
+    const censusRoot = censusConfig.root;
 
     // 4. Use ballot mode configuration directly
     const ballotMode = config.ballot;
@@ -375,15 +436,15 @@ export class ProcessOrchestrationService {
       censusRoot,
       ballotMode,
       signature,
-      censusOrigin: config.census.type,
+      censusOrigin: censusConfig.type,
     });
 
     // 7. Create census object for on-chain call
     const census: CensusData = {
-      censusOrigin: config.census.type,
-      maxVotes: config.census.size.toString(),
+      censusOrigin: censusConfig.type,
+      maxVotes: censusConfig.size.toString(),
       censusRoot,
-      censusURI: config.census.uri,
+      censusURI: censusConfig.uri,
     };
 
     return {
