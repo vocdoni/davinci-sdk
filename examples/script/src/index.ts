@@ -2,7 +2,7 @@
 
 import chalk from "chalk";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK, CensusOrigin, ProcessStatus, VoteStatus, TxStatus } from "../../../src";
+import { DavinciSDK, CensusOrigin, VoteStatus, TxStatus, WeightedCensus, CspCensus, Census } from "../../../src";
 import { 
     getUserConfiguration, 
     generateTestParticipants,
@@ -90,71 +90,47 @@ async function step1_initializeSDK(): Promise<DavinciSDK> {
 }
 
 /**
- * Step 2: Create Census with participants (or prepare CSP census)
+ * Step 2: Create Census with participants using Census classes
  */
 async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, censusType: CensusOrigin): Promise<{
-    censusRoot: string;
-    censusSize: number;
-    censusUri: string;
+    census: Census;
     participants: TestParticipant[];
 }> {
-    step(2, censusType === CensusOrigin.CensusOriginCSP ? "Prepare CSP census" : "Create census with participants");
+    step(2, censusType === CensusOrigin.CensusOriginCSP ? "Create CSP census" : "Create weighted census");
     
     // Generate test participants
     const participants = generateTestParticipants(numParticipants);
     info(`Generated ${participants.length} test participants`);
     
     if (censusType === CensusOrigin.CensusOriginCSP) {
-        // For CSP census, use the SDK's existing crypto service
+        // Create CSP census object
         const davinciCrypto = await sdk.getCrypto();
-        
-        // Generate CSP census root using the proper method
         const censusRoot = await davinciCrypto.cspCensusRoot(
             CensusOrigin.CensusOriginCSP,
             CSP_PRIVATE_KEY
         );
         
-        const censusSize = numParticipants;
-        const censusUri = `ipfs://csp-census-${Date.now()}`;
+        const cspUri = `https://csp-server.com`;
+        const census = new CspCensus(censusRoot, cspUri);
         
-        success(`CSP census root generated using cspCensusRoot: ${censusRoot}`);
-        success(`CSP census URI: ${censusUri}`);
-        success(`CSP census ready with ${censusSize} participants`);
+        success(`✨ CSP census created with root: ${censusRoot}`);
+        success(`   CSP URI: ${cspUri}`);
+        success(`   Ready for ${numParticipants} participants`);
         
-        return {
-            censusRoot,
-            censusSize,
-            censusUri,
-            participants
-        };
+        return { census, participants };
     } else {
-        // Traditional MerkleTree census creation
-        // Create census
-        const censusId = await sdk.api.census.createCensus();
-        success(`Census created with ID: ${censusId}`);
+        // Create WeightedCensus object
+        const census = new WeightedCensus();
         
-        // Add participants to census
-        await sdk.api.census.addParticipants(censusId, participants.map(p => ({
+        // Add participants
+        census.add(participants.map(p => ({
             key: p.address,
             weight: p.weight
         })));
-        success(`Added ${participants.length} participants to census`);
         
-        // Publish census
-        const publishResult = await sdk.api.census.publishCensus(censusId);
-        success(`Census published with root: ${publishResult.root}`);
-        success(`Census URI: ${publishResult.uri}`);
+        success(`WeightedCensus created with ${participants.length} participants`);
         
-        // Get census size
-        const censusSize = await sdk.api.census.getCensusSize(publishResult.root);
-        success(`Census ready with ${censusSize} participants`);
-        
-        return {
-            censusRoot: publishResult.root,
-            censusSize,
-            censusUri: publishResult.uri,
-            participants
-        };
+        return { census, participants };
     }
 }
 
@@ -163,22 +139,14 @@ async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, cens
  */
 async function step3_createProcess(
     sdk: DavinciSDK, 
-    censusRoot: string, 
-    censusSize: number,
-    censusUri: string,
-    censusType: CensusOrigin
+    census: Census
 ): Promise<string> {
-    step(3, "Create voting process (with real-time transaction monitoring)");
+    step(3, "Create voting process");
     
     const stream = sdk.createProcessStream({
         title: "Simplified Test Election " + Date.now(),
         description: "A simplified test election created with DavinciSDK",
-        census: {
-            type: censusType,
-            root: censusRoot,
-            size: censusSize,
-            uri: censusUri
-        },
+        census: census,
         ballot: {
             numFields: 2,        // Two questions
             maxValue: "3",       // Four options (0,1,2,3)
@@ -527,10 +495,10 @@ async function run() {
         const sdk = await step1_initializeSDK();
         
         // Step 2: Create census
-        const { censusRoot, censusSize, censusUri, participants } = await step2_createCensus(sdk, userConfig.numParticipants, userConfig.censusType);
+        const { census, participants } = await step2_createCensus(sdk, userConfig.numParticipants, userConfig.censusType);
         
         // Step 3: Create process
-        const processId = await step3_createProcess(sdk, censusRoot, censusSize, censusUri, userConfig.censusType);
+        const processId = await step3_createProcess(sdk, census);
         
         // Step 4: Wait for process to be ready
         await step4_waitForProcessReady(sdk, processId);
