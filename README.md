@@ -201,8 +201,9 @@ For external authentication systems.
 import { CspCensus } from '@vocdoni/davinci-sdk';
 
 const census = new CspCensus(
-  "0x1234567890abcdef", // Root hash
-  "https://csp-server.com" // CSP URL
+  "0x1234567890abcdef", // Root hash (public key)
+  "https://csp-server.com", // CSP URL
+  1000 // Expected number of voters
 );
 
 const process = await sdk.createProcess({

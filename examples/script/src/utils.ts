@@ -37,6 +37,7 @@ export const step = (n: number, msg: string) =>
 export interface UserConfig {
     numParticipants: number;
     censusType: CensusOrigin;
+    useWeights: boolean;
 }
 
 export type TestParticipant = { 
@@ -98,11 +99,25 @@ export async function getUserConfiguration(): Promise<UserConfig> {
         console.log(chalk.green("✓ Selected: MerkleTree Census"));
     }
     
+    // Ask about weight usage
+    const useWeightsAnswer = await askQuestion(
+        rl,
+        chalk.yellow("\nDo you want to use weighted voting? (y/N, default: N): ")
+    );
+    
+    const useWeights = useWeightsAnswer.toLowerCase() === 'y' || useWeightsAnswer.toLowerCase() === 'yes';
+    if (useWeights) {
+        console.log(chalk.green("✓ Weighted voting enabled - votes will be multiplied by participant weight"));
+    } else {
+        console.log(chalk.green("✓ Standard voting - all votes count equally"));
+    }
+    
     rl.close();
     
     return {
         numParticipants: Math.max(1, numParticipants || 5),
-        censusType
+        censusType,
+        useWeights
     };
 }
 

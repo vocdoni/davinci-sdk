@@ -18,7 +18,7 @@ export interface ServiceUrls {
  */
 export interface ChainConfig {
   /** Chain name/ID */
-  chain: 'sepolia' | 'mainnet';
+  chain: 'sepolia' | 'mainnet' | 'celo';
 }
 
 /**

@@ -10,43 +10,63 @@ import addressesJson from '@vocdoni/davinci-contracts/deployed_contracts_address
 
 /**
  * Interface defining the structure of deployed contract addresses across different networks.
- * Each contract has addresses for both Sepolia testnet and Ethereum mainnet.
+ * Each contract has addresses for multiple supported networks.
  */
 export interface DeployedAddresses {
   /** Process Registry contract addresses */
   processRegistry: {
     /** Sepolia testnet address */
     sepolia: string;
+    /** UZH testnet address */
+    uzh: string;
     /** Ethereum mainnet address */
     mainnet: string;
+    /** Celo mainnet address */
+    celo: string;
   };
   /** Organization Registry contract addresses */
   organizationRegistry: {
     /** Sepolia testnet address */
     sepolia: string;
+    /** UZH testnet address */
+    uzh: string;
     /** Ethereum mainnet address */
     mainnet: string;
+    /** Celo mainnet address */
+    celo: string;
   };
   /** State Transition Verifier contract addresses */
   stateTransitionVerifierGroth16: {
     /** Sepolia testnet address */
     sepolia: string;
+    /** UZH testnet address */
+    uzh: string;
     /** Ethereum mainnet address */
     mainnet: string;
+    /** Celo mainnet address */
+    celo: string;
   };
   /** Results Verifier contract addresses */
   resultsVerifierGroth16: {
     /** Sepolia testnet address */
     sepolia: string;
+    /** UZH testnet address */
+    uzh: string;
     /** Ethereum mainnet address */
     mainnet: string;
+    /** Celo mainnet address */
+    celo: string;
   };
   /** Sequencer Registry contract addresses */
   sequencerRegistry: {
     /** Sepolia testnet address */
     sepolia: string;
+    /** UZH testnet address */
+    uzh: string;
     /** Ethereum mainnet address */
     mainnet: string;
+    /** Celo mainnet address */
+    celo: string;
   };
 }
 
@@ -263,15 +283,20 @@ export abstract class SmartContractService {
       // We use the provider's internal method if available
       if ('send' in provider && typeof provider.send === 'function') {
         try {
-          await provider.send('eth_newFilter', [testFilter]);
-          // If we get here, eth_newFilter is supported
+          // Test both creating the filter AND getting changes to ensure full support
+          const filterId = await provider.send('eth_newFilter', [testFilter]);
+          
+          // Try to get filter changes - this will fail if RPC doesn't maintain filters
+          await provider.send('eth_getFilterChanges', [filterId]);
+          
+          // If we get here, both eth_newFilter and eth_getFilterChanges work
           contract.on(eventFilter as ContractEventName, normalizedCallback);
           return;
         } catch (error: any) {
           if (this.isUnsupportedMethodError(error)) {
-            // eth_newFilter not supported, use polling
+            // eth_newFilter or eth_getFilterChanges not working, use polling
             console.warn(
-              'RPC does not support eth_newFilter, falling back to polling for events. ' +
+              'RPC does not fully support eth_newFilter/eth_getFilterChanges, falling back to polling for events. ' +
                 'This may result in delayed event notifications.'
             );
             this.setupPollingListener(contract, eventFilter, callback);
@@ -310,19 +335,28 @@ export abstract class SmartContractService {
   }
 
   /**
-   * Checks if an error indicates that the RPC method is unsupported (eth_newFilter).
+   * Checks if an error indicates that the RPC method is unsupported or filter operations are not working.
+   * This includes:
+   * - Method not found (-32601): RPC doesn't support eth_newFilter
+   * - Filter not found (-32000): RPC doesn't properly maintain filters
    *
    * @param error - The error to check
-   * @returns true if the error indicates unsupported method
+   * @returns true if the error indicates unsupported or broken filter functionality
    */
   private isUnsupportedMethodError(error: any): boolean {
-    // Check for error code -32601 (method not found) at various levels
-    return (
+    // Check for error code -32601 (method not found) - RPC doesn't support eth_newFilter
+    const isMethodNotFound =
       error?.code === -32601 ||
       error?.error?.code === -32601 ||
       error?.data?.code === -32601 ||
-      (typeof error?.message === 'string' && error.message.includes('unsupported method'))
-    );
+      (typeof error?.message === 'string' && error.message.includes('unsupported method'));
+
+    // Check for error code -32000 with "filter not found" - RPC supports creating filters but doesn't maintain them
+    const isFilterNotFound =
+      ((error?.code === -32000 || error?.error?.code === -32000 || (error?.code === 'UNKNOWN_ERROR' && error?.error?.code === -32000)) &&
+       (error?.message?.includes('filter not found') || error?.error?.message?.includes('filter not found')));
+
+    return isMethodNotFound || isFilterNotFound;
   }
 
   /**
