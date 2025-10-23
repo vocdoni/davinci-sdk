@@ -139,7 +139,7 @@ describe('CensusOrchestrator', () => {
     });
 
     it('should get census data from CSP census', () => {
-      const census = new CspCensus('0x1234567890abcdef', 'https://csp-server.com');
+      const census = new CspCensus('0x1234567890abcdef', 'https://csp-server.com', 100);
 
       const data = orchestrator.getCensusData(census);
 
@@ -147,7 +147,7 @@ describe('CensusOrchestrator', () => {
         type: CensusOrigin.CensusOriginCSP,
         root: '0x1234567890abcdef',
         uri: 'https://csp-server.com',
-        size: null,
+        size: 100,
       });
     });
 

@@ -25,7 +25,7 @@ import { CensusProviders, CSPCensusProofProvider } from "../../../src/census/typ
 /**
  * Create a CSP census proof provider that uses DavinciCrypto
  */
-function createCSPCensusProvider(sdk: DavinciSDK): CSPCensusProofProvider {
+function createCSPCensusProvider(sdk: DavinciSDK, participants: TestParticipant[]): CSPCensusProofProvider {
     return async ({ processId, address }) => {
         info(`🔐 CSP Provider: Generating proof for ${address} in process ${processId.substring(0, 10)}...`);
         
@@ -40,12 +40,16 @@ function createCSPCensusProvider(sdk: DavinciSDK): CSPCensusProofProvider {
             address.replace(/^0x/, "")
         );
 
-        success(`✅ CSP Provider: Generated proof with signature ${cspProofData.signature.substring(0, 10)}...`);
+        // Find the participant's weight
+        const participant = participants.find(p => p.address.toLowerCase() === address.toLowerCase());
+        const weight = participant?.weight || "1";
+
+        success(`✅ CSP Provider: Generated proof with signature ${cspProofData.signature.substring(0, 10)}... (weight: ${weight})`);
 
         return {
             root: cspProofData.root,
             address: cspProofData.address,
-            weight: "1",
+            weight: weight,
             censusOrigin: CensusOrigin.CensusOriginCSP,
             processId: cspProofData.processId,
             publicKey: cspProofData.publicKey,
@@ -111,7 +115,7 @@ async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, cens
         );
         
         const cspUri = `https://csp-server.com`;
-        const census = new CspCensus(censusRoot, cspUri);
+        const census = new CspCensus(censusRoot, cspUri, numParticipants);
         
         success(`✨ CSP census created with root: ${censusRoot}`);
         success(`   CSP URI: ${cspUri}`);
@@ -139,9 +143,18 @@ async function step2_createCensus(sdk: DavinciSDK, numParticipants: number, cens
  */
 async function step3_createProcess(
     sdk: DavinciSDK, 
-    census: Census
+    census: Census,
+    useWeights: boolean,
+    maxWeight: number
 ): Promise<string> {
-    step(3, "Create voting process");
+    step(3, `Create voting process${useWeights ? ' (with weighted voting)' : ''}`);
+    
+    // Calculate ballot limits based on whether weights are used
+    // maxValue = maxOption * maxWeight (if weighted), or just maxOption (if not weighted)
+    // maxValueSum = sum of all maxValues for all questions
+    const maxOption = 3; // Options are 0,1,2,3
+    const maxValue = useWeights ? maxOption * maxWeight : maxOption;
+    const maxValueSum = useWeights ? maxValue * 2 : maxOption * 2; // 2 questions
     
     const stream = sdk.createProcessStream({
         title: "Simplified Test Election " + Date.now(),
@@ -149,12 +162,12 @@ async function step3_createProcess(
         census: census,
         ballot: {
             numFields: 2,        // Two questions
-            maxValue: "3",       // Four options (0,1,2,3)
+            maxValue: maxValue.toString(),
             minValue: "0",
             uniqueValues: false,
             costFromWeight: false,
             costExponent: 0,
-            maxValueSum: "6",    // Sum of max values (3 + 3)
+            maxValueSum: maxValueSum.toString(),
             minValueSum: "0"
         },
         timing: {
@@ -266,36 +279,45 @@ async function step5_submitVotes(
     sdk: DavinciSDK, 
     processId: string, 
     participants: TestParticipant[],
-    censusType: CensusOrigin
+    censusType: CensusOrigin,
+    useWeights: boolean
 ): Promise<string[]> {
-    step(5, "Submit votes for all participants");
+    step(5, `Submit votes for all participants${useWeights ? ' (with weights)' : ''}`);
     
     const voteIds: string[] = [];
     
     for (let i = 0; i < participants.length; i++) {
         const participant = participants[i];
+        const weight = parseInt(participant.weight);
         
         // Generate random choices for each question (0-3)
         const choice1 = Math.floor(Math.random() * 4);
         const choice2 = Math.floor(Math.random() * 4);
         
-        // Create arrays of 4 positions each (1 for selected choice, 0 for others)
+        // Create arrays of 4 positions each 
         const question1Choices = Array(4).fill(0);
         const question2Choices = Array(4).fill(0);
-        question1Choices[choice1] = 1;
-        question2Choices[choice2] = 1;
+        
+        // If using weights, multiply by participant weight
+        if (useWeights) {
+            question1Choices[choice1] = weight;
+            question2Choices[choice2] = weight;
+        } else {
+            question1Choices[choice1] = 1;
+            question2Choices[choice2] = 1;
+        }
         
         const colorChoice = ["Red", "Blue", "Green", "Yellow"][choice1];
         const transportChoice = ["Car", "Bike", "Public Transport", "Walking"][choice2];
         
-        info(`[${i + 1}/${participants.length}] ${participant.address} voting: ${colorChoice}, ${transportChoice}`);
+        info(`[${i + 1}/${participants.length}] ${participant.address} (weight: ${weight}) voting: ${colorChoice}, ${transportChoice}`);
         info(`   Choice arrays: Q1=[${question1Choices.join(", ")}], Q2=[${question2Choices.join(", ")}]`);
         
         try {
             const baseConfig = createSDKInstance(participant.privateKey, false);
             
             const voterConfig: any = censusType === CensusOrigin.CensusOriginCSP 
-                ? { ...baseConfig, censusProviders: { csp: createCSPCensusProvider(sdk) } as CensusProviders }
+                ? { ...baseConfig, censusProviders: { csp: createCSPCensusProvider(sdk, participants) } as CensusProviders }
                 : baseConfig;
             
             const voterSDK = new DavinciSDK(voterConfig);
@@ -497,14 +519,17 @@ async function run() {
         // Step 2: Create census
         const { census, participants } = await step2_createCensus(sdk, userConfig.numParticipants, userConfig.censusType);
         
+        // Calculate maximum weight from participants
+        const maxWeight = Math.max(...participants.map(p => parseInt(p.weight)));
+        
         // Step 3: Create process
-        const processId = await step3_createProcess(sdk, census);
+        const processId = await step3_createProcess(sdk, census, userConfig.useWeights, maxWeight);
         
         // Step 4: Wait for process to be ready
         await step4_waitForProcessReady(sdk, processId);
         
         // Step 5: Submit votes
-        const voteIds = await step5_submitVotes(sdk, processId, participants, userConfig.censusType);
+        const voteIds = await step5_submitVotes(sdk, processId, participants, userConfig.censusType, userConfig.useWeights);
         
         // Step 6: Wait for votes to be processed
         await step6_waitForVotesProcessed(sdk, processId, voteIds);

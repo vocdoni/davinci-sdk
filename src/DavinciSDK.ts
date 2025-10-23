@@ -36,7 +36,7 @@ export interface DavinciSDKConfig {
   censusUrl?: string;
 
   /** Chain name (optional, defaults based on environment) */
-  chain?: 'sepolia' | 'mainnet';
+  chain?: 'sepolia' | 'mainnet' | 'celo';
 
   /** Custom contract addresses (optional, uses defaults if not provided) */
   contractAddresses?: {
@@ -67,7 +67,7 @@ interface InternalDavinciSDKConfig {
   signer: Signer;
   sequencerUrl: string;
   censusUrl: string;
-  chain: 'sepolia' | 'mainnet';
+  chain: 'sepolia' | 'mainnet' | 'celo';
   contractAddresses: {
     processRegistry?: string;
     organizationRegistry?: string;

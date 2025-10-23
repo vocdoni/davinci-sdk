@@ -8,7 +8,7 @@ export class CspCensus extends Census {
   private _publicKey: string;
   private _cspURI: string;
 
-  constructor(publicKey: string, cspURI: string) {
+  constructor(publicKey: string, cspURI: string, size: number) {
     super(CensusType.CSP);
 
     // Validate public key
@@ -29,6 +29,7 @@ export class CspCensus extends Census {
     // For CSP, these are known immediately
     this._censusRoot = publicKey; // Public key serves as root
     this._censusURI = cspURI;
+    this._size = size;
   }
 
   get publicKey(): string {
