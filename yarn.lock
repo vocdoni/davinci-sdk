@@ -1215,10 +1215,10 @@
   resolved "https://registry.yarnpkg.com/@ungap/structured-clone/-/structured-clone-1.3.0.tgz#d06bbb384ebcf6c505fde1c3d0ed4ddffe0aaff8"
   integrity sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==
 
-"@vocdoni/davinci-contracts@0.0.19":
-  version "0.0.19"
-  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.19.tgz#f4468329beae38b684d35445a31a810a59718a2d"
-  integrity sha512-AJSTA12FF5y7zIf9QjwKRxH31h9YsU5C67XQ34DSWUJEo/8liV/ZRrnMAFYEobyi11ifOxdxPW7zSTQi9bR8+Q==
+"@vocdoni/davinci-contracts@0.0.21":
+  version "0.0.21"
+  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.21.tgz#428359516906cb199e8b6f8a09840cf80a0098f7"
+  integrity sha512-Gp0Nla0iFesAdyQscSgb7L2VjQU3nN/AG/zZpawS9BEoKq/DWmoERJ+5hE9XrBqqZuni/eyjDK7i2jDQ9HOFCQ==
 
 acorn-jsx@^5.3.2:
   version "5.3.2"
