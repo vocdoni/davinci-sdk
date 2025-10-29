@@ -10,7 +10,7 @@ import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
+const provider = new JsonRpcProvider(process.env.RPC_URL);
 const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
 
 function randomHex(bytes: number): string {
@@ -21,14 +21,14 @@ function randomHex(bytes: number): string {
   return '0x' + hex;
 }
 
-describe('Simple Process Creation Integration (Sepolia)', () => {
+describe('Simple Process Creation Integration', () => {
   let sdk: DavinciSDK;
 
   beforeAll(async () => {
     sdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
-      useSequencerAddresses: true,
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
+      censusUrl: process.env.CENSUS_API_URL,
     });
 
     await sdk.init();
@@ -283,7 +283,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     const config: ProcessConfig = {
@@ -650,7 +650,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for getProcess', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     await expect(
@@ -790,7 +790,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     // Wait for process to start to avoid underflow error (block.timestamp - p.startTime)
     // The contract calculates newDuration = block.timestamp - p.startTime when ending
     // If current time < start time, this causes Panic(17) overflow
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Now end the process using the stream
     const endStream = sdk.endProcessStream(processId);
@@ -877,7 +877,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforeEnd.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start to avoid underflow error
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // End the process using the simplified method
     await sdk.endProcess(processId);
@@ -890,7 +890,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for endProcess', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     await expect(
@@ -903,7 +903,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for endProcessStream', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     expect(() =>
@@ -961,7 +961,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Now pause the process using the stream
     const pauseStream = sdk.pauseProcessStream(processId);
@@ -1047,7 +1047,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Pause the process using the simplified method
     await sdk.pauseProcess(processId);
@@ -1060,7 +1060,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for pauseProcess', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     await expect(
@@ -1073,7 +1073,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for pauseProcessStream', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     expect(() =>
@@ -1131,7 +1131,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Now cancel the process using the stream
     const cancelStream = sdk.cancelProcessStream(processId);
@@ -1217,7 +1217,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Cancel the process using the simplified method
     await sdk.cancelProcess(processId);
@@ -1230,7 +1230,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for cancelProcess', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     await expect(
@@ -1243,7 +1243,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for cancelProcessStream', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     expect(() =>
@@ -1301,7 +1301,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Pause the process first
     await sdk.pauseProcess(processId);
@@ -1394,7 +1394,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
     // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
 
     // Pause the process first
     await sdk.pauseProcess(processId);
@@ -1414,7 +1414,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for resumeProcess', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     await expect(
@@ -1427,7 +1427,7 @@ describe('Simple Process Creation Integration (Sepolia)', () => {
   it('should validate SDK initialization requirement for resumeProcessStream', async () => {
     const uninitializedSdk = new DavinciSDK({
       signer: wallet,
-      environment: 'dev',
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
     });
 
     expect(() =>

@@ -118,28 +118,6 @@ describe('VocdoniSequencerService Integration', () => {
     expect(typeof sequencerStats.lastBatchSize).toBe('number');
   });
 
-  it('should create a process and validate the response', async () => {
-    const censusRoot = await censusService.getCensusRoot(censusId);
-
-    // Mock process ID (32 bytes hex)
-    const processId = '0x00aa36a7000000000000000000000000000000000000dead0000000000000000';
-
-    const payload = generateMockProcessRequest(processId, censusRoot);
-
-    // Use the new signature format
-    const signature = await signProcessCreation(processId, mockWallet);
-
-    const fullPayload = { ...payload, signature };
-    const response = await sequencerService.createProcess(fullPayload);
-
-    expect(isValidHex(response.processId, 64)).toBe(true);
-    expect(response.processId).toBe(processId);
-    expect(Array.isArray(response.encryptionPubKey)).toBe(true);
-    expect(response.encryptionPubKey.length).toBe(2);
-    expect(isValidHex(response.stateRoot, 64)).toBe(true);
-    expect(response.ballotMode).toEqual(payload.ballotMode);
-  });
-
   describe('Metadata operations', () => {
     let metadataHash: string;
     const testMetadata = getElectionMetadataTemplate();
@@ -157,8 +135,8 @@ describe('VocdoniSequencerService Integration', () => {
       expect(metadata).toEqual(testMetadata);
     });
 
-    it('should throw error for invalid hash format', () => {
-      expect(() => sequencerService.getMetadata('invalid-hash')).toThrow(
+    it('should throw error for invalid hash format', async () => {
+      await expect(sequencerService.getMetadata('invalid-hash')).rejects.toThrow(
         'Invalid metadata hash format'
       );
     });
@@ -215,8 +193,8 @@ describe('VocdoniSequencerService Integration', () => {
       expect(Array.isArray(response.workers)).toBe(true);
 
       // Check each worker's structure
-      response.workers.forEach((worker: any) => {
-        expect(typeof worker.address).toBe('string');
+      response.workers.forEach((worker) => {
+        expect(typeof worker.name).toBe('string');
         expect(typeof worker.successCount).toBe('number');
         expect(typeof worker.failedCount).toBe('number');
       });

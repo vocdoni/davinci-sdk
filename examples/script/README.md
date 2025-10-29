@@ -22,7 +22,7 @@ This script demonstrates a complete voting workflow using the Vocdoni DAVINCI SD
 
 - **Privacy-Preserving Voting**: Uses zk-SNARKs to ensure vote privacy while maintaining verifiability
 - **Multi-Question Elections**: Creates an election with two questions (favorite color and transportation preference)
-- **Smart Contract Integration**: Interacts with Ethereum smart contracts on Sepolia testnet
+- **Smart Contract Integration**: Interacts with Ethereum smart contracts
 - **Complete Lifecycle**: From census creation to result tallying
 - **Cryptographic Operations**: Handles encryption, proof generation, and verification
 
@@ -44,7 +44,7 @@ Before running this script, ensure you have:
 
 ### Blockchain Requirements
 - **Ethereum Wallet** with a private key
-- **Sepolia Testnet ETH** for transaction fees
+- **Testnet ETH** for transaction fees (on the blockchain the sequencer is using)
 - **RPC Provider** (Infura, Alchemy, or similar)
 
 ### API Access
@@ -83,24 +83,22 @@ Before running this script, ensure you have:
 2. **Configure environment variables** in `.env`:
 
    ```env
-   # Sequencer API endpoint (e.g., http://localhost:8080)
+   # Sequencer API endpoint (e.g., https://sequencer-dev.davinci.vote)
    SEQUENCER_API_URL=
 
-   # Census API endpoint (e.g., http://localhost:8081)
+   # Census API endpoint (e.g., https://c3-dev.davinci.vote)
    CENSUS_API_URL=
 
-   # Sepolia RPC endpoint (get from Infura, Alchemy, etc.)
-   SEPOLIA_RPC=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
+   # RPC endpoint for blockchain transactions (get from Infura, Alchemy, etc.)
+   # The chain is determined by the sequencer configuration
+   RPC_URL=https://sepolia.infura.io/v3/YOUR_PROJECT_ID
 
    # Private key for transaction signing (without 0x prefix)
    PRIVATE_KEY=your_private_key_here
 
-   # Optional: Custom contract addresses
-   ORGANIZATION_REGISTRY_ADDRESS=
-   PROCESS_REGISTRY_ADDRESS=
-
-   # Force using contract addresses from sequencer info endpoint (default: false)
-   FORCE_SEQUENCER_ADDRESSES=false
+   # (optional) CSP private key for CSP census operations (without 0x prefix)
+   # If not provided, a random private key will be generated
+   CSP_PRIVATE_KEY=
    ```
 
 ### Environment Variables Explained
@@ -109,7 +107,7 @@ Before running this script, ensure you have:
 |----------|-------------|----------|---------|
 | `SEQUENCER_API_URL` | Vocdoni sequencer API endpoint | ✅ | `https://sequencer1.davinci.vote` |
 | `CENSUS_API_URL` | Vocdoni census API endpoint | ✅ | `https://census1.davinci.vote` |
-| `SEPOLIA_RPC` | Ethereum Sepolia RPC URL | ✅ | `https://sepolia.infura.io/v3/...` |
+| `RPC_URL` | Blockchain RPC URL | ✅ | `https://sepolia.infura.io/v3/...` |
 | `PRIVATE_KEY` | Wallet private key (no 0x) | ✅ | `abcd1234...` |
 | `ORGANIZATION_REGISTRY_ADDRESS` | Custom org registry address | ❌ | `0x1234...` |
 | `PROCESS_REGISTRY_ADDRESS` | Custom process registry address | ❌ | `0x5678...` |
@@ -139,17 +137,17 @@ The script now includes a new environment variable `FORCE_SEQUENCER_ADDRESSES` t
 
 ### Getting Required Values
 
-#### Sepolia RPC URL
+#### RPC URL
 1. Sign up at [Infura](https://infura.io/) or [Alchemy](https://alchemy.com/)
 2. Create a new project
-3. Copy the Sepolia endpoint URL
+3. Copy the RPC endpoint URL for the network your sequencer is using
 
 #### Private Key
 1. Export from MetaMask: Settings → Security & Privacy → Reveal Private Key
 2. **⚠️ Security Warning**: Never share your private key or commit it to version control
 
-#### Sepolia ETH
-- Get free testnet ETH from [Sepolia Faucet](https://sepoliafaucet.com/)
+#### Testnet ETH
+- Get free testnet ETH from the appropriate faucet for your network
 - You'll need ~0.01 ETH for transaction fees
 
 ## Usage
@@ -325,8 +323,8 @@ graph LR
 - **Solution**: Copy `.env.example` to `.env` and configure variables
 
 #### "insufficient funds for intrinsic transaction cost"
-- **Cause**: Not enough Sepolia ETH for gas fees
-- **Solution**: Get more testnet ETH from [Sepolia Faucet](https://sepoliafaucet.com/)
+- **Cause**: Not enough testnet ETH for gas fees
+- **Solution**: Get more testnet ETH from the appropriate faucet for your network
 
 #### "Process not ready yet, checking again in 10 seconds..."
 - **Cause**: Normal behavior - process initialization takes time
@@ -353,9 +351,9 @@ graph LR
 ### Debug Tips
 
 1. **Enable verbose logging**: The script already provides detailed output
-2. **Check transaction status**: Use [Sepolia Etherscan](https://sepolia.etherscan.io/) to verify transactions
+2. **Check transaction status**: Use the appropriate block explorer for your network to verify transactions
 3. **Verify API status**: Test API connectivity with `curl $SEQUENCER_API_URL/ping`
-4. **Check balances**: Ensure wallet has sufficient Sepolia ETH
+4. **Check balances**: Ensure wallet has sufficient testnet ETH
 
 ### Getting Help
 

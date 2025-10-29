@@ -9,17 +9,15 @@ import {
   ProcessRegistryService,
   ProcessStatus,
   ProcessCreateError,
-  deployedAddresses as addresses,
 } from '../../../src/contracts';
 import { BallotMode, CensusData, EncryptionKey } from '../../../src/core';
 import { CensusOrigin } from '../../../src/census';
+import { VocdoniSequencerService } from '../../../src/sequencer';
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
+const provider = new JsonRpcProvider(process.env.RPC_URL);
 const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
-
-const PROC_REGISTRY_ADDR = addresses.processRegistry.sepolia;
 
 function randomHex(bytes: number): string {
   let hex = '';
@@ -29,7 +27,7 @@ function randomHex(bytes: number): string {
   return '0x' + hex;
 }
 
-describe('ProcessRegistryService Integration (Sepolia)', () => {
+describe('ProcessRegistryService Integration', () => {
   let procService: ProcessRegistryService;
 
   let processId: string;
@@ -38,7 +36,11 @@ describe('ProcessRegistryService Integration (Sepolia)', () => {
   let initCensus: CensusData;
   const metadataURI = `ipfs://meta-${Date.now()}`;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    // Fetch contract address from sequencer
+    const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    const info = await sequencerService.getInfo();
+    const PROC_REGISTRY_ADDR = info.contracts.process;
     procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);
   });
 
