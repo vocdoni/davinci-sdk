@@ -3,8 +3,6 @@ import { VocdoniApiService } from './core/api/ApiService';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { OrganizationRegistryService } from './contracts/OrganizationRegistry';
 import { DavinciCrypto } from './sequencer/DavinciCryptoService';
-import { deployedAddresses } from './contracts/SmartContractService';
-import { Environment, EnvironmentOptions, resolveConfiguration } from './core/config';
 import {
   ProcessOrchestrationService,
   ProcessConfig,
@@ -26,29 +24,20 @@ export interface DavinciSDKConfig {
    */
   signer: Signer;
 
-  /** Environment to use (dev, stg, prod) - used to set default URLs and chain if not explicitly provided */
-  environment?: Environment;
+  /** Sequencer API URL for Vocdoni services (required) */
+  sequencerUrl: string;
 
-  /** Sequencer API URL for Vocdoni services (optional, defaults based on environment) */
-  sequencerUrl?: string;
-
-  /** Census API URL for census management (optional, defaults based on environment) */
+  /** Census API URL for census management (optional, only needed when creating censuses from scratch) */
   censusUrl?: string;
 
-  /** Chain name (optional, defaults based on environment) */
-  chain?: 'sepolia' | 'mainnet' | 'celo';
-
-  /** Custom contract addresses (optional, uses defaults if not provided) */
-  contractAddresses?: {
+  /** Custom contract addresses (optional, fetched from sequencer if not provided) */
+  addresses?: {
     processRegistry?: string;
     organizationRegistry?: string;
     stateTransitionVerifier?: string;
     resultsVerifier?: string;
     sequencerRegistry?: string;
   };
-
-  /** Whether to force using contract addresses from sequencer info (optional, defaults to false) */
-  useSequencerAddresses?: boolean;
 
   /** Custom census proof providers (optional) */
   censusProviders?: CensusProviders;
@@ -61,21 +50,20 @@ export interface DavinciSDKConfig {
 }
 
 /**
- * Internal configuration interface (without environment)
+ * Internal configuration interface
  */
 interface InternalDavinciSDKConfig {
   signer: Signer;
   sequencerUrl: string;
-  censusUrl: string;
-  chain: 'sepolia' | 'mainnet' | 'celo';
-  contractAddresses: {
+  censusUrl?: string;
+  customAddresses: {
     processRegistry?: string;
     organizationRegistry?: string;
     stateTransitionVerifier?: string;
     resultsVerifier?: string;
     sequencerRegistry?: string;
   };
-  useSequencerAddresses: boolean;
+  fetchAddressesFromSequencer: boolean;
   verifyCircuitFiles: boolean;
   verifyProof: boolean;
 }
@@ -95,24 +83,16 @@ export class DavinciSDK {
   private censusProviders: CensusProviders;
 
   constructor(config: DavinciSDKConfig) {
-    // Resolve configuration based on environment and custom overrides
-    const resolvedConfig = resolveConfiguration({
-      environment: config.environment,
-      customUrls: {
-        sequencer: config.sequencerUrl,
-        census: config.censusUrl,
-      },
-      customChain: config.chain,
-    });
+    // Determine if custom addresses are provided
+    const hasCustomAddresses = !!config.addresses && Object.keys(config.addresses).length > 0;
 
-    // Set defaults for optional parameters
+    // Set configuration
     this.config = {
       signer: config.signer,
-      sequencerUrl: config.sequencerUrl ?? resolvedConfig.sequencer,
-      censusUrl: config.censusUrl ?? resolvedConfig.census,
-      chain: config.chain ?? resolvedConfig.chain,
-      contractAddresses: config.contractAddresses || {},
-      useSequencerAddresses: config.useSequencerAddresses || false,
+      sequencerUrl: config.sequencerUrl,
+      censusUrl: config.censusUrl,
+      customAddresses: config.addresses || {},
+      fetchAddressesFromSequencer: !hasCustomAddresses, // Automatic: fetch if no custom addresses
       verifyCircuitFiles: config.verifyCircuitFiles ?? true, // Default to true for security
       verifyProof: config.verifyProof ?? true, // Default to true for security
     };
@@ -120,7 +100,7 @@ export class DavinciSDK {
     // Initialize API service
     this.apiService = new VocdoniApiService({
       sequencerURL: this.config.sequencerUrl,
-      censusURL: this.config.censusUrl,
+      censusURL: this.config.censusUrl || '', // Use empty string if not provided
     });
 
     // Store census providers
@@ -136,13 +116,15 @@ export class DavinciSDK {
   async init(): Promise<void> {
     if (this.initialized) return;
 
-    // If useSequencerAddresses is true, fetch sequencer info and update contract addresses
-    if (this.config.useSequencerAddresses) {
-      await this.updateContractAddressesFromSequencer();
+    // Fetch contract addresses from sequencer if needed
+    if (this.config.fetchAddressesFromSequencer) {
+      await this.fetchContractAddressesFromSequencer();
     }
 
-    // Initialize DavinciCrypto if needed (lazy initialization)
-    // This will be done when crypto operations are first needed
+    // Validate census URL if needed
+    if (!this.config.censusUrl) {
+      // Census URL is optional, but we'll check if it's needed later when actually used
+    }
 
     this.initialized = true;
   }
@@ -451,6 +433,7 @@ export class DavinciSDK {
    * This is the ultra-easy method for end users that handles all the complex voting workflow internally.
    *
    * Does NOT require a provider - can be used with a bare Wallet for signing only.
+   * IMPORTANT: Requires censusUrl to be configured in the SDK for fetching census proofs (unless using custom census providers).
    *
    * The method automatically:
    * - Fetches process information and validates voting is allowed
@@ -460,6 +443,7 @@ export class DavinciSDK {
    *
    * @param config - Simplified vote configuration
    * @returns Promise resolving to vote submission result
+   * @throws Error if censusUrl is not configured (unless using custom census providers)
    *
    * @example
    * ```typescript
@@ -487,6 +471,14 @@ export class DavinciSDK {
   async submitVote(config: VoteConfig): Promise<VoteResult> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before submitting votes. Call sdk.init() first.');
+    }
+
+    // Check if censusUrl is configured (unless using custom census providers)
+    if (!this.config.censusUrl && !this.censusProviders.merkle && !this.censusProviders.csp) {
+      throw new Error(
+        'Census URL is required for voting. ' +
+          'Provide censusUrl in the SDK constructor config, or use custom census providers.'
+      );
     }
 
     return this.voteOrchestrator.submitVote(config);
@@ -936,89 +928,66 @@ export class DavinciSDK {
 
   /**
    * Resolve contract address based on configuration priority:
-   * 1. If useSequencerAddresses is true: addresses from sequencer (highest priority)
-   * 2. Custom addresses from config (if provided by user)
-   * 3. Default deployed addresses from npm package
+   * 1. Custom addresses from user config (if provided)
+   * 2. Addresses from sequencer (fetched during init if no custom addresses provided)
    */
   private resolveContractAddress(
-    contractName: keyof NonNullable<DavinciSDKConfig['contractAddresses']>
+    contractName: keyof NonNullable<DavinciSDKConfig['addresses']>
   ): string {
-    // 1. If useSequencerAddresses is true, we'll get addresses from sequencer during init()
-    // For now, return default addresses - they will be updated in updateContractAddressesFromSequencer()
-    if (this.config.useSequencerAddresses) {
-      // Return default for now, will be updated during init()
-      return this.getDefaultContractAddress(contractName);
-    }
-
-    // 2. Check if custom address is provided by user
-    const customAddress = this.config.contractAddresses[contractName];
+    // Check if custom address is provided by user
+    const customAddress = this.config.customAddresses[contractName];
     if (customAddress) {
       return customAddress;
     }
 
-    // 3. Use default deployed addresses from npm package
-    return this.getDefaultContractAddress(contractName);
-  }
-
-  /**
-   * Get default contract address from deployed addresses
-   */
-  private getDefaultContractAddress(
-    contractName: keyof NonNullable<DavinciSDKConfig['contractAddresses']>
-  ): string {
-    const chain = this.config.chain;
-    switch (contractName) {
-      case 'processRegistry':
-        return deployedAddresses.processRegistry[chain];
-      case 'organizationRegistry':
-        return deployedAddresses.organizationRegistry[chain];
-      case 'stateTransitionVerifier':
-        return deployedAddresses.stateTransitionVerifierGroth16[chain];
-      case 'resultsVerifier':
-        return deployedAddresses.resultsVerifierGroth16[chain];
-      case 'sequencerRegistry':
-        return deployedAddresses.sequencerRegistry[chain];
-      default:
-        throw new Error(`Unknown contract: ${contractName}`);
+    // If no custom address and we didn't fetch from sequencer, throw error
+    if (!this.config.customAddresses[contractName]) {
+      throw new Error(
+        `Contract address for '${contractName}' not found. ` +
+          `Make sure SDK is initialized with sdk.init() or provide custom addresses in config.`
+      );
     }
+
+    return this.config.customAddresses[contractName]!;
   }
 
   /**
-   * Update contract addresses from sequencer info if useSequencerAddresses is enabled
-   * Sequencer addresses have priority over user-provided addresses
+   * Fetch contract addresses from sequencer info
+   * This is called during init() if custom addresses are not provided
    */
-  private async updateContractAddressesFromSequencer(): Promise<void> {
+  private async fetchContractAddressesFromSequencer(): Promise<void> {
     try {
       const info = await this.apiService.sequencer.getInfo();
       const contracts = info.contracts;
 
-      // Update process registry with sequencer address (overrides user address)
+      // Store addresses from sequencer
       if (contracts.process) {
+        this.config.customAddresses.processRegistry = contracts.process;
         this._processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
-        this.config.contractAddresses.processRegistry = contracts.process;
       }
 
-      // Update organization registry with sequencer address (overrides user address)
       if (contracts.organization) {
+        this.config.customAddresses.organizationRegistry = contracts.organization;
         this._organizationRegistry = new OrganizationRegistryService(
           contracts.organization,
           this.config.signer
         );
-        this.config.contractAddresses.organizationRegistry = contracts.organization;
       }
 
-      // Update other contract addresses from sequencer (overrides user addresses)
       if (contracts.stateTransitionVerifier) {
-        this.config.contractAddresses.stateTransitionVerifier = contracts.stateTransitionVerifier;
+        this.config.customAddresses.stateTransitionVerifier = contracts.stateTransitionVerifier;
       }
 
       if (contracts.resultsVerifier) {
-        this.config.contractAddresses.resultsVerifier = contracts.resultsVerifier;
+        this.config.customAddresses.resultsVerifier = contracts.resultsVerifier;
       }
 
       // Note: sequencerRegistry is not provided by the sequencer info endpoint
     } catch (error) {
-      console.warn('Failed to fetch contract addresses from sequencer, using defaults:', error);
+      throw new Error(
+        `Failed to fetch contract addresses from sequencer: ${error instanceof Error ? error.message : String(error)}. ` +
+          `You can provide custom addresses in the SDK config to avoid this error.`
+      );
     }
   }
 

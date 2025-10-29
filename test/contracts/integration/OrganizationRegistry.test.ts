@@ -9,21 +9,28 @@ import {
   OrganizationRegistryService,
   SmartContractService,
   OrganizationCreateError,
-  deployedAddresses as addresses,
 } from '../../../src/contracts';
+import { VocdoniSequencerService } from '../../../src/sequencer';
 
 jest.setTimeout(Number(process.env.TIMEOUT) || 60000);
 
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
+const provider = new JsonRpcProvider(process.env.RPC_URL);
 provider.pollingInterval = 1_000;
 const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
-const contractAddress = addresses.organizationRegistry.sepolia;
 
 const admin = wallet.address;
-const service = new OrganizationRegistryService(contractAddress, wallet);
+let service: OrganizationRegistryService;
 
-describe('OrganizationRegistryService Integration (Sepolia)', () => {
+describe('OrganizationRegistryService Integration', () => {
   let extraAdmin: string;
+
+  beforeAll(async () => {
+    // Fetch contract address from sequencer
+    const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    const info = await sequencerService.getInfo();
+    const contractAddress = info.contracts.organization;
+    service = new OrganizationRegistryService(contractAddress, wallet);
+  });
 
   it('should yield correct transaction status events when creating organization', async () => {
     // Ensure any leftover org is cleaned up before tests run

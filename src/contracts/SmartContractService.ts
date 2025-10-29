@@ -4,78 +4,7 @@ import type {
   EventFilter,
   Provider,
   ContractEventName,
-  EventLog,
 } from 'ethers';
-import addressesJson from '@vocdoni/davinci-contracts/deployed_contracts_addresses.json';
-
-/**
- * Interface defining the structure of deployed contract addresses across different networks.
- * Each contract has addresses for multiple supported networks.
- */
-export interface DeployedAddresses {
-  /** Process Registry contract addresses */
-  processRegistry: {
-    /** Sepolia testnet address */
-    sepolia: string;
-    /** UZH testnet address */
-    uzh: string;
-    /** Ethereum mainnet address */
-    mainnet: string;
-    /** Celo mainnet address */
-    celo: string;
-  };
-  /** Organization Registry contract addresses */
-  organizationRegistry: {
-    /** Sepolia testnet address */
-    sepolia: string;
-    /** UZH testnet address */
-    uzh: string;
-    /** Ethereum mainnet address */
-    mainnet: string;
-    /** Celo mainnet address */
-    celo: string;
-  };
-  /** State Transition Verifier contract addresses */
-  stateTransitionVerifierGroth16: {
-    /** Sepolia testnet address */
-    sepolia: string;
-    /** UZH testnet address */
-    uzh: string;
-    /** Ethereum mainnet address */
-    mainnet: string;
-    /** Celo mainnet address */
-    celo: string;
-  };
-  /** Results Verifier contract addresses */
-  resultsVerifierGroth16: {
-    /** Sepolia testnet address */
-    sepolia: string;
-    /** UZH testnet address */
-    uzh: string;
-    /** Ethereum mainnet address */
-    mainnet: string;
-    /** Celo mainnet address */
-    celo: string;
-  };
-  /** Sequencer Registry contract addresses */
-  sequencerRegistry: {
-    /** Sepolia testnet address */
-    sepolia: string;
-    /** UZH testnet address */
-    uzh: string;
-    /** Ethereum mainnet address */
-    mainnet: string;
-    /** Celo mainnet address */
-    celo: string;
-  };
-}
-
-/**
- * Deployed contract addresses imported from @vocdoni/davinci-contracts package.
- * These addresses are used to interact with the Vocdoni voting protocol contracts
- * on different networks.
- */
-export const deployedAddresses: DeployedAddresses = addressesJson;
 
 /**
  * Enum representing the possible states of a transaction during its lifecycle.

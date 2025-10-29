@@ -17,10 +17,10 @@ import { DavinciCrypto } from '../../../src/sequencer/DavinciCryptoService';
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 600_000); // 10 minutes for voting tests
 
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
+const provider = new JsonRpcProvider(process.env.RPC_URL);
 const organizerWallet = new Wallet(process.env.PRIVATE_KEY!, provider);
 
-describe('Vote Orchestration Integration (Sepolia)', () => {
+describe('Vote Orchestration Integration', () => {
   let organizerSdk: DavinciSDK;
   let processId: string;
   const voters: Wallet[] = [];
@@ -38,8 +38,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
   beforeAll(async () => {
     organizerSdk = new DavinciSDK({
       signer: organizerWallet,
-      environment: 'dev',
-      useSequencerAddresses: true,
+      sequencerUrl: process.env.SEQUENCER_API_URL!,
+      censusUrl: process.env.CENSUS_API_URL,
     });
 
     await organizerSdk.init();
@@ -52,8 +52,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
 
       const voterSdk = new DavinciSDK({
         signer: voter,
-        environment: 'dev',
-        useSequencerAddresses: true,
+        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        censusUrl: process.env.CENSUS_API_URL,
       });
       await voterSdk.init();
       voterSdks.push(voterSdk);
@@ -186,8 +186,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
       const invalidVoter = new Wallet(Wallet.createRandom().privateKey, provider);
       const invalidVoterSdk = new DavinciSDK({
         signer: invalidVoter,
-        environment: 'dev',
-        useSequencerAddresses: true,
+        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        censusUrl: process.env.CENSUS_API_URL,
       });
       await invalidVoterSdk.init();
 
@@ -480,7 +480,7 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
     it('should validate SDK initialization requirement', async () => {
       const uninitializedSdk = new DavinciSDK({
         signer: organizerWallet,
-        environment: 'dev',
+        sequencerUrl: process.env.SEQUENCER_API_URL!,
       });
 
       const voteConfig: VoteConfig = {
@@ -608,8 +608,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
         // Create SDK with custom census provider
         const customVoterSdk = new DavinciSDK({
           signer: customVoters[0],
-          environment: 'dev',
-          useSequencerAddresses: true,
+          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          censusUrl: process.env.CENSUS_API_URL,
           censusProviders,
         });
         await customVoterSdk.init();
@@ -650,8 +650,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
 
         const customVoterSdk = new DavinciSDK({
           signer: customVoters[1],
-          environment: 'dev',
-          useSequencerAddresses: true,
+          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          censusUrl: process.env.CENSUS_API_URL,
           censusProviders,
         });
         await customVoterSdk.init();
@@ -798,8 +798,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
         // Create SDK with custom CSP provider
         const customVoterSdk = new DavinciSDK({
           signer: customVoters[2],
-          environment: 'dev',
-          useSequencerAddresses: true,
+          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          censusUrl: process.env.CENSUS_API_URL,
           censusProviders,
         });
         await customVoterSdk.init();
@@ -819,11 +819,11 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
       });
 
       it('should throw error when CSP provider is not provided for CSP process', async () => {
-        // Create SDK without CSP provider
+        // Create SDK without CSP provider (but with censusUrl to get past initial validation)
         const customVoterSdk = new DavinciSDK({
           signer: customVoters[0],
-          environment: 'dev',
-          useSequencerAddresses: true,
+          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          censusUrl: process.env.CENSUS_API_URL,
           // No census providers
         });
         await customVoterSdk.init();
@@ -858,8 +858,8 @@ describe('Vote Orchestration Integration (Sepolia)', () => {
 
         const customVoterSdk = new DavinciSDK({
           signer: customVoters[1],
-          environment: 'dev',
-          useSequencerAddresses: true,
+          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          censusUrl: process.env.CENSUS_API_URL,
           censusProviders,
         });
         await customVoterSdk.init();
