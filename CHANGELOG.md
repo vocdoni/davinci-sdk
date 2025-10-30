@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2025-10-30
+
+### Changed
+- **BREAKING**: Removed legacy `environment` parameter from SDK configuration
+- **BREAKING**: SDK now requires explicit `sequencerUrl` parameter
+- Updated SDK to fetch contract addresses automatically from sequencer `/info` endpoint
+- Improved contract integration tests to dynamically fetch addresses from sequencer
+- Organized and optimized import statements across the codebase
+
+### Added
+- Added proper validation for `censusUrl` requirement when using PlainCensus or WeightedCensus
+- Added helpful error messages when census URL is missing for census publication
+- Documentation updates reflecting new initialization patterns in README
+
+### Fixed
+- Fixed async error handling in Sequencer integration tests
+- Fixed census URL validation to properly check axios baseURL configuration
+- Fixed test files to use environment variables instead of hardcoded URLs
+
+### Removed
+- Removed entire `src/core/config/` module (deprecated legacy configuration system)
+- Removed unused `deployedAddresses` export and related configuration code
+- Removed hardcoded contract addresses from codebase
+
 ## [0.0.2] - 2025-01-16
 
 ### Added
