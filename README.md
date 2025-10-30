@@ -27,7 +27,8 @@ import { Wallet } from 'ethers';
 const wallet = new Wallet('your-private-key');
 const sdk = new DavinciSDK({
   signer: wallet,
-  environment: 'dev' // or 'stg', 'prod'
+  sequencerUrl: 'https://sequencer-dev.davinci.vote',
+  censusUrl: 'https://c3-dev.davinci.vote'
 });
 
 await sdk.init();
@@ -63,7 +64,8 @@ const process = await sdk.createProcess({
 const voterWallet = new Wallet('voter-private-key'); // Must be one of the census participants
 const voterSdk = new DavinciSDK({
   signer: voterWallet,
-  environment: 'dev'
+  sequencerUrl: 'https://sequencer-dev.davinci.vote'
+  // No censusUrl needed for voting-only operations
 });
 await voterSdk.init();
 
@@ -337,18 +339,31 @@ const process = await sdk.createProcess({
 ```typescript
 interface DavinciSDKConfig {
   signer: Signer;                    // Ethereum signer (required)
-  environment?: 'dev' | 'stg' | 'prod'; // Environment (default: 'prod')
-  sequencerUrl?: string;             // Custom sequencer URL
-  censusUrl?: string;                // Custom census API URL
-  chain?: 'sepolia' | 'mainnet';    // Blockchain network
-  contractAddresses?: {              // Custom contract addresses
+  sequencerUrl: string;              // Sequencer API URL (required)
+  censusUrl?: string;                // Census API URL (optional, only needed for census creation)
+  addresses?: {                      // Custom contract addresses (optional)
     processRegistry?: string;
     organizationRegistry?: string;
-    // ... other contracts
+    stateTransitionVerifier?: string;
+    resultsVerifier?: string;
+    sequencerRegistry?: string;
   };
-  useSequencerAddresses?: boolean;   // Use addresses from sequencer
+  censusProviders?: CensusProviders; // Custom census proof providers (optional)
+  verifyCircuitFiles?: boolean;      // Verify downloaded circuit files (default: true)
+  verifyProof?: boolean;             // Verify generated proof before submission (default: true)
 }
 ```
+
+**Key Points:**
+
+- **`sequencerUrl`** (required): The Vocdoni sequencer API endpoint
+  - Dev: `https://sequencer-dev.davinci.vote`
+  - Staging: `https://sequencer1.davinci.vote`
+  - Production: (check latest docs)
+
+- **`censusUrl`** (optional): Only required if you're creating censuses from scratch. Not needed for voting-only operations.
+
+- **Contract Addresses**: If not provided, the SDK automatically fetches them from the sequencer's `/info` endpoint during initialization. This is the recommended approach.
 
 #### Basic Initialization
 
@@ -356,12 +371,28 @@ interface DavinciSDKConfig {
 import { DavinciSDK } from '@vocdoni/davinci-sdk';
 import { Wallet } from 'ethers';
 
+// Development environment
 const sdk = new DavinciSDK({
   signer: new Wallet('your-private-key'),
-  environment: 'dev'
+  sequencerUrl: 'https://sequencer-dev.davinci.vote',
+  censusUrl: 'https://c3-dev.davinci.vote'
 });
 
 await sdk.init();
+```
+
+**Automatic Contract Address Fetching:**
+
+The SDK automatically fetches contract addresses from the sequencer during `init()`:
+
+```typescript
+const sdk = new DavinciSDK({
+  signer: wallet,
+  sequencerUrl: 'https://sequencer-dev.davinci.vote'
+  // Contract addresses will be fetched automatically from sequencer
+});
+
+await sdk.init(); // Fetches and stores contract addresses
 ```
 
 ### Process Management
@@ -531,7 +562,8 @@ async function completeVotingExample() {
   const organizerWallet = new Wallet('organizer-private-key');
   const sdk = new DavinciSDK({
     signer: organizerWallet,
-    environment: 'dev'
+    sequencerUrl: 'https://sequencer-dev.davinci.vote',
+    censusUrl: 'https://c3-dev.davinci.vote'
   });
   await sdk.init();
 
@@ -586,7 +618,8 @@ async function completeVotingExample() {
   const voterWallet = voters[0]; // Use first voter from census
   const voterSdk = new DavinciSDK({
     signer: voterWallet,
-    environment: 'dev'
+    sequencerUrl: 'https://sequencer-dev.davinci.vote'
+    // No censusUrl needed for voting-only operations
   });
   await voterSdk.init();
 
@@ -630,7 +663,7 @@ async function browserVotingExample() {
   // Initialize SDK
   const sdk = new DavinciSDK({
     signer,
-    environment: 'prod'
+    sequencerUrl: 'https://sequencer.davinci.vote' // Production URL
   });
   await sdk.init();
 
@@ -654,10 +687,9 @@ async function browserVotingExample() {
 ```typescript
 const sdk = new DavinciSDK({
   signer: wallet,
-  chain: 'sepolia',
   sequencerUrl: 'https://your-custom-sequencer.com',
   censusUrl: 'https://your-custom-census.com',
-  contractAddresses: {
+  addresses: {
     processRegistry: '0x...',
     organizationRegistry: '0x...',
     stateTransitionVerifier: '0x...',
@@ -666,14 +698,18 @@ const sdk = new DavinciSDK({
 });
 ```
 
-### Using Sequencer-Provided Addresses
+### Automatic Contract Address Fetching (Default Behavior)
+
+By default, the SDK automatically fetches contract addresses from the sequencer's `/info` endpoint:
 
 ```typescript
 const sdk = new DavinciSDK({
   signer: wallet,
-  environment: 'dev',
-  useSequencerAddresses: true // Fetch contract addresses from sequencer
+  sequencerUrl: 'https://sequencer-dev.davinci.vote'
+  // Contract addresses fetched automatically during init()
 });
+
+await sdk.init(); // Fetches addresses from sequencer
 ```
 
 ### Custom Vote Randomness
@@ -682,7 +718,7 @@ const sdk = new DavinciSDK({
 const vote = await sdk.submitVote({
   processId: "0x...",
   choices: [1],
-  randomness: "your-custom-randomness-hex" // For deterministic testing
+  randomness: "your-custom-randomness-hex"
 });
 ```
 
