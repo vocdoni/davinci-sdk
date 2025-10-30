@@ -182,6 +182,14 @@ export class ProcessOrchestrationService {
       if (census instanceof PlainCensus || census instanceof WeightedCensus) {
         // Auto-publish if not published
         if (!census.isPublished) {
+          // Check if census service has a valid base URL configured
+          const censusBaseURL = this.apiService.census?.['axios']?.defaults?.baseURL;
+          if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
+            throw new Error(
+              'Census API URL is required to publish PlainCensus or WeightedCensus. ' +
+              'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
+            );
+          }
           await this.censusOrchestrator.publish(census);
         }
       }
