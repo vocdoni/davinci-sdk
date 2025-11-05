@@ -16,9 +16,6 @@ const viteconfig = defineConfig(({ mode }) => {
       'import.meta.env.CENSUS_API_URL': JSON.stringify(process.env.CENSUS_API_URL || 'https://c3.davinci.vote'),
       'import.meta.env.RPC_URL': JSON.stringify(process.env.RPC_URL || ''),
       'import.meta.env.EXPLORER_URL': JSON.stringify(process.env.EXPLORER_URL || 'https://sepolia.etherscan.io'),
-      'import.meta.env.ORGANIZATION_REGISTRY_ADDRESS': JSON.stringify(process.env.ORGANIZATION_REGISTRY_ADDRESS || ''),
-      'import.meta.env.PROCESS_REGISTRY_ADDRESS': JSON.stringify(process.env.PROCESS_REGISTRY_ADDRESS || ''),
-      'import.meta.env.FORCE_SEQUENCER_ADDRESSES': JSON.stringify(process.env.FORCE_SEQUENCER_ADDRESSES || false),
     },
     resolve: {
       alias: {

@@ -20,7 +20,8 @@ import {
   Typography,
   createTheme,
 } from '@mui/material'
-import { type GetProcessResponse, VocdoniApiService } from '@vocdoni/davinci-sdk'
+import { DavinciSDK, type GetProcessResponse } from '@vocdoni/davinci-sdk'
+import { Wallet } from 'ethers'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -111,13 +112,16 @@ export default function ProcessesPage() {
       setIsLoading(true)
       setError(null)
 
-      const api = new VocdoniApiService({
-        sequencerURL: import.meta.env.SEQUENCER_API_URL,
-        censusURL: import.meta.env.CENSUS_API_URL
+      // Create a temporary wallet for SDK init (not used for any operations)
+      const tempWallet = Wallet.createRandom()
+      const sdk = new DavinciSDK({
+        signer: tempWallet,
+        sequencerUrl: import.meta.env.SEQUENCER_API_URL
       })
+      await sdk.init()
 
       // Get list of process IDs (lightweight operation)
-      const processIds = await api.sequencer.listProcesses()
+      const processIds = await sdk.api.sequencer.listProcesses()
 
       // Reverse the order to get most recent first
       const reversedProcessIds = [...processIds].reverse()
@@ -142,10 +146,13 @@ export default function ProcessesPage() {
       setIsLoadingPage(true)
       setError(null)
 
-      const api = new VocdoniApiService({
-        sequencerURL: import.meta.env.SEQUENCER_API_URL,
-        censusURL: import.meta.env.CENSUS_API_URL
+      // Create a temporary wallet for SDK init (not used for any operations)
+      const tempWallet = Wallet.createRandom()
+      const sdk = new DavinciSDK({
+        signer: tempWallet,
+        sequencerUrl: import.meta.env.SEQUENCER_API_URL
       })
+      await sdk.init()
 
       // Calculate pagination
       const startIndex = (page - 1) * PAGE_SIZE
@@ -155,7 +162,7 @@ export default function ProcessesPage() {
       // Load processes in parallel for better performance
       const processPromises = pageProcessIds.map(async (processId) => {
         try {
-          const processData: GetProcessResponse = await api.sequencer.getProcess(processId)
+          const processData: GetProcessResponse = await sdk.api.sequencer.getProcess(processId)
 
           // Load metadata separately
           let title = 'Untitled Process'
@@ -165,7 +172,7 @@ export default function ProcessesPage() {
             try {
               const metadataHash = processData.metadataURI.split('/').pop()
               if (metadataHash) {
-                const metadata = await api.sequencer.getMetadata(metadataHash)
+                const metadata = await sdk.api.sequencer.getMetadata(metadataHash)
                 title = metadata.title?.default || title
                 description = metadata.description?.default || description
               }

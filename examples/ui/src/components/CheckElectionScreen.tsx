@@ -13,12 +13,14 @@ import {
   ListItemText,
   Typography,
 } from '@mui/material'
-import { VocdoniApiService } from '@vocdoni/davinci-sdk'
+import { DavinciSDK } from '@vocdoni/davinci-sdk'
+import { JsonRpcSigner, Wallet } from 'ethers'
 import { useEffect, useState } from 'react'
 
 interface CheckElectionScreenProps {
   onBack: () => void
   onNext: () => void
+  wallet: Wallet | JsonRpcSigner
 }
 
 interface ElectionDetails {
@@ -30,7 +32,7 @@ interface ElectionDetails {
   censusSize: number
 }
 
-export default function CheckElectionScreen({ onBack, onNext }: CheckElectionScreenProps) {
+export default function CheckElectionScreen({ onBack, onNext, wallet }: CheckElectionScreenProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [electionReady, setElectionReady] = useState(false)
@@ -52,17 +54,18 @@ export default function CheckElectionScreen({ onBack, onNext }: CheckElectionScr
         const details: ElectionDetails = JSON.parse(detailsStr)
         setCheckStatus((prev) => ({ ...prev, detailsLoaded: true }))
 
-        const api = new VocdoniApiService({
-          sequencerURL: import.meta.env.SEQUENCER_API_URL,
-          censusURL: import.meta.env.CENSUS_API_URL
+        const sdk = new DavinciSDK({
+          signer: wallet,
+          sequencerUrl: import.meta.env.SEQUENCER_API_URL
         })
+        await sdk.init()
 
         // Start polling for process status and update wait time
         const startTime = Date.now()
         const pollInterval = setInterval(async () => {
           setWaitTime(Math.floor((Date.now() - startTime) / 1000))
           try {
-            const process = await api.sequencer.getProcess(details.processId)
+            const process = await sdk.api.sequencer.getProcess(details.processId)
             setCheckStatus((prev) => ({ ...prev, processExists: true }))
 
             if (process.isAcceptingVotes) {
@@ -124,7 +127,7 @@ export default function CheckElectionScreen({ onBack, onNext }: CheckElectionScr
               <List>
                 {renderCheckItem('Election details loaded', checkStatus.detailsLoaded, false)}
                 {renderCheckItem(
-                  'Election process created',
+                  'Election process found',
                   checkStatus.processExists,
                   !checkStatus.processExists && checkStatus.detailsLoaded
                 )}

@@ -16,13 +16,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { DavinciSDK } from '@vocdoni/davinci-sdk'
+import { PlainCensus } from '@vocdoni/davinci-sdk'
 import { Wallet, JsonRpcProvider } from 'ethers'
 import { useEffect, useState } from 'react'
 
 interface CensusCreationScreenProps {
   onBack: () => void
-  onNext: (censusId: string) => void
+  onNext: (census: PlainCensus) => void
 }
 
 export default function CensusCreationScreen({ onBack, onNext }: CensusCreationScreenProps) {
@@ -30,10 +30,8 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
   const { walletMap, setWalletMap } = useWallets()
   const [newAddress, setNewAddress] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
   const [censusCreated, setCensusCreated] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [censusId, setCensusId] = useState<string | null>(null)
+  const [census, setCensus] = useState<PlainCensus | null>(null)
 
   useEffect(() => {
     // Generate initial 10 random wallets on component mount
@@ -82,86 +80,28 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
     }
   }
 
-  const handleCreateCensus = async () => {
+  const handleCreateCensus = () => {
     if (addresses.length === 0) {
       setError('Add at least one address to create a census')
       return
     }
 
     try {
-      setIsLoading(true)
       setError(null)
-      setProgress(0)
 
-      // Initialize DavinciSDK with first available wallet
-      const firstWallet = Object.values(walletMap)[0]
-      if (!firstWallet) {
-        throw new Error('No wallets available for SDK initialization')
-      }
+      // Create a PlainCensus object with all addresses
+      const newCensus = new PlainCensus()
+      newCensus.add(addresses)
 
-      // Check if wallet already has a provider (e.g., MetaMask)
-      // If not, connect it to the RPC provider from env
-      const wallet = firstWallet as Wallet
-      let signerWithProvider = wallet
-      if (!wallet.provider) {
-        if (!import.meta.env.RPC_URL) {
-          throw new Error('RPC_URL environment variable is required')
-        }
-        const provider = new JsonRpcProvider(import.meta.env.RPC_URL)
-        signerWithProvider = wallet.connect(provider)
-      }
-
-      const sdk = new DavinciSDK({
-        signer: signerWithProvider,
-        environment: 'dev',
-        sequencerUrl: import.meta.env.SEQUENCER_API_URL,
-        censusUrl: import.meta.env.CENSUS_API_URL,
-        chain: 'sepolia',
-        useSequencerAddresses: true
-      })
-      await sdk.init()
-
-      // Create census
-      setProgress(20)
-      const newCensusId = await sdk.api.census.createCensus()
-      setCensusId(newCensusId)
-
-      // Add voters in batches
-      const batchSize = Math.ceil(addresses.length / 4) // Split into 4 parts for progress
-      for (let i = 0; i < addresses.length; i += batchSize) {
-        const batch = addresses.slice(i, i + batchSize)
-
-        // Add participants using addresses
-        await sdk.api.census.addParticipants(
-          newCensusId,
-          batch.map((address) => ({
-            key: address,
-            weight: '1', // All voters have equal weight
-          }))
-        )
-        setProgress(40 + Math.floor((i / addresses.length) * 40))
-      }
-
-      // Publish the census and store root & size locally
-      setProgress(90)
-      const publishResult = await sdk.api.census.publishCensus(newCensusId)
-      const censusRoot = publishResult.root
-      const censusSize = await sdk.api.census.getCensusSize(censusRoot)
-      
-      // Store census details locally for the next screen
-      localStorage.setItem('censusDetails', JSON.stringify({
-        censusId: newCensusId,
-        censusRoot,
-        censusSize
-      }))
-
-      setProgress(100)
+      // Store census object for the next screen
+      setCensus(newCensus)
       setCensusCreated(true)
+      
+      console.log('Census object created with', addresses.length, 'addresses')
+      console.log('Census will be automatically published when creating the process')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create census')
       console.error('Error creating census:', err)
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -179,13 +119,13 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Box sx={{ mb: 3, display: 'flex', gap: 2, justifyContent: 'center' }}>
-            <Button variant='contained' onClick={handleAddRandomWallet} startIcon={<AddIcon />} disabled={isLoading}>
+            <Button variant='contained' onClick={handleAddRandomWallet} startIcon={<AddIcon />} disabled={censusCreated}>
               Add Random Wallet
             </Button>
             <Button
               variant='contained'
               onClick={handleCreateCensus}
-              disabled={addresses.length === 0 || isLoading || censusCreated}
+              disabled={addresses.length === 0 || censusCreated}
             >
               Create Census
             </Button>
@@ -197,18 +137,17 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
             </Alert>
           )}
 
-          {isLoading && (
-            <Box sx={{ mb: 2, textAlign: 'center' }}>
-              <CircularProgress variant='determinate' value={progress} sx={{ mb: 1 }} />
-              <Typography variant='body2' color='text.secondary'>
-                Creating census... {progress}%
-              </Typography>
-            </Box>
-          )}
-
           {censusCreated && (
-            <Alert severity='success' sx={{ mb: 2 }}>
-              Census created successfully!
+            <Alert severity='success' sx={{ mb: 3, py: 2 }}>
+              <Typography variant='h6' gutterBottom>
+                ✓ Census Created Successfully!
+              </Typography>
+              <Typography variant='body2' gutterBottom>
+                Census ready with {addresses.length} addresses. It will be automatically published when you create the process.
+              </Typography>
+              <Typography variant='body1' sx={{ mt: 2, fontWeight: 'bold' }}>
+                👉 Click "Next" below to continue to the next step
+              </Typography>
             </Alert>
           )}
 
@@ -217,11 +156,11 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
               <ListItem
                 key={address}
                 secondaryAction={
-                  !censusCreated && (
+                  !censusCreated ? (
                     <IconButton edge='end' aria-label='delete' onClick={() => handleRemoveAddress(address)}>
                       <DeleteIcon />
                     </IconButton>
-                  )
+                  ) : null
                 }
               >
                 <ListItemText
@@ -261,11 +200,37 @@ export default function CensusCreationScreen({ onBack, onNext }: CensusCreationS
       </Card>
 
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-        <Button variant='outlined' onClick={onBack} disabled={isLoading}>
+        <Button variant='outlined' onClick={onBack} disabled={censusCreated}>
           Back
         </Button>
-        <Button variant='contained' onClick={() => censusId && onNext(censusId)} disabled={!censusCreated || !censusId}>
-          Next
+        <Button 
+          variant='contained' 
+          size={censusCreated ? 'large' : 'medium'}
+          onClick={() => {
+            if (census) {
+              onNext(census)
+            }
+          }} 
+          disabled={!censusCreated || !census}
+          sx={censusCreated ? {
+            fontSize: '1.1rem',
+            py: 1.5,
+            px: 4,
+            animation: 'pulse 2s infinite',
+            '@keyframes pulse': {
+              '0%': {
+                boxShadow: '0 0 0 0 rgba(43, 108, 176, 0.7)',
+              },
+              '70%': {
+                boxShadow: '0 0 0 10px rgba(43, 108, 176, 0)',
+              },
+              '100%': {
+                boxShadow: '0 0 0 0 rgba(43, 108, 176, 0)',
+              },
+            },
+          } : {}}
+        >
+          {censusCreated ? '→ Next: Create Election' : 'Next'}
         </Button>
       </Box>
     </Box>

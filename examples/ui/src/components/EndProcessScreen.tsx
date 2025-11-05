@@ -17,7 +17,7 @@ import {
 import { ProcessRegistryService, ProcessStatus, TxStatus, VocdoniApiService } from '@vocdoni/davinci-sdk'
 import { JsonRpcSigner, Wallet } from 'ethers'
 import { useState } from 'react'
-import { getProcessRegistryAddress, logAddressConfiguration } from '../utils/contractAddresses'
+import { getContractAddresses } from '../utils/contractAddresses'
 import { getTransactionUrl } from '../utils/explorerUrl'
 
 interface EndProcessScreenProps {
@@ -48,21 +48,19 @@ export default function EndProcessScreen({ onBack, onNext, wallet }: EndProcessS
     try {
       setIsLoading(true)
       
-      // Log address configuration
-      logAddressConfiguration()
-      
       const detailsStr = localStorage.getItem('electionDetails')
       if (!detailsStr) throw new Error('Election details not found')
       const details = JSON.parse(detailsStr)
 
-      // Fetch sequencer info to get contract addresses if needed
+      // Fetch sequencer info to get contract addresses
       const api = new VocdoniApiService({
         sequencerURL: import.meta.env.SEQUENCER_API_URL,
         censusURL: import.meta.env.CENSUS_API_URL
       })
       const sequencerInfo = await api.sequencer.getInfo()
+      const addresses = getContractAddresses(sequencerInfo.contracts)
 
-      const registry = new ProcessRegistryService(getProcessRegistryAddress(sequencerInfo.contracts), wallet)
+      const registry = new ProcessRegistryService(addresses.processRegistry, wallet)
 
       // End the process
       for await (const status of registry.setProcessStatus(details.processId, ProcessStatus.ENDED)) {
