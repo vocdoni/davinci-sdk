@@ -1,5 +1,4 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import ErrorIcon from '@mui/icons-material/Error'
 import ListIcon from '@mui/icons-material/List'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import {
@@ -14,17 +13,30 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Tooltip,
   Typography,
 } from '@mui/material'
 import { VocdoniApiService } from '@vocdoni/davinci-sdk'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { getContractAddresses, logAddressConfiguration } from '../utils/contractAddresses'
+import { getContractAddresses } from '../utils/contractAddresses'
 import { getAddressUrl } from '../utils/explorerUrl'
 
 interface WelcomeScreenProps {
   onNext: () => void
+}
+
+// Helper function to get network name from chain ID
+function getNetworkName(chainId: number): string {
+  const networks: Record<number, string> = {
+    1: 'Ethereum Mainnet',
+    11155111: 'Sepolia Testnet',
+    5: 'Goerli Testnet',
+    137: 'Polygon Mainnet',
+    80001: 'Mumbai Testnet',
+    42220: 'Celo Mainnet',
+    // Add more networks as needed
+  }
+  return networks[chainId] || `Unknown Network (${chainId})`
 }
 
 export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
@@ -32,14 +44,11 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
   const [isConnected, setIsConnected] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
-  const [apiAddresses, setApiAddresses] = useState<{
-    process: string
-    organization: string
-  } | null>(null)
   const [contractAddresses, setContractAddresses] = useState<{
     organizationRegistry: string
     processRegistry: string
   } | null>(null)
+  const [networkInfo, setNetworkInfo] = useState<Record<string, number> | null>(null)
 
   useEffect(() => {
     checkConnection()
@@ -50,9 +59,6 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
       setIsLoading(true)
       setError('')
       
-      // Log address configuration
-      logAddressConfiguration()
-      
       const api = new VocdoniApiService({
         sequencerURL: import.meta.env.SEQUENCER_API_URL,
         censusURL: import.meta.env.CENSUS_API_URL
@@ -60,14 +66,13 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
       await api.sequencer.ping()
       const info = await api.sequencer.getInfo()
       
-      // Get contract addresses using sequencer info
+      // Get contract addresses from sequencer info
       const addresses = getContractAddresses(info.contracts)
       setContractAddresses(addresses)
       
-      setApiAddresses({
-        process: info.contracts.process.toLowerCase(),
-        organization: info.contracts.organization.toLowerCase(),
-      })
+      // Get network info from sequencer
+      setNetworkInfo(info.network)
+      
       setIsConnected(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to API')
@@ -129,30 +134,21 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
 
           <List>
             <ListItem>
-              <ListItemText primary='Network' secondary='Sepolia Testnet' />
+              <ListItemText 
+                primary='Network' 
+                secondary={
+                  networkInfo 
+                    ? Object.entries(networkInfo).map(([name, id]) => `${name}: ${id}`).join(', ')
+                    : 'Loading...'
+                } 
+              />
             </ListItem>
             {contractAddresses && (
               <>
                 <ListItem>
-                  <Tooltip
-                    title={
-                      apiAddresses && contractAddresses && apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase()
-                        ? 'Contract address verified'
-                        : 'Contract address mismatch between SDK and API'
-                    }
-                  >
-                    <ListItemIcon>
-                      {apiAddresses && contractAddresses ? (
-                        apiAddresses.organization === contractAddresses.organizationRegistry.toLowerCase() ? (
-                          <CheckCircleIcon color='success' />
-                        ) : (
-                          <ErrorIcon color='error' />
-                        )
-                      ) : (
-                        <CircularProgress size={24} />
-                      )}
-                    </ListItemIcon>
-                  </Tooltip>
+                  <ListItemIcon>
+                    <CheckCircleIcon color='success' />
+                  </ListItemIcon>
                   <ListItemText
                     primary='Organization Registry Contract'
                     secondary={
@@ -168,25 +164,9 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
                   />
                 </ListItem>
                 <ListItem>
-                  <Tooltip
-                    title={
-                      apiAddresses && contractAddresses && apiAddresses.process === contractAddresses.processRegistry.toLowerCase()
-                        ? 'Contract address verified'
-                        : 'Contract address mismatch between SDK and API'
-                    }
-                  >
-                    <ListItemIcon>
-                      {apiAddresses && contractAddresses ? (
-                        apiAddresses.process === contractAddresses.processRegistry.toLowerCase() ? (
-                          <CheckCircleIcon color='success' />
-                        ) : (
-                          <ErrorIcon color='error' />
-                        )
-                      ) : (
-                        <CircularProgress size={24} />
-                      )}
-                    </ListItemIcon>
-                  </Tooltip>
+                  <ListItemIcon>
+                    <CheckCircleIcon color='success' />
+                  </ListItemIcon>
                   <ListItemText
                     primary='Process Registry Contract'
                     secondary={
@@ -207,14 +187,6 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
         </CardContent>
       </Card>
 
-      {apiAddresses && contractAddresses &&
-      (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
-        apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase()) ? (
-        <Alert severity='error' sx={{ mb: 2 }}>
-          Contract addresses mismatch between SDK and API. Please check the configuration.
-        </Alert>
-      ) : null}
-
       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
         <Button
           variant='outlined'
@@ -232,15 +204,7 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
           variant='contained'
           color='primary'
           size='large'
-          disabled={
-            !isConnected ||
-            isLoading ||
-            Boolean(
-              apiAddresses && contractAddresses &&
-                (apiAddresses.process !== contractAddresses.processRegistry.toLowerCase() ||
-                  apiAddresses.organization !== contractAddresses.organizationRegistry.toLowerCase())
-            )
-          }
+          disabled={!isConnected || isLoading}
           onClick={onNext}
           endIcon={isLoading ? <CircularProgress size={20} color='inherit' /> : null}
           sx={{ minWidth: 200 }}

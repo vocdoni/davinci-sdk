@@ -64,13 +64,6 @@ RPC_URL=
 
 # Explorer URL for viewing addresses, transactions and contracts
 EXPLORER_URL=https://sepolia.etherscan.io
-
-# Optional: Custom contract addresses (if not provided, will use default deployed addresses)
-ORGANIZATION_REGISTRY_ADDRESS=
-PROCESS_REGISTRY_ADDRESS=
-
-# Force using contract addresses from sequencer info endpoint (default: false)
-FORCE_SEQUENCER_ADDRESSES=false
 ```
 
 #### Environment Variables
@@ -83,9 +76,6 @@ FORCE_SEQUENCER_ADDRESSES=false
     - [Alchemy](https://www.alchemy.com/)
     - [QuickNode](https://www.quicknode.com/)
 - **EXPLORER_URL**: Block explorer URL for viewing transactions
-- **ORGANIZATION_REGISTRY_ADDRESS** (Optional): Custom organization registry contract address
-- **PROCESS_REGISTRY_ADDRESS** (Optional): Custom process registry contract address
-- **FORCE_SEQUENCER_ADDRESSES** (Optional): Use contract addresses from sequencer info endpoint
 
 ## Running the Application
 
@@ -131,7 +121,7 @@ The application follows a step-by-step workflow:
 - 10 random wallets are created by default
 - Add additional random wallets as needed
 - Each wallet gets a private key for voting later
-- Publish the census to make it ready for elections
+- Create a PlainCensus object that will be used when creating the election
 
 ### 4. Create Election
 - Configure election details (title, description, end date)
@@ -216,10 +206,12 @@ src/
 ### DavinciSDK Integration
 All screens now exclusively use the DavinciSDK for operations:
 
-- **Census Operations**: `sdk.api.census.createCensus()`, `sdk.api.census.addParticipants()`
-- **Process Creation**: `sdk.createProcess()`  
-- **Voting**: `sdk.submitVote()`, `sdk.getVoteStatus()`
-- **Results**: `sdk.getProcess()` (includes results)
+- **SDK Initialization**: `new DavinciSDK({ signer, sequencerUrl, censusUrl })` followed by `await sdk.init()`
+- **Census Creation**: Census objects (`PlainCensus`, `WeightedCensus`) are created locally and passed to `createProcess()`
+- **Process Creation**: `sdk.createProcess({ title, description, census, ballot, timing, questions })`  
+- **Voting**: `sdk.submitVote({ processId, choices })` - single method handles all proof generation
+- **Vote Monitoring**: `sdk.watchVoteStatus()` - async iterator for real-time status updates
+- **Results**: `sdk.getProcess(processId)` - includes process details and results
 
 ### Wallet Provider Handling
 The application properly handles different wallet scenarios:

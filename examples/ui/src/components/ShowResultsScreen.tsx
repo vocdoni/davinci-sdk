@@ -57,14 +57,10 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
           signerWithProvider = walletInstance.connect(provider)
         }
 
-        // Initialize SDK
+        // Initialize SDK (no censusUrl needed for reading results)
         const sdk = new DavinciSDK({
           signer: signerWithProvider,
-          environment: 'dev',
-          sequencerUrl: import.meta.env.SEQUENCER_API_URL,
-          censusUrl: import.meta.env.CENSUS_API_URL,
-          chain: 'sepolia',
-          useSequencerAddresses: true
+          sequencerUrl: import.meta.env.SEQUENCER_API_URL
         })
         await sdk.init()
 
@@ -72,15 +68,15 @@ export default function ShowResultsScreen({ onBack, onNext, wallet }: ShowResult
         const processInfo = await sdk.getProcess(details.processId)
 
         // Map results to questions and choices using process info
-        const questions = processInfo.questions.map((question, questionIndex) => {
+        const questions = processInfo.questions.map((question: any, questionIndex: number) => {
           const startIndex = questionIndex * question.choices.length
           const endIndex = startIndex + question.choices.length
           const questionResults = processInfo.result.slice(startIndex, endIndex)
 
           return {
-            title: typeof question.title === 'string' ? question.title : question.title.default,
-            choices: question.choices.map((choice, choiceIndex) => ({
-              title: typeof choice.title === 'string' ? choice.title : choice.title.default,
+            title: typeof question.title === 'string' ? question.title : question.title?.default || '',
+            choices: question.choices.map((choice: any, choiceIndex: number) => ({
+              title: typeof choice.title === 'string' ? choice.title : choice.title?.default || '',
               votes: Number(questionResults[choiceIndex]),
             })),
           }

@@ -27,7 +27,7 @@ import {
   type IQuestion,
   type MultiLanguage,
 } from '@vocdoni/davinci-sdk'
-import { Wallet, JsonRpcProvider } from 'ethers'
+import { JsonRpcProvider } from 'ethers'
 import { useEffect, useState } from 'react'
 
 
@@ -99,11 +99,8 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
 
         const sdk = new DavinciSDK({
           signer: walletWithProvider,
-          environment: 'dev',
           sequencerUrl: import.meta.env.SEQUENCER_API_URL,
-          censusUrl: import.meta.env.CENSUS_API_URL,
-          chain: 'sepolia',
-          useSequencerAddresses: true
+          censusUrl: import.meta.env.CENSUS_API_URL
         })
         await sdk.init()
 
@@ -163,11 +160,8 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       // Initialize SDK with the connected wallet
       const sdk = new DavinciSDK({
         signer: walletWithProvider,
-        environment: 'dev',
         sequencerUrl: import.meta.env.SEQUENCER_API_URL,
-        censusUrl: import.meta.env.CENSUS_API_URL,
-        chain: 'sepolia',
-        useSequencerAddresses: true
+        censusUrl: import.meta.env.CENSUS_API_URL
       })
       await sdk.init()
 
@@ -199,36 +193,40 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
       setSelectedAddress('')
       setAnswers(Object.fromEntries(Object.keys(answers).map((k) => [k, -1])))
 
-      // Start monitoring vote status
-      const checkVoteStatus = async () => {
-        let isDone = false
-        while (!isDone) {
-          try {
-            const voteStatus = await sdk.getVoteStatus(details.processId, voteResult.voteId)
-            setSubmittedVotes((prev) => {
-              const updated = prev.map((v) =>
+      // Monitor vote status using watchVoteStatus (better pattern from example script)
+      const monitorVoteStatus = async () => {
+        try {
+          const stream = sdk.watchVoteStatus(details.processId, voteResult.voteId, {
+            targetStatus: VoteStatus.Settled,
+            timeoutMs: 1200000, // 20 minutes timeout
+            pollIntervalMs: 3000, // Poll every 3 seconds
+          })
+
+          for await (const statusInfo of stream) {
+            setSubmittedVotes((prev) => 
+              prev.map((v) =>
                 v.voteId === voteResult.voteId
-                  ? {
-                      ...v,
-                      status: voteStatus.status as Vote['status'],
-                    }
+                  ? { ...v, status: statusInfo.status as Vote['status'] }
                   : v
               )
-              return updated
-            })
+            )
 
-            if (voteStatus.status === VoteStatus.Settled || voteStatus.status === VoteStatus.Error) {
-              isDone = true
-            } else {
-              await new Promise((r) => setTimeout(r, 2000))
+            // Stream automatically stops when targetStatus is reached or error occurs
+            if (statusInfo.status === VoteStatus.Error) {
+              console.error('Vote processing failed:', voteResult.voteId)
             }
-          } catch (err) {
-            console.error('Error checking vote status:', err)
-            isDone = true
           }
+        } catch (err) {
+          console.error('Error monitoring vote status:', err)
+          // Mark as error on failure
+          setSubmittedVotes((prev) =>
+            prev.map((v) =>
+              v.voteId === voteResult.voteId ? { ...v, status: VoteStatus.Error } : v
+            )
+          )
         }
       }
-      checkVoteStatus().catch(console.error)
+      monitorVoteStatus().catch(console.error)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote')
       console.error('Error voting:', err)
@@ -268,9 +266,11 @@ export default function VotingScreen({ onBack, onNext }: VotingScreenProps) {
             ) : (
               <>
                 <FormControl fullWidth sx={{ mb: 4 }}>
-                  <InputLabel>Select Your Address</InputLabel>
+                  <InputLabel id="address-select-label">Select Your Address</InputLabel>
                   <Select
+                    labelId="address-select-label"
                     value={selectedAddress}
+                    label="Select Your Address"
                     onChange={(e) => setSelectedAddress(e.target.value)}
                     disabled={isLoading || availableAddresses.length === 0}
                   >

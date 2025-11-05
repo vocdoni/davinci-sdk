@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "preinstall": "cd ../.. && yarn build && yarn pack && mv vocdoni-davinci-sdk-v*.tgz examples/ui/davinci-sdk.tgz",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
@@ -17,7 +16,7 @@
     "@mui/material": "^7.2.0",
     "@mui/x-date-pickers": "^8.6.0",
     "@tailwindcss/vite": "^4.1.11",
-    "@vocdoni/davinci-sdk": "file:davinci-sdk.tgz",
+    "@vocdoni/davinci-sdk": "0.0.3",
     "date-fns": "^4.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

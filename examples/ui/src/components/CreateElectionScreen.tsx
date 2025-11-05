@@ -23,7 +23,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import {
   DavinciSDK,
-  CensusOrigin,
+  PlainCensus,
 } from '@vocdoni/davinci-sdk'
 import { JsonRpcSigner, Wallet, JsonRpcProvider } from 'ethers'
 import { useState } from 'react'
@@ -33,7 +33,7 @@ interface CreateElectionScreenProps {
   onBack: () => void
   onNext: () => void
   wallet: Wallet | JsonRpcSigner
-  censusId: string
+  census: PlainCensus
 }
 
 interface Question {
@@ -62,7 +62,7 @@ const calculateBallotMode = (questions: Question[]) => {
   }
 }
 
-export default function CreateElectionScreen({ onBack, onNext, wallet, censusId }: CreateElectionScreenProps) {
+export default function CreateElectionScreen({ onBack, onNext, wallet, census }: CreateElectionScreenProps) {
   const [title, setTitle] = useState('Test Election')
   const [description, setDescription] = useState('This is a test election created via the UI')
   const [questions, setQuestions] = useState<Question[]>([
@@ -83,7 +83,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
   const [txHash, setTxHash] = useState<string | null>(null)
   const [endDate, setEndDate] = useState<Date>(() => {
     const date = new Date()
-    date.setHours(date.getHours() + 1) // Default: 1 hour from now
+    date.setMinutes(date.getMinutes() + 40) // Default: 40 minutes from now (above minimum of 30)
     return date
   })
 
@@ -110,7 +110,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
   const handleRemoveQuestion = (index: number) => {
     // Check if this is the only valid question (has title and at least 2 choices)
     const isValidQuestion = (q: Question) =>
-      q.title.default.trim() !== '' && q.description.default.trim() !== '' && q.choices.length >= 2
+      q.title.default.trim() !== '' && q.choices.length >= 2
 
     const validQuestions = questions.filter(isValidQuestion)
     if (validQuestions.length === 1 && isValidQuestion(questions[index])) {
@@ -187,13 +187,6 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       setIsLoading(true)
       setError(null)
 
-      // Get census details from local storage
-      const censusDetailsStr = localStorage.getItem('censusDetails')
-      if (!censusDetailsStr) {
-        throw new Error('Census details not found. Please create a census first.')
-      }
-      const censusDetails = JSON.parse(censusDetailsStr)
-
       // Check if wallet already has a provider (e.g., MetaMask)
       // If not, connect it to the RPC provider from env
       const walletInstance = wallet as Wallet
@@ -209,15 +202,12 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       // Initialize SDK
       const sdk = new DavinciSDK({
         signer: signerWithProvider,
-        environment: 'dev',
         sequencerUrl: import.meta.env.SEQUENCER_API_URL,
-        censusUrl: import.meta.env.CENSUS_API_URL,
-        chain: 'sepolia',
-        useSequencerAddresses: true
+        censusUrl: import.meta.env.CENSUS_API_URL
       })
       await sdk.init()
 
-      // Create process using simplified SDK
+      // Create process
       const ballotMode = calculateBallotMode(questions)
       const startTime = new Date(Date.now() + 60 * 1000) // Start in 1 minute
       const duration = Math.floor((endDate.getTime() - startTime.getTime()) / 1000) // Duration in seconds
@@ -225,12 +215,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
       const processResult = await sdk.createProcess({
         title,
         description,
-        census: {
-          type: CensusOrigin.CensusOriginMerkleTree,
-          root: censusDetails.censusRoot,
-          size: censusDetails.censusSize,
-          uri: censusDetails.censusUri || `ipfs://census-${Date.now()}`
-        },
+        census,
         ballot: ballotMode,
         timing: {
           startDate: startTime,
@@ -258,9 +243,6 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
         JSON.stringify({
           processId: processResult.processId,
           metadataUrl: processInfo.raw?.metadataURI || `process-${processResult.processId}-metadata`,
-          censusRoot: censusDetails.censusRoot,
-          censusSize: censusDetails.censusSize,
-          censusId: censusDetails.censusId,
         })
       )
     } catch (err) {
@@ -317,7 +299,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
               disabled={isLoading || electionCreated}
               minDateTime={(() => {
                 const minDate = new Date()
-                minDate.setHours(minDate.getHours() + 1)
+                minDate.setMinutes(minDate.getMinutes() + 30)
                 return minDate
               })()}
               sx={{ width: '100%', mb: 3 }}
@@ -351,7 +333,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
                   />
                   <TextField
                     fullWidth
-                    label='Question Description'
+                    label='Question Description (optional)'
                     value={newQuestionDescription}
                     onChange={(e) => setNewQuestionDescription(e.target.value)}
                     sx={{ mb: 2 }}
@@ -514,8 +496,7 @@ export default function CreateElectionScreen({ onBack, onNext, wallet, censusId 
               disabled={
                 isLoading ||
                 !title.trim() ||
-                questions.some((q) => q.choices.length < 2 && q.title.default.trim() !== '') || // Each non-empty question must have 2+ choices
-                questions.some((q) => q.title.default.trim() !== '' && !q.description.default.trim()) // Each question must have description
+                questions.some((q) => q.choices.length < 2 && q.title.default.trim() !== '') // Each non-empty question must have 2+ choices
               }
             >
               Create Election

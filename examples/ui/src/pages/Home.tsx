@@ -9,6 +9,7 @@ import StepIndicator from '@/components/StepIndicator'
 import VotingScreen from '@/components/VotingScreen'
 import WelcomeScreen from '@/components/WelcomeScreen'
 import { Box, ThemeProvider, createTheme } from '@mui/material'
+import { PlainCensus } from '@vocdoni/davinci-sdk'
 import { JsonRpcSigner, Wallet } from 'ethers'
 import { useCallback, useState } from 'react'
 
@@ -47,23 +48,23 @@ const STEPS = [
   'Vote',
   'End Process',
   'Show Results',
-] as const
+]
 
-enum Step {
-  Welcome,
-  ConnectWallet,
-  CreateCensus,
-  CreateElection,
-  CheckElectionStatus,
-  Vote,
-  EndProcess,
-  ShowResults,
+const Step = {
+  Welcome: 0,
+  ConnectWallet: 1,
+  CreateCensus: 2,
+  CreateElection: 3,
+  CheckElectionStatus: 4,
+  Vote: 5,
+  EndProcess: 6,
+  ShowResults: 7,
 }
 
 export default function Home() {
-  const [currentStep, setCurrentStep] = useState<Step>(Step.Welcome)
+  const [currentStep, setCurrentStep] = useState<number>(Step.Welcome)
   const [wallet, setWallet] = useState<Wallet | JsonRpcSigner | null>(null)
-  const [censusId, setCensusId] = useState<string | null>(null)
+  const [census, setCensus] = useState<PlainCensus | null>(null)
 
   const handleWalletConnected = useCallback((connectedWallet: Wallet | JsonRpcSigner) => {
     setWallet(connectedWallet)
@@ -86,21 +87,25 @@ export default function Home() {
       case Step.CreateCensus:
         return (
           <CensusCreationScreen
-            onNext={(id) => {
-              setCensusId(id)
+            onNext={(createdCensus) => {
+              setCensus(createdCensus)
               handleNext()
             }}
             onBack={handleBack}
           />
         )
       case Step.CreateElection:
-        return wallet && censusId ? (
-          <CreateElectionScreen onNext={handleNext} onBack={handleBack} wallet={wallet} censusId={censusId} />
+        return wallet && census ? (
+          <CreateElectionScreen onNext={handleNext} onBack={handleBack} wallet={wallet} census={census} />
         ) : (
           <WelcomeScreen onNext={handleNext} />
         )
       case Step.CheckElectionStatus:
-        return <CheckElectionScreen onNext={handleNext} onBack={handleBack} />
+        return wallet ? (
+          <CheckElectionScreen onNext={handleNext} onBack={handleBack} wallet={wallet} />
+        ) : (
+          <WelcomeScreen onNext={handleNext} />
+        )
       case Step.Vote:
         return <VotingScreen onNext={() => setCurrentStep(Step.EndProcess)} onBack={handleBack} />
       case Step.EndProcess:
