@@ -7,6 +7,7 @@ config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, PlainCensus, WeightedCensus } from '../../../src';
 import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
+import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
 
 jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
 
@@ -321,37 +322,6 @@ describe('Simple Process Creation Integration', () => {
 
     await expect(uninitializedSdk.createProcess(config)).rejects.toThrow(
       'SDK must be initialized before creating processes. Call sdk.init() first.'
-    );
-  });
-
-  it('should fail when no questions are provided', async () => {
-    const configWithoutQuestions = {
-      title: 'No Questions Test',
-      description: 'This should fail due to missing questions',
-      census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
-        root: randomHex(32),
-        size: 10,
-        uri: `ipfs://no-questions-census-${Date.now()}`,
-      },
-      ballot: {
-        numFields: 1,
-        maxValue: '1',
-        minValue: '0',
-        uniqueValues: false,
-        costFromWeight: false,
-        costExponent: 1,
-        maxValueSum: '1',
-        minValueSum: '0',
-      },
-      timing: {
-        duration: 3600,
-      },
-      questions: [],
-    } as ProcessConfig;
-
-    await expect(sdk.createProcess(configWithoutQuestions)).rejects.toThrow(
-      'Questions are required. Please provide at least one question with choices.'
     );
   });
 
@@ -1827,5 +1797,73 @@ describe('Simple Process Creation Integration', () => {
       expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
       expect(onChainProcess.census.maxVotes).toBe(BigInt(25));
     });
+  });
+
+  it('should create a process using pre-existing metadataUri', async () => {
+    // Step 1: Manually upload metadata to get a metadata URI using the template helper
+    const metadata = getElectionMetadataTemplate();
+    metadata.title.default = 'Metadata URI Test Election';
+    metadata.description.default = 'Testing metadataUri feature by uploading metadata manually';
+    metadata.questions = [
+      {
+        title: { default: 'Do you approve this test?' },
+        description: { default: 'Test question for metadataUri' },
+        meta: {},
+        choices: [
+          { title: { default: 'Yes' }, value: 0, meta: {} },
+          { title: { default: 'No' }, value: 1, meta: {} },
+        ],
+      },
+    ];
+
+    // Upload metadata directly to the sequencer
+    const metadataHash = await sdk.api.sequencer.pushMetadata(metadata);
+    const uploadedMetadataUri = sdk.api.sequencer.getMetadataUrl(metadataHash);
+    
+    expect(uploadedMetadataUri).toBeDefined();
+    expect(uploadedMetadataUri).toBeTruthy();
+
+    // Step 2: Create a process using the uploaded metadataUri (no title/description/questions needed!)
+    const censusRoot = randomHex(32);
+    const processConfig: ProcessConfig = {
+      metadataUri: uploadedMetadataUri, // Just provide the URI!
+      census: {
+        type: CensusOrigin.CensusOriginMerkleTree,
+        root: censusRoot,
+        size: 10,
+        uri: `ipfs://metadatauri-test-${Date.now()}`,
+      },
+      ballot: {
+        numFields: 1,
+        maxValue: '1',
+        minValue: '0',
+        uniqueValues: false,
+        costFromWeight: false,
+        costExponent: 1,
+        maxValueSum: '1',
+        minValueSum: '0',
+      },
+      timing: {
+        duration: 3600,
+      },
+    };
+
+    const result = await sdk.createProcess(processConfig);
+
+    // Verify the process was created successfully
+    expect(result).toBeDefined();
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+    // Verify the process uses the uploaded metadata URI
+    const process = await sdk.getProcess(result.processId);
+    expect(process.metadataURI).toBe(uploadedMetadataUri);
+
+    // Verify the metadata content matches what we uploaded
+    expect(process.title).toBe('Metadata URI Test Election');
+    expect(process.description).toBe('Testing metadataUri feature by uploading metadata manually');
+    expect(process.questions.length).toBe(1);
+    expect(process.questions[0].title).toBe('Do you approve this test?');
+    expect(process.questions[0].description).toBe('Test question for metadataUri');
   });
 });
