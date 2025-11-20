@@ -39,20 +39,25 @@ export interface BaseProcess {
   ballot: BallotMode;
 
   /** Election questions and choices (required) */
-  questions: Array<{
-    title: string;
-    description?: string;
-    choices: Array<{
-      title: string;
-      value: number;
-    }>;
-  }>;
+  questions: Array<ProcessQuestion>;
 }
 
 /**
- * Configuration for creating a process
+ * Question structure used in process configuration and metadata
  */
-export interface ProcessConfig extends Omit<BaseProcess, 'census'> {
+export type ProcessQuestion = {
+  title: string;
+  description?: string;
+  choices: Array<{
+    title: string;
+    value: number;
+  }>;
+};
+
+/**
+ * Base configuration shared by both process creation variants
+ */
+interface BaseProcessConfig {
   /** 
    * Census - either a Census object (PlainCensus, WeightedCensus, CspCensus, PublishedCensus)
    * or manual configuration. If a Census object is provided and not published, it will be 
@@ -68,7 +73,10 @@ export interface ProcessConfig extends Omit<BaseProcess, 'census'> {
     /** Census URI */
     uri: string;
   };
-  
+
+  /** Ballot configuration */
+  ballot: BallotMode;
+
   /** Process timing - use either duration-based or date-based configuration */
   timing: {
     /** Start date/time (Date object, ISO string, or Unix timestamp, default: now + 60 seconds) */
@@ -79,6 +87,36 @@ export interface ProcessConfig extends Omit<BaseProcess, 'census'> {
     endDate?: Date | string | number;
   };
 }
+
+/**
+ * Process configuration with metadata fields (title, description, questions)
+ * The metadata will be created and uploaded automatically
+ */
+export interface ProcessConfigWithMetadata extends BaseProcessConfig {
+  /** Process title */
+  title: string;
+
+  /** Process description (optional) */
+  description?: string;
+
+  /** Election questions and choices (at least one required) */
+  questions: [ProcessQuestion, ...ProcessQuestion[]];
+}
+
+/**
+ * Process configuration with a pre-existing metadata URI
+ * No metadata upload will occur - the provided URI will be used directly
+ */
+export interface ProcessConfigWithMetadataUri extends BaseProcessConfig {
+  /** Pre-existing metadata URI to use instead of uploading new metadata */
+  metadataUri: string;
+}
+
+/**
+ * Configuration for creating a process
+ * Use either metadata fields (title, questions) or a pre-existing metadataUri
+ */
+export type ProcessConfig = ProcessConfigWithMetadata | ProcessConfigWithMetadataUri;
 
 /**
  * Result of process creation
@@ -221,7 +259,7 @@ export class ProcessOrchestrationService {
     let metadata: any = null;
     let title: string | undefined;
     let description: string | undefined;
-    let questions: ProcessConfig['questions'] = [];
+    let questions: Array<ProcessQuestion> = [];
 
     try {
       if (rawProcess.metadataURI) {
@@ -277,11 +315,11 @@ export class ProcessOrchestrationService {
     // 6. Return user-friendly process info
     return {
       processId,
-      title: title!,
-      description: description!,
+      title: title || '',
+      description: description,
       census,
       ballot,
-      questions,
+      questions: questions || [],
       status: Number(rawProcess.status) as ProcessStatus,
       creator: rawProcess.organizationId,
       startDate: new Date(startTime * 1000),
@@ -432,10 +470,18 @@ export class ProcessOrchestrationService {
     // 4. Use ballot mode configuration directly
     const ballotMode = config.ballot;
 
-    // 5. Create and push metadata
-    const metadata = this.createMetadata(config);
-    const metadataHash = await this.apiService.sequencer.pushMetadata(metadata);
-    const metadataUri = this.apiService.sequencer.getMetadataUrl(metadataHash);
+    // 5. Handle metadata - either use provided URI or create and upload new metadata
+    let metadataUri: string;
+    
+    if ('metadataUri' in config) {
+      // Use the provided metadata URI directly
+      metadataUri = config.metadataUri;
+    } else {
+      // Create and push metadata
+      const metadata = this.createMetadata(config);
+      const metadataHash = await this.apiService.sequencer.pushMetadata(metadata);
+      metadataUri = this.apiService.sequencer.getMetadataUrl(metadataHash);
+    }
 
     // 6. Create process via sequencer API (this gets encryption key and state root)
     const signature = await signProcessCreation(processId, this.signer);
@@ -549,19 +595,16 @@ export class ProcessOrchestrationService {
   }
 
   /**
-   * Creates metadata from the simplified configuration
+   * Creates metadata from the configuration with metadata fields
+   * This method should only be called with ProcessConfigWithMetadata
    */
-  private createMetadata(config: ProcessConfig) {
+  private createMetadata(config: ProcessConfigWithMetadata) {
     const metadata = getElectionMetadataTemplate();
 
     metadata.title.default = config.title;
     metadata.description.default = config.description || '';
 
-    // Questions are required
-    if (!config.questions || config.questions.length === 0) {
-      throw new Error('Questions are required. Please provide at least one question with choices.');
-    }
-
+    // TypeScript ensures at least one question exists due to tuple type
     metadata.questions = config.questions.map(q => ({
       title: { default: q.title },
       description: { default: q.description || '' },
