@@ -20,12 +20,12 @@ export class VocdoniCensusService extends BaseService {
   }
 
   /**
-   * Constructs the URI for accessing a census by its root
-   * @param censusRoot - The census root (hex-prefixed)
+   * Constructs the URI for accessing a census
+   * @param relativePath - The relative path
    * @returns The constructed URI for the census
    */
-  getCensusUri(censusRoot: string): string {
-    return `${this.axios.defaults.baseURL}/censuses/${censusRoot}`;
+  getCensusUri(relativePath: string): string {
+    return `${this.axios.defaults.baseURL}${relativePath}`;
   }
 
   createCensus(): Promise<string> {
@@ -107,13 +107,17 @@ export class VocdoniCensusService extends BaseService {
   publishCensus(censusId: string): Promise<PublishCensusResponse> {
     if (!isUUId(censusId)) throw new Error('Invalid census ID format');
 
-    return this.request<Omit<PublishCensusResponse, 'uri'>>({
+    return this.request<PublishCensusResponse & { censusUri: string }>({
       method: 'POST',
       url: `/censuses/${censusId}/publish`,
-    }).then(response => ({
-      ...response,
-      uri: this.getCensusUri(response.root),
-    }));
+    }).then(apiResponse => {
+      // Use censusUri from API response to construct full URI, then remove it
+      const { censusUri, ...responseWithoutCensusUri } = apiResponse;
+      return {
+        ...responseWithoutCensusUri,
+        uri: this.getCensusUri(censusUri),
+      };
+    });
   }
 
   // BigQuery endpoints

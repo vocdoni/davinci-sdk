@@ -111,7 +111,6 @@ export class ProcessRegistryService extends SmartContractService {
     // Convert CensusData type from core to contract format
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
-      maxVotes: BigInt(census.maxVotes),
       censusRoot: census.censusRoot,
       censusURI: census.censusURI,
     };
@@ -148,7 +147,6 @@ export class ProcessRegistryService extends SmartContractService {
     // Convert CensusData type from core to contract format
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
-      maxVotes: BigInt(census.maxVotes),
       censusRoot: census.censusRoot,
       censusURI: census.censusURI,
     };
@@ -218,7 +216,7 @@ export class ProcessRegistryService extends SmartContractService {
   }
 
   onCensusUpdated(cb: ProcessCensusUpdatedCallback): void {
-    this.setupEventListener<[string, string, string, bigint]>(
+    this.setupEventListener<[string, string, string]>(
       this.contract,
       this.contract.filters.CensusUpdated(),
       cb

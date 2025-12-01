@@ -33,6 +33,7 @@ describe('CensusOrchestrator', () => {
         createdAt: '2024-01-01T00:00:00Z',
         publishedAt: '2024-01-01T00:01:00Z',
         uri: 'ipfs://published-uri',
+        size: 2,
       });
 
       await orchestrator.publish(census);
@@ -88,6 +89,7 @@ describe('CensusOrchestrator', () => {
         createdAt: '2024-01-01T00:00:00Z',
         publishedAt: '2024-01-01T00:01:00Z',
         uri: 'ipfs://published-uri',
+        size: 2,
       });
 
       await orchestrator.publish(census);

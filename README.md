@@ -549,6 +549,27 @@ if (hasVoted) {
 }
 ```
 
+#### Checking if Address is Able to Vote
+
+Get participant information including voting weight for an address:
+
+```typescript
+const participantInfo = await sdk.isAddressAbleToVote(processId, voterAddress);
+
+console.log('Address:', participantInfo.key);
+console.log('Voting weight:', participantInfo.weight);
+
+// Use this to verify voter eligibility before submitting a vote
+if (participantInfo) {
+  console.log(`Address ${participantInfo.key} is eligible with weight ${participantInfo.weight}`);
+}
+```
+
+This method is useful for:
+- Verifying voter eligibility before vote submission
+- Displaying voting power/weight to users
+- Building voter dashboards and analytics
+
 ## 💡 Examples
 
 ### Complete Voting Flow

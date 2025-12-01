@@ -45,17 +45,18 @@ function createCSPCensusProvider(
     // Get DavinciCrypto from the existing SDK instance
     const davinciCrypto = await sdk.getCrypto();
 
+    // Find the participant's weight
+    const participant = participants.find(p => p.address.toLowerCase() === address.toLowerCase());
+    const weight = participant?.weight || '1';
+
     // Generate CSP proof using the dummy CSP
     const cspProofData = await davinciCrypto.cspSign(
       CensusOrigin.CensusOriginCSP,
       CSP_PRIVATE_KEY,
       processId.replace(/^0x/, ''),
-      address.replace(/^0x/, '')
+      address.replace(/^0x/, ''),
+      weight
     );
-
-    // Find the participant's weight
-    const participant = participants.find(p => p.address.toLowerCase() === address.toLowerCase());
-    const weight = participant?.weight || '1';
 
     success(
       `✅ CSP Provider: Generated proof with signature ${cspProofData.signature.substring(0, 10)}... (weight: ${weight})`

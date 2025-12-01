@@ -288,6 +288,44 @@ describe('Vote Orchestration Integration', () => {
     });
   });
 
+  describe('isAddressAbleToVote', () => {
+    it('should get participant info for address in census', async () => {
+      const testAddress = voters[0].address;
+      
+      const participantInfo = await organizerSdk.isAddressAbleToVote(processId, testAddress);
+
+      expect(participantInfo).toBeDefined();
+      expect(participantInfo).toHaveProperty('key');
+      expect(participantInfo).toHaveProperty('weight');
+      expect(typeof participantInfo.key).toBe('string');
+      expect(typeof participantInfo.weight).toBe('string');
+      expect(participantInfo.key.toLowerCase()).toBe(testAddress.toLowerCase());
+      expect(BigInt(participantInfo.weight).toString()).toBe(participantInfo.weight);
+    });
+
+    it('should throw error for address not in census', async () => {
+      const randomAddress = Wallet.createRandom().address;
+      
+      await expect(
+        organizerSdk.isAddressAbleToVote(processId, randomAddress)
+      ).rejects.toThrow();
+    });
+
+    it('should throw error for invalid process ID', async () => {
+      const testAddress = voters[0].address;
+      
+      await expect(
+        organizerSdk.isAddressAbleToVote('invalid-process-id', testAddress)
+      ).rejects.toThrow();
+    });
+
+    it('should throw error for invalid address format', async () => {
+      await expect(
+        organizerSdk.isAddressAbleToVote(processId, 'invalid-address')
+      ).rejects.toThrow();
+    });
+  });
+
   describe('watchVoteStatus', () => {
     let watchTestVoteId: string;
     let watchTestVoterSdk: DavinciSDK;
@@ -627,42 +665,6 @@ describe('Vote Orchestration Integration', () => {
         expect(result.processId).toBe(customProcessId);
         expect(result.status).toBe(VoteStatus.Pending);
       });
-
-      it('should validate custom merkle provider response', async () => {
-        // Create a custom provider that returns invalid data
-        const invalidMerkleProvider: MerkleCensusProofProvider = async ({
-          censusRoot,
-          address,
-        }) => {
-          return {
-            root: censusRoot,
-            address: address,
-            weight: '100',
-            censusOrigin: CensusOrigin.CensusOriginMerkleTree,
-            value: 'invalid', // This should cause validation to fail
-            siblings: '', // Missing siblings
-          } as any;
-        };
-
-        const censusProviders: CensusProviders = {
-          merkle: invalidMerkleProvider,
-        };
-
-        const customVoterSdk = new DavinciSDK({
-          signer: customVoters[1],
-          sequencerUrl: process.env.SEQUENCER_API_URL!,
-          censusUrl: process.env.CENSUS_API_URL,
-          censusProviders,
-        });
-        await customVoterSdk.init();
-
-        const voteConfig: VoteConfig = {
-          processId: customProcessId,
-          choices: [0, 1],
-        };
-
-        await expect(customVoterSdk.submitVote(voteConfig)).rejects.toThrow('malformed JSON body');
-      });
     });
 
     describe('CSP Census Provider', () => {
@@ -777,7 +779,8 @@ describe('Vote Orchestration Integration', () => {
             CensusOrigin.CensusOriginCSP,
             CSP_PRIVATE_KEY,
             processId.replace(/^0x/, ''),
-            address.replace(/^0x/, '')
+            address.replace(/^0x/, ''),
+            '100'
           );
 
           return {

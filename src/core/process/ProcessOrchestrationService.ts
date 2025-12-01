@@ -29,8 +29,6 @@ export interface BaseProcess {
     type: CensusOrigin;
     /** Census root */
     root: string;
-    /** Census size */
-    size: number;
     /** Census URI */
     uri: string;
   };
@@ -296,7 +294,6 @@ export class ProcessOrchestrationService {
     const census = {
       type: Number(rawProcess.census.censusOrigin) as CensusOrigin,
       root: rawProcess.census.censusRoot,
-      size: Number(rawProcess.census.maxVotes),
       uri: rawProcess.census.censusURI || '',
     };
 
@@ -487,16 +484,18 @@ export class ProcessOrchestrationService {
     const signature = await signProcessCreation(processId, this.signer);
     const sequencerResult = await this.apiService.sequencer.createProcess({
       processId,
-      censusRoot,
+      census: {
+        censusOrigin: censusConfig.type,
+        censusRoot,
+        censusURI: censusConfig.uri,
+      },
       ballotMode,
       signature,
-      censusOrigin: censusConfig.type,
     });
 
     // 7. Create census object for on-chain call
     const census: CensusData = {
       censusOrigin: censusConfig.type,
-      maxVotes: censusConfig.size.toString(),
       censusRoot,
       censusURI: censusConfig.uri,
     };

@@ -57,7 +57,6 @@ describe('ProcessRegistryService Integration', () => {
     initDuration = 3600; // seconds
     initCensus = {
       censusOrigin: CensusOrigin.CensusOriginMerkleTree,
-      maxVotes: '5',
       censusRoot: randomHex(32),
       censusURI: `ipfs://census-${Date.now()}`,
     };
@@ -135,16 +134,14 @@ describe('ProcessRegistryService Integration', () => {
     //
     const newCensus: CensusData = {
       ...initCensus,
-      maxVotes: '10',
       censusURI: initCensus.censusURI + '-v2',
     };
     const censusUpdated = new Promise<void>(resolve => {
-      procService.onCensusUpdated((id: string, root: string, uri: string, maxVotes: bigint) => {
+      procService.onCensusUpdated((id: string, root: string, uri: string) => {
         if (
           id.toLowerCase() === processId.toLowerCase() &&
           hexlify(root).toLowerCase() === hexlify(newCensus.censusRoot).toLowerCase() &&
-          uri === newCensus.censusURI &&
-          maxVotes === BigInt(newCensus.maxVotes)
+          uri === newCensus.censusURI
         )
           resolve();
       });
@@ -171,7 +168,6 @@ describe('ProcessRegistryService Integration', () => {
 
     const afterC = await procService.getProcess(processId);
     expect(afterC.census.censusURI).toBe(newCensus.censusURI);
-    expect(afterC.census.maxVotes).toBe(BigInt(newCensus.maxVotes));
 
     //
     // 4) UPDATE DURATION & WAIT ProcessDurationChanged
@@ -247,7 +243,6 @@ describe('ProcessRegistryService Integration', () => {
   it('should yield failure status when creating process with invalid parameters', async () => {
     const invalidCensus: CensusData = {
       censusOrigin: CensusOrigin.CensusOriginMerkleTree,
-      maxVotes: '0', // Invalid: maxVotes should be > 0
       censusRoot: randomHex(32),
       censusURI: `ipfs://invalid-census-${Date.now()}`,
     };

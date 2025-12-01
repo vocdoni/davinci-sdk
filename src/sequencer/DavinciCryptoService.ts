@@ -34,6 +34,7 @@ export interface CSPSignOutput {
   censusOrigin: CensusOrigin;
   root: string;
   address: string;
+  weight: string;
   processId: string;
   publicKey: string;
   signature: string;
@@ -50,7 +51,8 @@ interface GoDavinciCryptoWasm {
     censusOrigin: number,
     privKey: string,
     processId: string,
-    address: string
+    address: string,
+    weight: string
   ): RawResult<CSPSignOutput>;
   cspVerify(cspProof: string): RawResult<boolean>;
   cspCensusRoot(censusOrigin: number, privKey: string): RawResult<{ root: string }>;
@@ -224,6 +226,7 @@ export class DavinciCrypto {
    * @param privKey - The private key in hex format
    * @param processId - The process ID in hex format
    * @param address - The address in hex format
+   * @param weight - The vote weight as a decimal string
    * @returns The CSP proof as a parsed JSON object
    * @throws if called before `await init()`, or if Go returns an error
    */
@@ -231,13 +234,14 @@ export class DavinciCrypto {
     censusOrigin: CensusOrigin,
     privKey: string,
     processId: string,
-    address: string
+    address: string,
+    weight: string
   ): Promise<CSPSignOutput> {
     if (!this.initialized) {
       throw new Error('DavinciCrypto not initialized — call `await init()` first');
     }
 
-    const raw = globalThis.DavinciCrypto.cspSign(censusOrigin, privKey, processId, address);
+    const raw = globalThis.DavinciCrypto.cspSign(censusOrigin, privKey, processId, address, weight);
 
     if (raw.error) {
       throw new Error(`Go/WASM cspSign error: ${raw.error}`);
@@ -254,6 +258,7 @@ export class DavinciCrypto {
    * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
    * @param root - The census root
    * @param address - The address
+   * @param weight - The vote weight as a decimal string
    * @param processId - The process ID
    * @param publicKey - The public key
    * @param signature - The signature
@@ -264,6 +269,7 @@ export class DavinciCrypto {
     censusOrigin: CensusOrigin,
     root: string,
     address: string,
+    weight: string,
     processId: string,
     publicKey: string,
     signature: string
@@ -277,6 +283,7 @@ export class DavinciCrypto {
       censusOrigin,
       root,
       address,
+      weight,
       processId,
       publicKey,
       signature,
