@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4] - 2025-12-01
+
+### Changed
+- **BREAKING**: Removed `maxVotes` field from census data structure in smart contracts
+  - Census now only includes: `censusOrigin`, `censusRoot`, and `censusURI` (3 fields instead of 4)
+  - Updated `ProcessRegistryService.newProcess()` to remove maxVotes parameter
+  - Updated `ProcessRegistryService.setProcessCensus()` to remove maxVotes parameter
+  - Updated `ProcessCensusUpdatedCallback` type signature
+- **BREAKING**: Census proof `weight` field is now mandatory (required by Go WASM cryptographic operations)
+  - Previously optional weight field in census proofs is now required
+  - Type guards now validate that weight is present and is a string
+- Fixed CSP proof verification to include weight parameter
+  - Added `weight` field to `CSPSignOutput` interface
+  - Added `weight` parameter to `cspVerify()` method
+  - Updated all CSP-related tests to include weight in verification calls
+
+### Added
+- Added `isAddressAbleToVote()` method to DavinciSDK
+  - Returns participant information including voting weight for an address
+  - Useful for verifying voter eligibility before vote submission
+  - Enables displaying voting power/weight to users
+  - Supports building voter dashboards and analytics
+- Added comprehensive test coverage for `isAddressAbleToVote()` functionality
+  - 1 test in Sequencer integration tests
+  - 4 tests in VoteOrchestration integration tests
+- Updated README.md with documentation for new `isAddressAbleToVote()` method
+
+### Fixed
+- Fixed `ProcessInfo` interface to include census `size` field
+  - Census size is not stored on-chain, so it's set to 0 when fetching process info
+  - Ensures compatibility with the `BaseProcess` interface
+- Fixed all test files to work with updated census data structure
+  - Removed maxVotes assertions from ProcessRegistry tests
+  - Removed maxVotes assertions from SimpleProcessCreation tests
+  - Updated CensusOrchestrator tests to include missing size field
+- All 23 CSP tests now passing with updated verification parameters
+
+### Technical Details
+- Census proof weight validation now enforced at compile-time
+- CSP signature verification now properly includes weight in cryptographic operations
+- Process information retrieval properly handles missing census size from on-chain data
+
 ## [0.0.3] - 2025-10-30
 
 ### Changed
