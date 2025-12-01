@@ -5,6 +5,7 @@ import {
   GetProcessResponse,
   InfoResponse,
   ListProcessesResponse,
+  ParticipantInfoResponse,
   SequencerStats,
   VoteBallot,
   VoteRequest,
@@ -82,6 +83,13 @@ export class VocdoniSequencerService extends BaseService {
       }
       throw error;
     }
+  }
+
+  isAddressAbleToVote(processId: string, address: string): Promise<ParticipantInfoResponse> {
+    return this.request<ParticipantInfoResponse>({
+      method: 'GET',
+      url: `/processes/${processId}/participants/${address}`,
+    });
   }
 
   getInfo(): Promise<InfoResponse> {

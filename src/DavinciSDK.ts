@@ -536,6 +536,32 @@ export class DavinciSDK {
   }
 
   /**
+   * Check if an address is able to vote in a process and get participant information.
+   *
+   * Does NOT require a provider - uses API calls only.
+   *
+   * @param processId - The process ID
+   * @param address - The voter's address
+   * @returns Promise resolving to participant information (key and weight)
+   *
+   * @example
+   * ```typescript
+   * const participantInfo = await sdk.isAddressAbleToVote(processId, "0x1234567890abcdef...");
+   * console.log("Address:", participantInfo.key);
+   * console.log("Weight:", participantInfo.weight);
+   * ```
+   */
+  async isAddressAbleToVote(processId: string, address: string) {
+    if (!this.initialized) {
+      throw new Error(
+        'SDK must be initialized before checking participant info. Call sdk.init() first.'
+      );
+    }
+
+    return this.apiService.sequencer.isAddressAbleToVote(processId, address);
+  }
+
+  /**
    * Watch vote status changes in real-time using an async generator.
    * This method yields each status change as it happens, perfect for showing
    * progress indicators in UI applications.

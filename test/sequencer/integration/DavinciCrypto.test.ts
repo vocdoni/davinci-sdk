@@ -134,6 +134,7 @@ describe('DavinciCryptoService Integration', () => {
         '50df49d9d1175d49808602d12bf945ba3f55d90146882fbc5d54078f204f5005372143904f3fd452767581fd55b4c27aedacdd7b70d14f374b7c9f341c0f9a5300',
       processId: '00000539f39fd6e51aad88f6f4ce6ab8827279cfffb922660000000000000000',
       address: '0e9eA11b92F119aEce01990b68d85227a41AA627',
+      weight: '10',
     };
 
     describe('CSP Signing and Verification', () => {
@@ -142,7 +143,8 @@ describe('DavinciCryptoService Integration', () => {
           cspTestData.censusOrigin,
           cspTestData.privKey,
           cspTestData.processId,
-          cspTestData.address
+          cspTestData.address,
+          cspTestData.weight
         );
 
         // Verify the proof is a valid object with expected structure
@@ -164,7 +166,8 @@ describe('DavinciCryptoService Integration', () => {
           cspTestData.censusOrigin,
           cspTestData.privKey,
           cspTestData.processId,
-          cspTestData.address
+          cspTestData.address,
+          cspTestData.weight
         );
 
         // Then verify it
@@ -172,6 +175,7 @@ describe('DavinciCryptoService Integration', () => {
           cspProof.censusOrigin,
           cspProof.root,
           cspProof.address,
+          cspProof.weight,
           cspProof.processId,
           cspProof.publicKey,
           cspProof.signature
@@ -187,6 +191,7 @@ describe('DavinciCryptoService Integration', () => {
             CensusOrigin.CensusOriginCSP,
             'invalid_root',
             'invalid_address',
+            'invalid_weight',
             'invalid_process_id',
             'invalid_public_key',
             'invalid_signature'
@@ -201,6 +206,7 @@ describe('DavinciCryptoService Integration', () => {
             CensusOrigin.CensusOriginCSP,
             'malformed_root',
             'malformed_address',
+            'malformed_weight',
             'malformed_process_id',
             'malformed_public_key',
             'malformed_signature'
@@ -268,7 +274,8 @@ describe('DavinciCryptoService Integration', () => {
             cspTestData.censusOrigin,
             cspTestData.privKey,
             cspTestData.processId,
-            cspTestData.address
+            cspTestData.address,
+            cspTestData.weight
           )
         ).rejects.toThrow('DavinciCrypto not initialized');
       });
@@ -284,6 +291,7 @@ describe('DavinciCryptoService Integration', () => {
             CensusOrigin.CensusOriginCSP,
             'test_root',
             'test_address',
+            'test_weight',
             'test_process_id',
             'test_public_key',
             'test_signature'
@@ -341,7 +349,8 @@ describe('DavinciCryptoService Integration', () => {
               origin,
               cspTestData.privKey,
               cspTestData.processId,
-              cspTestData.address
+              cspTestData.address,
+              cspTestData.weight
             );
 
             expect(typeof cspProof).toBe('object');
@@ -351,6 +360,7 @@ describe('DavinciCryptoService Integration', () => {
               cspProof.censusOrigin,
               cspProof.root,
               cspProof.address,
+              cspProof.weight,
               cspProof.processId,
               cspProof.publicKey,
               cspProof.signature

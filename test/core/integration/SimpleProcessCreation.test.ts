@@ -100,7 +100,6 @@ describe('Simple Process Creation Integration', () => {
     const onChainProcess = await sdk.processes.getProcess(result.processId);
     expect(onChainProcess).toBeDefined();
     expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
-    expect(onChainProcess.census.maxVotes).toBe(BigInt(censusSize));
   });
 
   it('should create a process with minimal configuration', async () => {
@@ -144,10 +143,6 @@ describe('Simple Process Creation Integration', () => {
     expect(result).toBeDefined();
     expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-
-    // Verify on-chain
-    const onChainProcess = await sdk.processes.getProcess(result.processId);
-    expect(onChainProcess.census.maxVotes).toBe(BigInt(10));
   });
 
   it('should handle process creation with custom timing', async () => {
@@ -596,7 +591,6 @@ describe('Simple Process Creation Integration', () => {
     expect(processInfo.title).toBe('Get Process Test');
     expect(processInfo.description).toBe('Testing the getProcess wrapper method');
     expect(processInfo.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
-    expect(processInfo.census.size).toBe(50);
     expect(processInfo.duration).toBe(3600);
     expect(processInfo.status).toBeDefined();
     expect(processInfo.status).toBe(ProcessStatus.READY); // Process should be in READY status when created
@@ -1469,7 +1463,6 @@ describe('Simple Process Creation Integration', () => {
       expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(
         census.censusRoot!.toLowerCase()
       );
-      expect(onChainProcess.census.maxVotes).toBe(BigInt(3));
     });
 
     it('should create a process using WeightedCensus with string weights (auto-publishes)', async () => {
@@ -1520,10 +1513,6 @@ describe('Simple Process Creation Integration', () => {
       // Verify census was published
       expect(census.isPublished).toBe(true);
       expect(census.size).toBe(3);
-
-      // Verify on-chain
-      const onChainProcess = await sdk.processes.getProcess(result.processId);
-      expect(onChainProcess.census.maxVotes).toBe(BigInt(3));
     });
 
     it('should create a process using WeightedCensus with number weights (auto-publishes)', async () => {
@@ -1795,7 +1784,6 @@ describe('Simple Process Creation Integration', () => {
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);
       expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
-      expect(onChainProcess.census.maxVotes).toBe(BigInt(25));
     });
   });
 

@@ -82,7 +82,6 @@ function isBaseCensusProof(proof: any): proof is BaseCensusProof {
     !!proof &&
     typeof proof.root === 'string' &&
     typeof proof.address === 'string' &&
-    typeof proof.weight === 'string' &&
     typeof proof.censusOrigin === 'number' &&
     Object.values(CensusOrigin).includes(proof.censusOrigin)
   );
@@ -95,6 +94,7 @@ export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
   return (
     isBaseCensusProof(proof) &&
     proof.censusOrigin === CensusOrigin.CensusOriginMerkleTree &&
+    typeof (proof as any).weight === 'string' &&
     typeof (proof as any).value === 'string' &&
     typeof (proof as any).siblings === 'string'
   );
@@ -107,6 +107,7 @@ export function isCSPCensusProof(proof: any): proof is CSPCensusProof {
   return (
     isBaseCensusProof(proof) &&
     proof.censusOrigin === CensusOrigin.CensusOriginCSP &&
+    typeof (proof as any).weight === 'string' &&
     typeof (proof as any).processId === 'string' &&
     typeof (proof as any).publicKey === 'string' &&
     typeof (proof as any).signature === 'string'
@@ -142,6 +143,8 @@ export interface PublishCensusResponse {
   publishedAt: string;
   /** The constructed URI for accessing the census */
   uri: string;
+  /** The size of the census. */
+  size: number;
 }
 
 export interface Snapshot {

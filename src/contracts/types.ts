@@ -63,9 +63,8 @@ export type ProcessStatusChangedCallback = EntityCallback<[string, bigint, bigin
  * @param processID - The process ID
  * @param root - The new census root
  * @param uri - The new census URI
- * @param maxVotes - The maximum number of votes
  */
-export type ProcessCensusUpdatedCallback = EntityCallback<[string, string, string, bigint]>;
+export type ProcessCensusUpdatedCallback = EntityCallback<[string, string, string]>;
 
 /**
  * Callback for when a process duration changes.

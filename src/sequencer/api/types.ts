@@ -3,14 +3,13 @@ import { CensusOrigin, CensusProof } from '../../census/types';
 
 export interface CreateProcessRequest {
   processId: string;
-  censusRoot: string;
+  census: {
+    censusOrigin: CensusOrigin;
+    censusRoot: string;
+    censusURI: string;
+  };
   ballotMode: BallotMode;
   signature: string;
-  /**
-   * The censusOrigin specifies the origin type of the census used in the request.
-   * This attribute allows the API to determine how the census data should be processed or verified.
-   */
-  censusOrigin: CensusOrigin;
 }
 
 export interface CreateProcessResponse {
@@ -89,8 +88,8 @@ export interface VoteProof {
 export interface VoteRequest {
   /** The `processId` you obtained when creating the process. */
   processId: string;
-  /** Your Merkle‐proof that you're in the census. */
-  censusProof: CensusProof;
+  /** Your census proof (only required for CSP, not for MerkleTree). */
+  censusProof?: CensusProof;
   /** Your encrypted ballot. */
   ballot: VoteBallot;
   /** The zkSNARK proof that the ballot is well‐formed. */
@@ -162,4 +161,9 @@ export interface WorkerStats {
 
 export interface WorkersResponse {
   workers: WorkerStats[];
+}
+
+export interface ParticipantInfoResponse {
+  key: string;
+  weight: string;
 }

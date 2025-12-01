@@ -13,7 +13,6 @@ export interface BallotMode {
 
 export interface CensusData {
   censusOrigin: CensusOrigin;
-  maxVotes: string;
   censusRoot: string;
   censusURI: string;
 }

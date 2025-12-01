@@ -146,16 +146,22 @@ export class VoteOrchestrationService {
     const signature = await this.signVote(voteId);
 
     // 7. Submit the vote
-    await this.submitVoteRequest({
+    const voteRequest: VoteRequest = {
       processId: config.processId,
-      censusProof,
       ballot: cryptoOutput.ballot,
       ballotProof: proof,
       ballotInputsHash: cryptoOutput.ballotInputsHash,
       address: voterAddress,
       signature,
       voteId,
-    });
+    };
+
+    // Only include censusProof for CSP (not for MerkleTree)
+    if (process.census.censusOrigin === CensusOrigin.CensusOriginCSP) {
+      voteRequest.censusProof = censusProof;
+    }
+
+    await this.submitVoteRequest(voteRequest);
 
     // 8. Get initial vote status
     const status = await this.apiService.sequencer.getVoteStatus(config.processId, voteId);
@@ -479,6 +485,6 @@ export class VoteOrchestrationService {
       ballotProof,
     };
 
-    await this.apiService.sequencer.submitVote(request);
+      await this.apiService.sequencer.submitVote(request);
   }
 }
