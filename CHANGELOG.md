@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2025-12-04
+
+### Changed
+- **BREAKING**: `GetProcessResponse` type updated to match actual sequencer API response
+  - `startTime` changed from `number` to `string` (ISO date format)
+  - `result` changed from `string[]` to `string[] | null` (can be null before process ends)
+  - Renamed `voteCount` to `votersCount` 
+  - Renamed `voteOverwrittenCount` to `overwrittenVotesCount`
+  - Removed `metadata` field (not returned by sequencer)
+- **BREAKING**: `isAddressAbleToVote()` now returns `Promise<boolean>` instead of participant info object
+  - Returns `true` if address is in census and can vote
+  - Returns `false` only when address is not in census (error code 40001)
+  - Throws errors for invalid inputs (invalid process ID, invalid address format, etc.)
+  - Use new `getAddressWeight()` method to retrieve weight separately if needed
+- Optimized MerkleTree voting to use sequencer's participant endpoint
+  - Vote submission now calls `getAddressWeight()` instead of fetching full census proof
+  - More efficient - only fetches required weight for vote encryption
+  - Custom census providers still supported for both MerkleTree and CSP
+
+### Added
+- Added `getAddressWeight(processId, address)` method to retrieve voting weight
+  - Returns weight as a string
+  - Available in both SequencerService and DavinciSDK
+  - Throws errors for invalid process ID or address not in census
+- Added comprehensive test coverage for new methods
+  - Updated `isAddressAbleToVote` tests to expect boolean return
+  - Added 4 new tests for `getAddressWeight` functionality
+  - Updated vote orchestration tests for new census proof flow
+
+### Fixed
+- Fixed sequencer integration tests to use new property names (`votersCount`, `overwrittenVotesCount`)
+- Fixed vote orchestration to properly handle census weight retrieval from sequencer
+- Improved error handling in `isAddressAbleToVote` to distinguish between "not in census" and other errors
+
+### Technical Details
+- `VoteOrchestrationService.getCensusProof()` now uses `getAddressWeight()` for MerkleTree census
+- Census proof objects for MerkleTree voting now include minimal data (weight only)
+- Full census proof still available through custom census providers if needed
+- All type definitions now accurately match sequencer API responses
+
 ## [0.0.4] - 2025-12-01
 
 ### Changed
