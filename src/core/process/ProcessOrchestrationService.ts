@@ -172,10 +172,10 @@ export interface ProcessInfo extends BaseProcess {
   result: bigint[];
 
   /** Number of votes cast */
-  voteCount: number;
+  votersCount: number;
 
   /** Number of vote overwrites */
-  voteOverwriteCount: number;
+  overwrittenVotesCount: number;
 
   /** Metadata URI */
   metadataURI: string;
@@ -324,8 +324,8 @@ export class ProcessOrchestrationService {
       duration,
       timeRemaining,
       result: rawProcess.result,
-      voteCount: Number(rawProcess.voteCount),
-      voteOverwriteCount: Number(rawProcess.voteOverwriteCount),
+      votersCount: Number(rawProcess.votersCount),
+      overwrittenVotesCount: Number(rawProcess.overwrittenVotesCount),
       metadataURI: rawProcess.metadataURI,
       raw: rawProcess,
     };

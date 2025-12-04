@@ -85,11 +85,29 @@ export class VocdoniSequencerService extends BaseService {
     }
   }
 
-  isAddressAbleToVote(processId: string, address: string): Promise<ParticipantInfoResponse> {
-    return this.request<ParticipantInfoResponse>({
+  async getAddressWeight(processId: string, address: string): Promise<string> {
+    const participant = await this.request<ParticipantInfoResponse>({
       method: 'GET',
       url: `/processes/${processId}/participants/${address}`,
     });
+    return participant.weight;
+  }
+
+  async isAddressAbleToVote(processId: string, address: string): Promise<boolean> {
+    try {
+      await this.request<ParticipantInfoResponse>({
+        method: 'GET',
+        url: `/processes/${processId}/participants/${address}`,
+      });
+      return true;
+    } catch (error: any) {
+      // Only return false for "not in census" error
+      if (error?.code === 40001) {
+        return false;
+      }
+      // Throw for all other errors (invalid process ID, invalid address, etc.)
+      throw error;
+    }
   }
 
   getInfo(): Promise<InfoResponse> {

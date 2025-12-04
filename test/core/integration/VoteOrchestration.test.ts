@@ -289,26 +289,22 @@ describe('Vote Orchestration Integration', () => {
   });
 
   describe('isAddressAbleToVote', () => {
-    it('should get participant info for address in census', async () => {
+    it('should return true for address in census', async () => {
       const testAddress = voters[0].address;
       
-      const participantInfo = await organizerSdk.isAddressAbleToVote(processId, testAddress);
+      const isAble = await organizerSdk.isAddressAbleToVote(processId, testAddress);
 
-      expect(participantInfo).toBeDefined();
-      expect(participantInfo).toHaveProperty('key');
-      expect(participantInfo).toHaveProperty('weight');
-      expect(typeof participantInfo.key).toBe('string');
-      expect(typeof participantInfo.weight).toBe('string');
-      expect(participantInfo.key.toLowerCase()).toBe(testAddress.toLowerCase());
-      expect(BigInt(participantInfo.weight).toString()).toBe(participantInfo.weight);
+      expect(typeof isAble).toBe('boolean');
+      expect(isAble).toBe(true);
     });
 
-    it('should throw error for address not in census', async () => {
+    it('should return false for address not in census', async () => {
       const randomAddress = Wallet.createRandom().address;
       
-      await expect(
-        organizerSdk.isAddressAbleToVote(processId, randomAddress)
-      ).rejects.toThrow();
+      const isAble = await organizerSdk.isAddressAbleToVote(processId, randomAddress);
+      
+      expect(typeof isAble).toBe('boolean');
+      expect(isAble).toBe(false);
     });
 
     it('should throw error for invalid process ID', async () => {
@@ -322,6 +318,40 @@ describe('Vote Orchestration Integration', () => {
     it('should throw error for invalid address format', async () => {
       await expect(
         organizerSdk.isAddressAbleToVote(processId, 'invalid-address')
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('getAddressWeight', () => {
+    it('should get weight for address in census', async () => {
+      const testAddress = voters[0].address;
+      
+      const weight = await organizerSdk.getAddressWeight(processId, testAddress);
+
+      expect(typeof weight).toBe('string');
+      expect(BigInt(weight).toString()).toBe(weight);
+      expect(weight).toBe('1'); // Weight is 1 for our test census
+    });
+
+    it('should throw error for address not in census', async () => {
+      const randomAddress = Wallet.createRandom().address;
+      
+      await expect(
+        organizerSdk.getAddressWeight(processId, randomAddress)
+      ).rejects.toThrow();
+    });
+
+    it('should throw error for invalid process ID', async () => {
+      const testAddress = voters[0].address;
+      
+      await expect(
+        organizerSdk.getAddressWeight('invalid-process-id', testAddress)
+      ).rejects.toThrow();
+    });
+
+    it('should throw error for invalid address format', async () => {
+      await expect(
+        organizerSdk.getAddressWeight(processId, 'invalid-address')
       ).rejects.toThrow();
     });
   });

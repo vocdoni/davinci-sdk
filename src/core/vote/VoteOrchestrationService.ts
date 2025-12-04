@@ -315,7 +315,7 @@ export class VoteOrchestrationService {
     processId: string
   ): Promise<CensusProof> {
     if (censusOrigin === CensusOrigin.CensusOriginMerkleTree) {
-      // Use custom provider if present, otherwise default API
+      // Use custom provider if present, otherwise get weight from sequencer
       if (this.censusProviders.merkle) {
         const proof = await this.censusProviders.merkle({
           censusRoot,
@@ -324,10 +324,19 @@ export class VoteOrchestrationService {
         assertMerkleCensusProof(proof);
         return proof;
       } else {
-        const proof = await this.apiService.census.getCensusProof(censusRoot, voterAddress);
-        // In case the API returns a looser type, still verify:
-        assertMerkleCensusProof(proof);
-        return proof;
+        // For MerkleTree, only the weight is needed - get it from sequencer
+        const weight = await this.apiService.sequencer.getAddressWeight(processId, voterAddress);
+        
+        // Return minimal census proof with just the weight
+        // (full proof is not needed for MerkleTree voting)
+        return {
+          root: censusRoot,
+          address: voterAddress,
+          weight: weight,
+          censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+          value: '',
+          siblings: '',
+        };
       }
     }
 
