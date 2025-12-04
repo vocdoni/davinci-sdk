@@ -536,29 +536,57 @@ export class DavinciSDK {
   }
 
   /**
-   * Check if an address is able to vote in a process and get participant information.
+   * Check if an address is able to vote in a process (i.e., is in the census).
    *
    * Does NOT require a provider - uses API calls only.
    *
    * @param processId - The process ID
    * @param address - The voter's address
-   * @returns Promise resolving to participant information (key and weight)
+   * @returns Promise resolving to boolean indicating if the address can vote
    *
    * @example
    * ```typescript
-   * const participantInfo = await sdk.isAddressAbleToVote(processId, "0x1234567890abcdef...");
-   * console.log("Address:", participantInfo.key);
-   * console.log("Weight:", participantInfo.weight);
+   * const canVote = await sdk.isAddressAbleToVote(processId, "0x1234567890abcdef...");
+   * if (canVote) {
+   *   console.log("This address can vote");
+   * } else {
+   *   console.log("This address is not in the census");
+   * }
    * ```
    */
-  async isAddressAbleToVote(processId: string, address: string) {
+  async isAddressAbleToVote(processId: string, address: string): Promise<boolean> {
     if (!this.initialized) {
       throw new Error(
-        'SDK must be initialized before checking participant info. Call sdk.init() first.'
+        'SDK must be initialized before checking if address can vote. Call sdk.init() first.'
       );
     }
 
     return this.apiService.sequencer.isAddressAbleToVote(processId, address);
+  }
+
+  /**
+   * Get the voting weight for an address in a process.
+   *
+   * Does NOT require a provider - uses API calls only.
+   *
+   * @param processId - The process ID
+   * @param address - The voter's address
+   * @returns Promise resolving to the address weight as a string
+   *
+   * @example
+   * ```typescript
+   * const weight = await sdk.getAddressWeight(processId, "0x1234567890abcdef...");
+   * console.log("Address weight:", weight);
+   * ```
+   */
+  async getAddressWeight(processId: string, address: string): Promise<string> {
+    if (!this.initialized) {
+      throw new Error(
+        'SDK must be initialized before getting address weight. Call sdk.init() first.'
+      );
+    }
+
+    return this.apiService.sequencer.getAddressWeight(processId, address);
   }
 
   /**

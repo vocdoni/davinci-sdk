@@ -103,8 +103,8 @@ describe('VocdoniSequencerService Integration', () => {
     }
 
     const process = await sequencerService.getProcess(processes[0]);
-    expect(typeof process.voteCount).toBe('string');
-    expect(typeof process.voteOverwrittenCount).toBe('string');
+    expect(typeof process.votersCount).toBe('string');
+    expect(typeof process.overwrittenVotesCount).toBe('string');
     expect(typeof process.isAcceptingVotes).toBe('boolean');
     expect(process).toHaveProperty('sequencerStats');
     const { sequencerStats } = process;

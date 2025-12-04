@@ -462,7 +462,7 @@ async function step7_endProcessAndShowResults(
   info('Waiting for all votes to be counted on-chain...');
   while (true) {
     const process = await sdk.getProcess(processId);
-    const currentVotes = Number(process.voteCount);
+    const currentVotes = Number(process.votersCount);
 
     if (currentVotes === expectedVoteCount) {
       success(`Vote count matches expected (${currentVotes}/${expectedVoteCount})`);

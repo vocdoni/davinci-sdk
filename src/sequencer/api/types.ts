@@ -25,36 +25,14 @@ export interface GetProcessResponse {
   organizationId: string;
   encryptionKey: EncryptionKey;
   stateRoot: string;
-  result: string[];
-  startTime: number;
+  result: string[] | null;
+  startTime: string;
   duration: number;
   metadataURI: string;
   ballotMode: BallotMode;
   census: CensusData;
-  metadata: {
-    title: Record<string, string>;
-    description: Record<string, string>;
-    media: {
-      header: string;
-      logo: string;
-    };
-    questions: {
-      title: Record<string, string>;
-      description: Record<string, string>;
-      choices: {
-        title: Record<string, string>;
-        value: number;
-        meta: Record<string, string>;
-      }[];
-      meta: Record<string, string>;
-    }[];
-    processType: {
-      name: string;
-      properties: Record<string, string>;
-    };
-  };
-  voteCount: string;
-  voteOverwrittenCount: string;
+  votersCount: string;
+  overwrittenVotesCount: string;
   isAcceptingVotes: boolean;
   sequencerStats: {
     stateTransitionCount: number;
