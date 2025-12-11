@@ -22,6 +22,7 @@ import type {
   ProcessDurationChangedCallback,
   ProcessStateRootUpdatedCallback,
   ProcessResultsSetCallback,
+  ProcessMaxVotersChangedCallback,
 } from './types';
 
 export enum ProcessStatus {
@@ -102,6 +103,7 @@ export class ProcessRegistryService extends SmartContractService {
     status: ProcessStatus,
     startTime: number,
     duration: number,
+    maxVoters: number,
     ballotMode: BallotMode,
     census: CensusData,
     metadata: string,
@@ -121,6 +123,7 @@ export class ProcessRegistryService extends SmartContractService {
           status,
           startTime,
           duration,
+          maxVoters,
           ballotMode,
           contractCensus,
           metadata,
@@ -163,6 +166,15 @@ export class ProcessRegistryService extends SmartContractService {
     return this.sendTx(
       this.contract.setProcessDuration(processID, duration).catch(e => {
         throw new ProcessDurationError(e.message, 'setDuration');
+      }),
+      async () => ({ success: true })
+    );
+  }
+
+  setProcessMaxVoters(processID: string, maxVoters: number) {
+    return this.sendTx(
+      this.contract.setProcessMaxVoters(processID, maxVoters).catch(e => {
+        throw new ProcessDurationError(e.message, 'setMaxVoters');
       }),
       async () => ({ success: true })
     );
@@ -245,6 +257,14 @@ export class ProcessRegistryService extends SmartContractService {
       this.contract.filters.ProcessResultsSet(),
       cb
     ).catch(err => console.error('Error setting up ProcessResultsSet listener:', err));
+  }
+
+  onProcessMaxVotersChanged(cb: ProcessMaxVotersChangedCallback): void {
+    this.setupEventListener<[string, bigint]>(
+      this.contract,
+      this.contract.filters.ProcessMaxVotersChanged(),
+      cb
+    ).catch(err => console.error('Error setting up ProcessMaxVotersChanged listener:', err));
   }
 
   removeAllListeners(): void {

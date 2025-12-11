@@ -89,10 +89,13 @@ describe('ProcessRegistryService Integration', () => {
       });
     });
 
+    const maxVoters = 1000; // Set a reasonable default for max voters
+
     const newProcessStream = procService.newProcess(
       ProcessStatus.READY,
       Math.floor(Date.now() / 1000) + 60,
       initDuration,
+      maxVoters,
       ballotMode,
       initCensus,
       metadataURI,
@@ -205,7 +208,41 @@ describe('ProcessRegistryService Integration', () => {
     expect(afterD.duration).toBe(BigInt(newDuration));
 
     //
-    // 5) END PROCESS & WAIT ProcessStatusChanged
+    // 5) UPDATE MAX VOTERS & WAIT ProcessMaxVotersChanged
+    //
+    const newMaxVoters = 500;
+
+    const maxVotersChanged = new Promise<void>(resolve => {
+      procService.onProcessMaxVotersChanged((id: string, maxVoters: bigint) => {
+        if (id.toLowerCase() === processId.toLowerCase() && maxVoters === BigInt(newMaxVoters))
+          resolve();
+      });
+    });
+    const setMaxVotersStream = procService.setProcessMaxVoters(processId, newMaxVoters);
+
+    for await (const event of setMaxVotersStream) {
+      switch (event.status) {
+        case 'pending':
+          expect(event.hash).toBeDefined();
+          expect(typeof event.hash).toBe('string');
+          expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+          break;
+        case 'completed':
+          expect(event.response).toEqual({ success: true });
+          break;
+        case 'reverted':
+          throw new Error('Transaction should not revert');
+        case 'failed':
+          throw new Error('Transaction should not fail');
+      }
+    }
+    await maxVotersChanged;
+
+    const afterMV = await procService.getProcess(processId);
+    expect(afterMV.maxVoters).toBe(BigInt(newMaxVoters));
+
+    //
+    // 6) END PROCESS & WAIT ProcessStatusChanged
     //
     const ended = new Promise<void>(resolve => {
       procService.onProcessStatusChanged((id: string, oldStatus: bigint, newStatus: bigint) => {
@@ -263,10 +300,13 @@ describe('ProcessRegistryService Integration', () => {
       y: BigInt(randomHex(32)).toString(),
     };
 
+    const maxVoters = 1000;
+
     const newProcessStream = procService.newProcess(
       ProcessStatus.READY,
       Math.floor(Date.now() / 1000) + 60,
       3600,
+      maxVoters,
       ballotMode,
       invalidCensus,
       `ipfs://invalid-meta-${Date.now()}`,

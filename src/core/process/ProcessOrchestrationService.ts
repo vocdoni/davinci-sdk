@@ -84,6 +84,12 @@ interface BaseProcessConfig {
     /** End date/time (Date object, ISO string, or Unix timestamp, cannot be used with duration) */
     endDate?: Date | string | number;
   };
+
+  /** 
+   * Maximum number of voters allowed for this process (optional, defaults to census size)
+   * This parameter limits how many votes can be cast in the process.
+   */
+  maxVoters?: number;
 }
 
 /**
@@ -133,6 +139,7 @@ interface ProcessCreationData {
   processId: string;
   startTime: number;
   duration: number;
+  maxVoters: number;
   censusRoot: string;
   ballotMode: BallotMode;
   metadataUri: string;
@@ -167,6 +174,9 @@ export interface ProcessInfo extends BaseProcess {
 
   /** Time remaining in seconds (0 if ended, negative if not started) */
   timeRemaining: number;
+
+  /** Maximum number of voters allowed */
+  maxVoters: number;
 
   /** Process results (array of BigInt values) */
   result: bigint[];
@@ -323,6 +333,7 @@ export class ProcessOrchestrationService {
       endDate: new Date(endTime * 1000),
       duration,
       timeRemaining,
+      maxVoters: Number(rawProcess.maxVoters),
       result: rawProcess.result,
       votersCount: Number(rawProcess.votersCount),
       overwrittenVotesCount: Number(rawProcess.overwrittenVotesCount),
@@ -385,6 +396,7 @@ export class ProcessOrchestrationService {
       ProcessStatus.READY,
       data.startTime,
       data.duration,
+      data.maxVoters,
       data.ballotMode,
       data.census,
       data.metadataUri,
@@ -493,7 +505,10 @@ export class ProcessOrchestrationService {
       signature,
     });
 
-    // 7. Create census object for on-chain call
+    // 7. Determine maxVoters (use config value or default to census size)
+    const maxVoters = config.maxVoters ?? censusConfig.size;
+
+    // 8. Create census object for on-chain call
     const census: CensusData = {
       censusOrigin: censusConfig.type,
       censusRoot,
@@ -504,6 +519,7 @@ export class ProcessOrchestrationService {
       processId,
       startTime,
       duration,
+      maxVoters,
       censusRoot,
       ballotMode,
       metadataUri,
@@ -952,5 +968,92 @@ export class ProcessOrchestrationService {
     }
 
     throw new Error('Resume process stream ended unexpectedly');
+  }
+
+  /**
+   * Sets the maximum number of voters for a process.
+   * Returns an async generator that yields transaction status events.
+   *
+   * @param processId - The process ID
+   * @param maxVoters - The new maximum number of voters
+   * @returns AsyncGenerator yielding transaction status events
+   *
+   * @example
+   * ```typescript
+   * const stream = sdk.setProcessMaxVotersStream("0x1234567890abcdef...", 500);
+   *
+   * for await (const event of stream) {
+   *   switch (event.status) {
+   *     case "pending":
+   *       console.log("Transaction pending:", event.hash);
+   *       break;
+   *     case "completed":
+   *       console.log("MaxVoters updated successfully");
+   *       break;
+   *     case "failed":
+   *       console.error("Transaction failed:", event.error);
+   *       break;
+   *     case "reverted":
+   *       console.error("Transaction reverted:", event.reason);
+   *       break;
+   *   }
+   * }
+   * ```
+   */
+  async *setProcessMaxVotersStream(
+    processId: string,
+    maxVoters: number
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    // Submit on-chain transaction to update maxVoters
+    const txStream = this.processRegistry.setProcessMaxVoters(processId, maxVoters);
+
+    for await (const event of txStream) {
+      if (event.status === TxStatus.Pending) {
+        yield { status: TxStatus.Pending, hash: event.hash };
+      } else if (event.status === TxStatus.Completed) {
+        yield {
+          status: TxStatus.Completed,
+          response: { success: true },
+        };
+        break;
+      } else if (event.status === TxStatus.Failed) {
+        yield { status: TxStatus.Failed, error: event.error };
+        break;
+      } else if (event.status === TxStatus.Reverted) {
+        yield { status: TxStatus.Reverted, reason: event.reason };
+        break;
+      }
+    }
+  }
+
+  /**
+   * Sets the maximum number of voters for a process.
+   * This is a simplified method that waits for transaction completion.
+   *
+   * For real-time transaction status updates, use setProcessMaxVotersStream() instead.
+   *
+   * @param processId - The process ID
+   * @param maxVoters - The new maximum number of voters
+   * @returns Promise resolving when the maxVoters is updated
+   *
+   * @example
+   * ```typescript
+   * await sdk.setProcessMaxVoters("0x1234567890abcdef...", 500);
+   * console.log("MaxVoters updated successfully");
+   * ```
+   */
+  async setProcessMaxVoters(processId: string, maxVoters: number): Promise<void> {
+    // Use the stream internally and consume it to get the final result
+    for await (const event of this.setProcessMaxVotersStream(processId, maxVoters)) {
+      if (event.status === 'completed') {
+        return;
+      } else if (event.status === 'failed') {
+        throw event.error;
+      } else if (event.status === 'reverted') {
+        throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
+      }
+    }
+
+    throw new Error('Set process maxVoters stream ended unexpectedly');
   }
 }
