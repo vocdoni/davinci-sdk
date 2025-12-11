@@ -88,3 +88,10 @@ export type ProcessStateRootUpdatedCallback = EntityCallback<[string, string, bi
  * @param result - The results array
  */
 export type ProcessResultsSetCallback = EntityCallback<[string, string, bigint[]]>;
+
+/**
+ * Callback for when process maxVoters is changed.
+ * @param processID - The process ID
+ * @param maxVoters - The new maxVoters value
+ */
+export type ProcessMaxVotersChangedCallback = EntityCallback<[string, bigint]>;

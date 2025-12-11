@@ -592,6 +592,7 @@ describe('Simple Process Creation Integration', () => {
     expect(processInfo.description).toBe('Testing the getProcess wrapper method');
     expect(processInfo.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
     expect(processInfo.duration).toBe(3600);
+    expect(processInfo.maxVoters).toBe(50); // Should match the census size
     expect(processInfo.status).toBeDefined();
     expect(processInfo.status).toBe(ProcessStatus.READY); // Process should be in READY status when created
     expect(processInfo.startDate).toBeDefined();
@@ -1785,6 +1786,137 @@ describe('Simple Process Creation Integration', () => {
       const onChainProcess = await sdk.processes.getProcess(result.processId);
       expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
     });
+  });
+
+  it('should update process maxVoters after creation', async () => {
+    // Create a process with initial maxVoters
+    const censusRoot = randomHex(32);
+    const initialMaxVoters = 100;
+    
+    const processConfig: ProcessConfig = {
+      title: 'MaxVoters Update Test',
+      description: 'Testing maxVoters update functionality',
+      census: {
+        type: CensusOrigin.CensusOriginMerkleTree,
+        root: censusRoot,
+        size: 200,
+        uri: `ipfs://maxvoters-test-${Date.now()}`,
+      },
+      ballot: {
+        numFields: 1,
+        maxValue: '1',
+        minValue: '0',
+        uniqueValues: false,
+        costFromWeight: false,
+        costExponent: 1,
+        maxValueSum: '1',
+        minValueSum: '0',
+      },
+      timing: {
+        duration: 3600,
+      },
+      maxVoters: initialMaxVoters,
+      questions: [
+        {
+          title: 'Test question for maxVoters',
+          choices: [
+            { title: 'Yes', value: 0 },
+            { title: 'No', value: 1 },
+          ],
+        },
+      ],
+    };
+
+    // Create the process
+    const createResult = await sdk.createProcess(processConfig);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+    // Verify initial maxVoters
+    let processInfo = await sdk.getProcess(createResult.processId);
+    expect(processInfo.maxVoters).toBe(initialMaxVoters);
+
+    // Update maxVoters to a new value
+    const newMaxVoters = 50;
+    await sdk.setProcessMaxVoters(createResult.processId, newMaxVoters);
+
+    // Verify maxVoters was updated
+    processInfo = await sdk.getProcess(createResult.processId);
+    expect(processInfo.maxVoters).toBe(newMaxVoters);
+  });
+
+  it('should update process maxVoters using stream API', async () => {
+    // Create a process with initial maxVoters
+    const censusRoot = randomHex(32);
+    const initialMaxVoters = 150;
+    
+    const processConfig: ProcessConfig = {
+      title: 'MaxVoters Stream Update Test',
+      description: 'Testing maxVoters update with stream API',
+      census: {
+        type: CensusOrigin.CensusOriginMerkleTree,
+        root: censusRoot,
+        size: 300,
+        uri: `ipfs://maxvoters-stream-test-${Date.now()}`,
+      },
+      ballot: {
+        numFields: 1,
+        maxValue: '1',
+        minValue: '0',
+        uniqueValues: false,
+        costFromWeight: false,
+        costExponent: 1,
+        maxValueSum: '1',
+        minValueSum: '0',
+      },
+      timing: {
+        duration: 3600,
+      },
+      maxVoters: initialMaxVoters,
+      questions: [
+        {
+          title: 'Stream API test question',
+          choices: [
+            { title: 'Yes', value: 0 },
+            { title: 'No', value: 1 },
+          ],
+        },
+      ],
+    };
+
+    // Create the process
+    const createResult = await sdk.createProcess(processConfig);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+    // Update maxVoters using stream API
+    const newMaxVoters = 75;
+    const stream = sdk.setProcessMaxVotersStream(createResult.processId, newMaxVoters);
+
+    let hasPendingEvent = false;
+    let hasCompletedEvent = false;
+
+    for await (const event of stream) {
+      if (event.status === 'pending') {
+        hasPendingEvent = true;
+        expect(event.hash).toBeDefined();
+        expect(event.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      } else if (event.status === 'completed') {
+        hasCompletedEvent = true;
+        expect(event.response).toBeDefined();
+        expect(event.response.success).toBe(true);
+      } else if (event.status === 'failed') {
+        throw event.error;
+      } else if (event.status === 'reverted') {
+        throw new Error(`Transaction reverted: ${event.reason || 'Unknown'}`);
+      }
+    }
+
+    // Verify we received both events
+    expect(hasPendingEvent).toBe(true);
+    expect(hasCompletedEvent).toBe(true);
+
+    // Verify maxVoters was updated on-chain
+    const processInfo = await sdk.getProcess(createResult.processId);
+    expect(processInfo.maxVoters).toBe(newMaxVoters);
   });
 
   it('should create a process using pre-existing metadataUri', async () => {

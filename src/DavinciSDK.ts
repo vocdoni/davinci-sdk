@@ -981,6 +981,81 @@ export class DavinciSDK {
   }
 
   /**
+   * Sets the maximum number of voters for a process and returns an async generator
+   * that yields transaction status events. This allows you to change the voter limit
+   * after process creation.
+   *
+   * Requires a signer with a provider for blockchain interactions.
+   *
+   * @param processId - The process ID
+   * @param maxVoters - The new maximum number of voters
+   * @returns AsyncGenerator yielding transaction status events
+   * @throws Error if signer does not have a provider
+   *
+   * @example
+   * ```typescript
+   * const stream = sdk.setProcessMaxVotersStream("0x1234567890abcdef...", 500);
+   *
+   * for await (const event of stream) {
+   *   switch (event.status) {
+   *     case TxStatus.Pending:
+   *       console.log("Transaction pending:", event.hash);
+   *       break;
+   *     case TxStatus.Completed:
+   *       console.log("MaxVoters updated successfully");
+   *       break;
+   *     case TxStatus.Failed:
+   *       console.error("Transaction failed:", event.error);
+   *       break;
+   *     case TxStatus.Reverted:
+   *       console.error("Transaction reverted:", event.reason);
+   *       break;
+   *   }
+   * }
+   * ```
+   */
+  setProcessMaxVotersStream(processId: string, maxVoters: number) {
+    if (!this.initialized) {
+      throw new Error(
+        'SDK must be initialized before setting process maxVoters. Call sdk.init() first.'
+      );
+    }
+    this.ensureProvider();
+
+    return this.processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
+  }
+
+  /**
+   * Sets the maximum number of voters for a process.
+   * This is the simplified method that waits for transaction completion.
+   *
+   * For real-time transaction status updates, use setProcessMaxVotersStream() instead.
+   *
+   * Requires a signer with a provider for blockchain interactions.
+   *
+   * @param processId - The process ID
+   * @param maxVoters - The new maximum number of voters
+   * @returns Promise resolving when the maxVoters is updated
+   * @throws Error if signer does not have a provider
+   *
+   * @example
+   * ```typescript
+   * await sdk.setProcessMaxVoters("0x1234567890abcdef...", 500);
+   * console.log("MaxVoters updated successfully");
+   * ```
+   */
+  async setProcessMaxVoters(processId: string, maxVoters: number): Promise<void> {
+    if (!this.initialized) {
+      throw new Error(
+        'SDK must be initialized before setting process maxVoters. Call sdk.init() first.'
+      );
+    }
+    this.ensureProvider();
+
+    return this.processOrchestrator.setProcessMaxVoters(processId, maxVoters);
+  }
+
+  /**
    * Resolve contract address based on configuration priority:
    * 1. Custom addresses from user config (if provided)
    * 2. Addresses from sequencer (fetched during init if no custom addresses provided)
