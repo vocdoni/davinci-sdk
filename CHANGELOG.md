@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6] - 2025-12-15
+
+### Added
+- **Process MaxVoters Management**: New methods to manage the maximum number of voters for a process
+  - Added `setProcessMaxVoters(processId, maxVoters)` method to DavinciSDK for updating voter limits
+  - Added `setProcessMaxVotersStream(processId, maxVoters)` for real-time transaction status monitoring
+  - Added `maxVoters` optional parameter to `ProcessConfig` during process creation (defaults to census size)
+  - Added `maxVoters` field to `ProcessInfo` returned by `getProcess()`
+  - Available at all architecture layers: SDK, Orchestration, and Contract services
+- Added `ProcessMaxVotersChangedCallback` event type for monitoring maxVoters changes
+- Added `onProcessMaxVotersChanged()` event listener to ProcessRegistryService
+- Contract integration now supports `@vocdoni/davinci-contracts` version 0.0.29 with maxVoters parameter
+
+### Changed
+- Updated `ProcessRegistryService.newProcess()` to include `maxVoters` parameter
+- Updated `ProcessOrchestrationService` to automatically set maxVoters to census size if not specified
+- Process creation now validates and enforces maximum voter limits on-chain
+
+### Technical Details
+- All process management methods follow consistent architecture pattern: `DavinciSDK` → `ProcessOrchestrationService` → `ProcessRegistryService` → `Smart Contract`
+- MaxVoters updates emit `ProcessMaxVotersChanged` events on-chain for monitoring
+- Comprehensive test coverage added at contract, orchestration, and SDK levels
+- Both stream-based and promise-based APIs available for maximum flexibility
+
 ## [0.0.5] - 2025-12-04
 
 ### Changed
