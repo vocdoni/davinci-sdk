@@ -431,6 +431,9 @@ const processResult = await sdk.createProcess({
     minValueSum: "0"
   },
   
+  // Maximum voters (optional, defaults to census size)
+  maxVoters: 500, // Limit the process to 500 voters
+  
   // Questions
   questions: [{
     title: "What is your preferred option?",
@@ -500,7 +503,52 @@ console.log('Title:', processInfo.title);
 console.log('Status:', processInfo.status);
 console.log('Start date:', processInfo.startDate);
 console.log('End date:', processInfo.endDate);
+console.log('Max voters:', processInfo.maxVoters);
+console.log('Voters count:', processInfo.votersCount);
 console.log('Questions:', processInfo.questions);
+```
+
+#### Managing Process MaxVoters
+
+You can update the maximum number of voters allowed for a process after creation:
+
+```typescript
+// Update maxVoters limit
+await sdk.setProcessMaxVoters(processId, 750);
+
+console.log('MaxVoters updated to 750');
+
+// Verify the change
+const updatedProcess = await sdk.getProcess(processId);
+console.log('New maxVoters:', updatedProcess.maxVoters);
+```
+
+For real-time transaction status updates, use the stream version:
+
+```typescript
+import { TxStatus } from '@vocdoni/davinci-sdk';
+
+const stream = sdk.setProcessMaxVotersStream(processId, 750);
+
+for await (const event of stream) {
+  switch (event.status) {
+    case TxStatus.Pending:
+      console.log("📝 Transaction submitted:", event.hash);
+      break;
+      
+    case TxStatus.Completed:
+      console.log("✅ MaxVoters updated successfully");
+      break;
+      
+    case TxStatus.Failed:
+      console.error("❌ Transaction failed:", event.error);
+      break;
+      
+    case TxStatus.Reverted:
+      console.error("⚠️ Transaction reverted:", event.reason);
+      break;
+  }
+}
 ```
 
 ### Voting Operations
