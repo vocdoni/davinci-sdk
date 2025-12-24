@@ -56,7 +56,7 @@ describe('ProcessRegistryService Integration', () => {
     initStateRoot = randomHex(32);
     initDuration = 3600; // seconds
     initCensus = {
-      censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+      censusOrigin: CensusOrigin.OffchainDynamic,
       censusRoot: randomHex(32),
       censusURI: `ipfs://census-${Date.now()}`,
     };
@@ -279,7 +279,7 @@ describe('ProcessRegistryService Integration', () => {
 
   it('should yield failure status when creating process with invalid parameters', async () => {
     const invalidCensus: CensusData = {
-      censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+      censusOrigin: CensusOrigin.OffchainStatic,
       censusRoot: randomHex(32),
       censusURI: `ipfs://invalid-census-${Date.now()}`,
     };

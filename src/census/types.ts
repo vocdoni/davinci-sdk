@@ -2,10 +2,14 @@
  * Census origin types
  */
 export enum CensusOrigin {
-  /** Indicates that the census is derived from a Merkle Tree structure */
-  CensusOriginMerkleTree = 1,
-  /** Indicates that the census is provided by a Credential Service Provider (CSP) */
-  CensusOriginCSP = 2,
+  /** Offchain static Merkle Tree census */
+  OffchainStatic = 1,
+  /** Offchain dynamic Merkle Tree census */
+  OffchainDynamic = 2,
+  /** Onchain Merkle Tree census */
+  Onchain = 3,
+  /** Credential Service Provider (CSP) census using EdDSA BLS12-377 */
+  CSP = 4,
 }
 
 export interface CensusParticipant {
@@ -20,12 +24,12 @@ export interface BaseCensusProof {
   address: string;
   /** The weight as a decimal string. */
   weight: string;
-  /** Census origin type: CensusOriginMerkleTree for merkle proofs, CensusOriginCSP for csp proofs */
+  /** Census origin type: OffchainStatic/OffchainDynamic/Onchain for merkle proofs, CSP for csp proofs */
   censusOrigin: CensusOrigin;
 }
 
 export interface MerkleCensusProof extends BaseCensusProof {
-  censusOrigin: CensusOrigin.CensusOriginMerkleTree;
+  censusOrigin: CensusOrigin.OffchainStatic | CensusOrigin.OffchainDynamic | CensusOrigin.Onchain;
   /** The leaf value (hex-prefixed weight). */
   value: string;
   /** The serialized sibling path (hex-prefixed). */
@@ -33,7 +37,7 @@ export interface MerkleCensusProof extends BaseCensusProof {
 }
 
 export interface CSPCensusProof extends BaseCensusProof {
-  censusOrigin: CensusOrigin.CensusOriginCSP;
+  censusOrigin: CensusOrigin.CSP;
   /** The process id signed with the address (hex-prefixed). */
   processId: string;
   /** The public key of the csp (hex-prefixed). */
@@ -93,7 +97,9 @@ function isBaseCensusProof(proof: any): proof is BaseCensusProof {
 export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
   return (
     isBaseCensusProof(proof) &&
-    proof.censusOrigin === CensusOrigin.CensusOriginMerkleTree &&
+    (proof.censusOrigin === CensusOrigin.OffchainStatic ||
+      proof.censusOrigin === CensusOrigin.OffchainDynamic ||
+      proof.censusOrigin === CensusOrigin.Onchain) &&
     typeof (proof as any).weight === 'string' &&
     typeof (proof as any).value === 'string' &&
     typeof (proof as any).siblings === 'string'
@@ -106,7 +112,7 @@ export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
 export function isCSPCensusProof(proof: any): proof is CSPCensusProof {
   return (
     isBaseCensusProof(proof) &&
-    proof.censusOrigin === CensusOrigin.CensusOriginCSP &&
+    proof.censusOrigin === CensusOrigin.CSP &&
     typeof (proof as any).weight === 'string' &&
     typeof (proof as any).processId === 'string' &&
     typeof (proof as any).publicKey === 'string' &&

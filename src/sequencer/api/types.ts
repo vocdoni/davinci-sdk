@@ -32,6 +32,7 @@ export interface GetProcessResponse {
   ballotMode: BallotMode;
   census: CensusData;
   votersCount: string;
+  maxVoters: string;
   overwrittenVotesCount: string;
   isAcceptingVotes: boolean;
   sequencerStats: {

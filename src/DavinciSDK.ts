@@ -290,7 +290,7 @@ export class DavinciSDK {
    *   title: "My Election",
    *   description: "A simple election",
    *   census: {
-   *     type: CensusOrigin.CensusOriginMerkleTree,
+   *     type: CensusOrigin.OffchainStatic,
    *     root: "0x1234...",
    *     size: 100,
    *     uri: "ipfs://..."
@@ -379,7 +379,7 @@ export class DavinciSDK {
    *   title: "My Election",
    *   description: "A simple election",
    *   census: {
-   *     type: CensusOrigin.CensusOriginMerkleTree,
+   *     type: CensusOrigin.OffchainStatic,
    *     root: "0x1234...",
    *     size: 100,
    *     uri: "ipfs://your-census-uri"

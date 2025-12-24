@@ -20,7 +20,7 @@ import type {
   ProcessStatusChangedCallback,
   ProcessCensusUpdatedCallback,
   ProcessDurationChangedCallback,
-  ProcessStateRootUpdatedCallback,
+  ProcessStateTransitionedCallback,
   ProcessResultsSetCallback,
   ProcessMaxVotersChangedCallback,
 } from './types';
@@ -243,12 +243,12 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ProcessDurationChanged listener:', err));
   }
 
-  onStateRootUpdated(cb: ProcessStateRootUpdatedCallback): void {
-    this.setupEventListener<[string, string, bigint]>(
+  onStateTransitioned(cb: ProcessStateTransitionedCallback): void {
+    this.setupEventListener<[string, string, bigint, bigint, bigint, bigint]>(
       this.contract,
-      this.contract.filters.ProcessStateRootUpdated(),
+      this.contract.filters.ProcessStateTransitioned(),
       cb
-    ).catch(err => console.error('Error setting up StateRootUpdated listener:', err));
+    ).catch(err => console.error('Error setting up ProcessStateTransitioned listener:', err));
   }
 
   onProcessResultsSet(cb: ProcessResultsSetCallback): void {

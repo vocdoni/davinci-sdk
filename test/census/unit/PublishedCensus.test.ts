@@ -27,7 +27,7 @@ describe('PublishedCensus', () => {
       );
       
       expect(census.type).toBe(CensusType.PLAIN);
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
 
     it('should create a weighted published census', () => {
@@ -39,7 +39,7 @@ describe('PublishedCensus', () => {
       );
       
       expect(census.type).toBe(CensusType.WEIGHTED);
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
 
     it('should create a CSP published census', () => {
@@ -51,7 +51,7 @@ describe('PublishedCensus', () => {
       );
       
       expect(census.type).toBe(CensusType.CSP);
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginCSP);
+      expect(census.censusOrigin).toBe(CensusOrigin.CSP);
     });
   });
 
@@ -110,7 +110,7 @@ describe('PublishedCensus', () => {
         10
       );
       
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
 
     it('should map WEIGHTED to MerkleTree', () => {
@@ -121,7 +121,7 @@ describe('PublishedCensus', () => {
         10
       );
       
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
 
     it('should map CSP to CSP', () => {
@@ -132,7 +132,7 @@ describe('PublishedCensus', () => {
         0
       );
       
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginCSP);
+      expect(census.censusOrigin).toBe(CensusOrigin.CSP);
     });
   });
 });

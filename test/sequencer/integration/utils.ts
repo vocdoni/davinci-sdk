@@ -26,7 +26,7 @@ export const generateMockProcessRequest = (processId: string, censusRoot: string
     maxValueSum: '10',
     minValueSum: '0',
   },
-  censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+  censusOrigin: CensusOrigin.OffchainStatic,
 });
 
 // UUID validator

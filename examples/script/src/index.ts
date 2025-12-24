@@ -51,7 +51,7 @@ function createCSPCensusProvider(
 
     // Generate CSP proof using the dummy CSP
     const cspProofData = await davinciCrypto.cspSign(
-      CensusOrigin.CensusOriginCSP,
+      CensusOrigin.CSP,
       CSP_PRIVATE_KEY,
       processId.replace(/^0x/, ''),
       address.replace(/^0x/, ''),
@@ -66,7 +66,7 @@ function createCSPCensusProvider(
       root: cspProofData.root,
       address: cspProofData.address,
       weight: weight,
-      censusOrigin: CensusOrigin.CensusOriginCSP,
+      censusOrigin: CensusOrigin.CSP,
       processId: cspProofData.processId,
       publicKey: cspProofData.publicKey,
       signature: cspProofData.signature,
@@ -119,18 +119,18 @@ async function step2_createCensus(
 }> {
   step(
     2,
-    censusType === CensusOrigin.CensusOriginCSP ? 'Create CSP census' : 'Create weighted census'
+    censusType === CensusOrigin.CSP ? 'Create CSP census' : 'Create weighted census'
   );
 
   // Generate test participants
   const participants = generateTestParticipants(numParticipants);
   info(`Generated ${participants.length} test participants`);
 
-  if (censusType === CensusOrigin.CensusOriginCSP) {
+  if (censusType === CensusOrigin.CSP) {
     // Create CSP census object
     const davinciCrypto = await sdk.getCrypto();
     const censusRoot = await davinciCrypto.cspCensusRoot(
-      CensusOrigin.CensusOriginCSP,
+      CensusOrigin.CSP,
       CSP_PRIVATE_KEY
     );
 
@@ -347,7 +347,7 @@ async function step5_submitVotes(
       const baseConfig = createSDKInstance(participant.privateKey, false);
 
       const voterConfig: any =
-        censusType === CensusOrigin.CensusOriginCSP
+        censusType === CensusOrigin.CSP
           ? {
               ...baseConfig,
               censusProviders: {
@@ -548,7 +548,7 @@ async function run() {
     // Get user configuration
     const userConfig = await getUserConfiguration();
     const censusTypeName =
-      userConfig.censusType === CensusOrigin.CensusOriginCSP ? 'CSP' : 'MerkleTree';
+      userConfig.censusType === CensusOrigin.CSP ? 'CSP' : 'MerkleTree';
     console.log(
       chalk.green(
         `\n✓ Configuration: ${userConfig.numParticipants} participants, ${censusTypeName} census\n`

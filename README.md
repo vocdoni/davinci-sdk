@@ -321,7 +321,7 @@ For advanced use cases, you can still provide census data manually:
 ```typescript
 const process = await sdk.createProcess({
   census: {
-    type: CensusOrigin.CensusOriginMerkleTree,
+    type: CensusOrigin.OffchainStatic,
     root: "0xabc...",
     size: 100,
     uri: "ipfs://..."
@@ -406,7 +406,7 @@ const processResult = await sdk.createProcess({
   
   // Census configuration
   census: {
-    type: CensusOrigin.CensusOriginMerkleTree,
+    type: CensusOrigin.OffchainStatic,
     root: "0x...",
     size: 1000,
     uri: "ipfs://..."
@@ -662,7 +662,7 @@ async function completeVotingExample() {
     title: "Community Budget Allocation",
     description: "Decide how to allocate our community budget",
     census: {
-      type: CensusOrigin.CensusOriginMerkleTree,
+      type: CensusOrigin.OffchainStatic,
       root: publishResult.root,
       size: censusSize,
       uri: publishResult.uri

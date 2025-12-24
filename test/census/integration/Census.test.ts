@@ -101,11 +101,11 @@ describe('VocdoniCensusService Integration', () => {
       expect(proof.root).toBe(publishedCensusRoot);
 
       // Check that it's either a Merkle or CSP proof
-      if (proof.censusOrigin === CensusOrigin.CensusOriginMerkleTree) {
+      if (proof.censusOrigin === CensusOrigin.OffchainStatic) {
         // Merkle proof should have value and siblings
         expect(proof).toHaveProperty('value');
         expect(proof).toHaveProperty('siblings');
-      } else if (proof.censusOrigin === CensusOrigin.CensusOriginCSP) {
+      } else if (proof.censusOrigin === CensusOrigin.CSP) {
         // CSP proof should have processId, publicKey, and signature
         expect(proof).toHaveProperty('processId');
         expect(proof).toHaveProperty('publicKey');

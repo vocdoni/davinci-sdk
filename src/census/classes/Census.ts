@@ -62,9 +62,9 @@ export abstract class Census {
     switch (this._type) {
       case CensusType.PLAIN:
       case CensusType.WEIGHTED:
-        return CensusOrigin.CensusOriginMerkleTree;
+        return CensusOrigin.OffchainStatic;
       case CensusType.CSP:
-        return CensusOrigin.CensusOriginCSP;
+        return CensusOrigin.CSP;
       default:
         throw new Error(`Unknown census type: ${this._type}`);
     }

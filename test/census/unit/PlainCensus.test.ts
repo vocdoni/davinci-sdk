@@ -15,7 +15,7 @@ describe('PlainCensus', () => {
 
     it('should map to MerkleTree census origin', () => {
       const census = new PlainCensus();
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
   });
 

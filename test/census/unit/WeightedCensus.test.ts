@@ -15,7 +15,7 @@ describe('WeightedCensus', () => {
 
     it('should map to MerkleTree census origin', () => {
       const census = new WeightedCensus();
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginMerkleTree);
+      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
     });
   });
 

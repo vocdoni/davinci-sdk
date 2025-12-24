@@ -44,7 +44,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Integration Test Election',
       description: 'A test election created via the simplified SDK createProcess method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: censusSize,
         uri: `ipfs://test-census-${Date.now()}`,
@@ -108,7 +108,7 @@ describe('Simple Process Creation Integration', () => {
     const minimalConfig: ProcessConfig = {
       title: 'Minimal Test Election',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 10,
         uri: `ipfs://minimal-census-${Date.now()}`,
@@ -154,7 +154,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Custom Timing Election',
       description: 'Testing custom start time and duration',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 50,
         uri: `ipfs://timed-census-${Date.now()}`,
@@ -199,7 +199,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Invalid Census Test',
       description: 'This should fail due to invalid census root',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: '0xinvalid', // Invalid census root format
         size: 100,
         uri: `ipfs://invalid-census-${Date.now()}`,
@@ -236,7 +236,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'CSP Census Test',
       description: 'Testing CSP census type support',
       census: {
-        type: CensusOrigin.CensusOriginCSP,
+        type: CensusOrigin.CSP,
         root: randomHex(32),
         size: 100,
         uri: `ipfs://csp-census-${Date.now()}`,
@@ -273,7 +273,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Verify on-chain
     const onChainProcess = await sdk.processes.getProcess(result.processId);
-    expect(onChainProcess.census.censusOrigin).toBe(BigInt(CensusOrigin.CensusOriginCSP));
+    expect(onChainProcess.census.censusOrigin).toBe(BigInt(CensusOrigin.CSP));
   });
 
   it('should validate SDK initialization requirement', async () => {
@@ -286,7 +286,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Uninitialized SDK Test',
       description: 'This should fail due to uninitialized SDK',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: randomHex(32),
         size: 10,
         uri: `ipfs://uninitialized-census-${Date.now()}`,
@@ -329,7 +329,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Date-Based Timing Test',
       description: 'Testing Date object timing configuration',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 25,
         uri: `ipfs://date-based-census-${Date.now()}`,
@@ -380,7 +380,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'ISO String Timing Test',
       description: 'Testing ISO string timing configuration',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 15,
         uri: `ipfs://iso-string-census-${Date.now()}`,
@@ -427,7 +427,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Invalid Timing Test',
       description: 'This should fail due to conflicting timing configuration',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: randomHex(32),
         size: 10,
         uri: `ipfs://invalid-timing-census-${Date.now()}`,
@@ -468,7 +468,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'No Timing Test',
       description: 'This should fail due to missing timing configuration',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: randomHex(32),
         size: 10,
         uri: `ipfs://no-timing-census-${Date.now()}`,
@@ -508,7 +508,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Invalid Date Order Test',
       description: 'This should fail due to endDate being before startDate',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: randomHex(32),
         size: 10,
         uri: `ipfs://invalid-date-order-census-${Date.now()}`,
@@ -550,7 +550,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Get Process Test',
       description: 'Testing the getProcess wrapper method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 50,
         uri: `ipfs://get-process-test-${Date.now()}`,
@@ -632,7 +632,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Stream API Test Election',
       description: 'Testing the createProcessStream async generator method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 30,
         uri: `ipfs://stream-test-census-${Date.now()}`,
@@ -712,7 +712,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'End Process Stream Test',
       description: 'Testing the endProcessStream async generator method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 20,
         uri: `ipfs://end-process-test-${Date.now()}`,
@@ -801,7 +801,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Simple End Process Test',
       description: 'Testing the simplified endProcess method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 15,
         uri: `ipfs://simple-end-test-${Date.now()}`,
@@ -886,7 +886,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Pause Process Stream Test',
       description: 'Testing the pauseProcessStream async generator method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 20,
         uri: `ipfs://pause-process-test-${Date.now()}`,
@@ -972,7 +972,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Simple Pause Process Test',
       description: 'Testing the simplified pauseProcess method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 15,
         uri: `ipfs://simple-pause-test-${Date.now()}`,
@@ -1056,7 +1056,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Cancel Process Stream Test',
       description: 'Testing the cancelProcessStream async generator method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 20,
         uri: `ipfs://cancel-process-test-${Date.now()}`,
@@ -1142,7 +1142,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Simple Cancel Process Test',
       description: 'Testing the simplified cancelProcess method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 15,
         uri: `ipfs://simple-cancel-test-${Date.now()}`,
@@ -1226,7 +1226,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Resume Process Stream Test',
       description: 'Testing the resumeProcessStream async generator method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 20,
         uri: `ipfs://resume-process-test-${Date.now()}`,
@@ -1319,7 +1319,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'Simple Resume Process Test',
       description: 'Testing the simplified resumeProcess method',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 15,
         uri: `ipfs://simple-resume-test-${Date.now()}`,
@@ -1748,7 +1748,7 @@ describe('Simple Process Creation Integration', () => {
         title: 'Manual Config Test (Backwards Compatible)',
         description: 'Testing backwards compatibility with manual census config',
         census: {
-          type: CensusOrigin.CensusOriginMerkleTree,
+          type: CensusOrigin.OffchainStatic,
           root: censusRoot,
           size: 25,
           uri: `ipfs://manual-census-${Date.now()}`,
@@ -1797,7 +1797,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'MaxVoters Update Test',
       description: 'Testing maxVoters update functionality',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 200,
         uri: `ipfs://maxvoters-test-${Date.now()}`,
@@ -1853,7 +1853,7 @@ describe('Simple Process Creation Integration', () => {
       title: 'MaxVoters Stream Update Test',
       description: 'Testing maxVoters update with stream API',
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 300,
         uri: `ipfs://maxvoters-stream-test-${Date.now()}`,
@@ -1948,7 +1948,7 @@ describe('Simple Process Creation Integration', () => {
     const processConfig: ProcessConfig = {
       metadataUri: uploadedMetadataUri, // Just provide the URI!
       census: {
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: censusRoot,
         size: 10,
         uri: `ipfs://metadatauri-test-${Date.now()}`,
