@@ -92,10 +92,10 @@ export async function getUserConfiguration(): Promise<UserConfig> {
 
   let censusType: CensusOrigin;
   if (censusTypeAnswer === '2') {
-    censusType = CensusOrigin.CensusOriginCSP;
+    censusType = CensusOrigin.CSP;
     console.log(chalk.green('✓ Selected: CSP Census'));
   } else {
-    censusType = CensusOrigin.CensusOriginMerkleTree;
+    censusType = CensusOrigin.OffchainStatic;
     console.log(chalk.green('✓ Selected: MerkleTree Census'));
   }
 

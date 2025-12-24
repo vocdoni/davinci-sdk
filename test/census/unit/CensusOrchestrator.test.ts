@@ -118,7 +118,7 @@ describe('CensusOrchestrator', () => {
       const data = orchestrator.getCensusData(census);
 
       expect(data).toEqual({
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: '0xroot123',
         uri: 'ipfs://uri123',
         size: 1,
@@ -133,7 +133,7 @@ describe('CensusOrchestrator', () => {
       const data = orchestrator.getCensusData(census);
 
       expect(data).toEqual({
-        type: CensusOrigin.CensusOriginMerkleTree,
+        type: CensusOrigin.OffchainStatic,
         root: '0xroot456',
         uri: 'ipfs://uri456',
         size: 1,
@@ -146,7 +146,7 @@ describe('CensusOrchestrator', () => {
       const data = orchestrator.getCensusData(census);
 
       expect(data).toEqual({
-        type: CensusOrigin.CensusOriginCSP,
+        type: CensusOrigin.CSP,
         root: '0x1234567890abcdef',
         uri: 'https://csp-server.com',
         size: 100,

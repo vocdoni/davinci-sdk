@@ -74,12 +74,15 @@ export type ProcessCensusUpdatedCallback = EntityCallback<[string, string, strin
 export type ProcessDurationChangedCallback = EntityCallback<[string, bigint]>;
 
 /**
- * Callback for when a process state root is updated.
+ * Callback for when a process state transitions (valid state transition published).
  * @param processID - The process ID
  * @param sender - Address of the account that updated the state root
- * @param newStateRoot - The new state root
+ * @param oldStateRoot - The state root before the state transition
+ * @param newStateRoot - The new state root after the state transition
+ * @param newVotersCount - The number of single voters for the process updated after the state transition
+ * @param newOverwrittenVotesCount - The number of votes that has been overwritten updated after the state transition
  */
-export type ProcessStateRootUpdatedCallback = EntityCallback<[string, string, bigint]>;
+export type ProcessStateTransitionedCallback = EntityCallback<[string, string, bigint, bigint, bigint, bigint]>;
 
 /**
  * Callback for when process results are set.

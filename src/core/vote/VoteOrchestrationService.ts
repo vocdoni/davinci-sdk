@@ -157,7 +157,7 @@ export class VoteOrchestrationService {
     };
 
     // Only include censusProof for CSP (not for MerkleTree)
-    if (process.census.censusOrigin === CensusOrigin.CensusOriginCSP) {
+    if (process.census.censusOrigin === CensusOrigin.CSP) {
       voteRequest.censusProof = censusProof;
     }
 
@@ -314,7 +314,12 @@ export class VoteOrchestrationService {
     voterAddress: string,
     processId: string
   ): Promise<CensusProof> {
-    if (censusOrigin === CensusOrigin.CensusOriginMerkleTree) {
+    // Check if it's a Merkle-based census (OffchainStatic, OffchainDynamic, or Onchain)
+    if (
+      censusOrigin === CensusOrigin.OffchainStatic ||
+      censusOrigin === CensusOrigin.OffchainDynamic ||
+      censusOrigin === CensusOrigin.Onchain
+    ) {
       // Use custom provider if present, otherwise get weight from sequencer
       if (this.censusProviders.merkle) {
         const proof = await this.censusProviders.merkle({
@@ -333,14 +338,14 @@ export class VoteOrchestrationService {
           root: censusRoot,
           address: voterAddress,
           weight: weight,
-          censusOrigin: CensusOrigin.CensusOriginMerkleTree,
+          censusOrigin: censusOrigin as CensusOrigin.OffchainStatic | CensusOrigin.OffchainDynamic | CensusOrigin.Onchain,
           value: '',
           siblings: '',
         };
       }
     }
 
-    if (censusOrigin === CensusOrigin.CensusOriginCSP) {
+    if (censusOrigin === CensusOrigin.CSP) {
       if (!this.censusProviders.csp) {
         throw new Error(
           'CSP voting requires a CSP census proof provider. Pass one via VoteOrchestrationService(..., { csp: yourFn }).'

@@ -18,7 +18,7 @@ describe('CspCensus', () => {
 
     it('should map to CSP census origin', () => {
       const census = new CspCensus('0x1234567890abcdef', 'https://csp-server.com', 100);
-      expect(census.censusOrigin).toBe(CensusOrigin.CensusOriginCSP);
+      expect(census.censusOrigin).toBe(CensusOrigin.CSP);
     });
 
     it('should be published immediately', () => {

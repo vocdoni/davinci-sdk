@@ -65,6 +65,11 @@ export class ProcessStatusError extends ContractServiceError {}
 export class ProcessCensusError extends ContractServiceError {}
 
 /**
+ * Error thrown when the census origin does not allow to modify the census root or uri.
+ */
+export class CensusNotUpdatable extends ContractServiceError {}
+
+/**
  * Error thrown when process duration change fails.
  */
 export class ProcessDurationError extends ContractServiceError {}
