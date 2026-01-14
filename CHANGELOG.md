@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-01-14
+
+### Added
+- **Batch Voting Submission**: Enhanced voting capabilities to support batch submission of multiple votes
+  - Improved vote orchestration for handling multiple votes efficiently
+  - Updated example script to demonstrate batch voting workflows
+- **CensusNotUpdatable Error**: New error class for handling census update restrictions
+  - Added to `src/contracts/errors.ts` for better error handling when census updates are not allowed
+
+### Changed
+- **BREAKING**: Refactored census origin types for better clarity and alignment with smart contracts
+  - Changed `CensusOrigin.CensusOriginMerkleTree` to `CensusOrigin.OffchainStatic`
+  - Changed `CensusOrigin.CensusOriginCSP` to `CensusOrigin.CSP`
+  - Updated all census classes (`Census`, `PlainCensus`, `WeightedCensus`, `CspCensus`, `PublishedCensus`) to use new origin types
+  - Updated `ProcessRegistryService` to reflect new census origin types in event callbacks
+  - Modified SDK documentation and examples to use new census origin nomenclature
+- Enhanced census origin handling across the SDK
+  - Improved census type detection and origin assignment
+  - Better validation for census update operations
+- Updated `@vocdoni/davinci-contracts` dependency to version `0.0.31`
+  - Includes latest smart contract improvements and census origin type updates
+
+### Fixed
+- Improved test coverage for census update scenarios
+- Fixed census origin type consistency across the codebase
+
+### Technical Details
+- Census origin refactoring ensures consistency between SDK types and smart contract enums
+- New `OffchainStatic` name better represents MerkleTree-based censuses stored off-chain
+- All census-related tests updated to use new origin types
+- Examples updated to demonstrate best practices with new API
+
 ## [0.0.6] - 2025-12-15
 
 ### Added
