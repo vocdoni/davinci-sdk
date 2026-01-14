@@ -1,4 +1,5 @@
 import { Census, CensusType, CensusParticipant } from './Census';
+import { CensusOrigin } from '../types';
 
 /**
  * Participant with flexible weight type for WeightedCensus
@@ -16,8 +17,12 @@ export interface WeightedParticipant {
 export class WeightedCensus extends Census {
   private _participants: Map<string, string> = new Map();
 
-  constructor() {
-    super(CensusType.WEIGHTED);
+  /**
+   * Creates a new WeightedCensus
+   * @param censusOrigin - The census origin (defaults to OffchainStatic for backward compatibility)
+   */
+  constructor(censusOrigin?: CensusOrigin) {
+    super(CensusType.WEIGHTED, censusOrigin);
   }
 
   /**

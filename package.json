@@ -72,7 +72,7 @@
   },
   "dependencies": {
     "@ethereumjs/common": "^4.4.0",
-    "@vocdoni/davinci-contracts": "0.0.30",
+    "@vocdoni/davinci-contracts": "0.0.31",
     "axios": "^1.8.4",
     "ethers": "^6.7.1",
     "snarkjs": "^0.7.5"

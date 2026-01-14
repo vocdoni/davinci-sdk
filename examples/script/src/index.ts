@@ -310,72 +310,120 @@ async function step5_submitVotes(
 ): Promise<string[]> {
   step(5, `Submit votes for all participants${useWeights ? ' (with weights)' : ''}`);
 
+  const BATCH_SIZE = 5; // Number of votes to send concurrently in each batch
   const voteIds: string[] = [];
+  const errors: Array<{ participant: TestParticipant; error: any; index: number }> = [];
 
-  for (let i = 0; i < participants.length; i++) {
-    const participant = participants[i];
-    const weight = parseInt(participant.weight);
+  // Split participants into batches
+  const batches: TestParticipant[][] = [];
+  for (let i = 0; i < participants.length; i += BATCH_SIZE) {
+    batches.push(participants.slice(i, i + BATCH_SIZE));
+  }
 
-    // Generate random choices for each question (0-3)
-    const choice1 = Math.floor(Math.random() * 4);
-    const choice2 = Math.floor(Math.random() * 4);
+  info(`Submitting votes in ${batches.length} batches of up to ${BATCH_SIZE} votes each`);
 
-    // Create arrays of 4 positions each
-    const question1Choices = Array(4).fill(0);
-    const question2Choices = Array(4).fill(0);
+  // Process each batch
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    const batchStartIndex = batchIndex * BATCH_SIZE;
+    
+    info(chalk.cyan(`\n📦 Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} votes)`));
 
-    // If using weights, multiply by participant weight
-    if (useWeights) {
-      question1Choices[choice1] = weight;
-      question2Choices[choice2] = weight;
-    } else {
-      question1Choices[choice1] = 1;
-      question2Choices[choice2] = 1;
-    }
+    // Submit all votes in the batch concurrently
+    const batchPromises = batch.map(async (participant, indexInBatch) => {
+      const globalIndex = batchStartIndex + indexInBatch;
+      const weight = parseInt(participant.weight);
 
-    const colorChoice = ['Red', 'Blue', 'Green', 'Yellow'][choice1];
-    const transportChoice = ['Car', 'Bike', 'Public Transport', 'Walking'][choice2];
+      // Generate random choices for each question (0-3)
+      const choice1 = Math.floor(Math.random() * 4);
+      const choice2 = Math.floor(Math.random() * 4);
 
-    info(
-      `[${i + 1}/${participants.length}] ${participant.address} (weight: ${weight}) voting: ${colorChoice}, ${transportChoice}`
-    );
-    info(
-      `   Choice arrays: Q1=[${question1Choices.join(', ')}], Q2=[${question2Choices.join(', ')}]`
-    );
+      // Create arrays of 4 positions each
+      const question1Choices = Array(4).fill(0);
+      const question2Choices = Array(4).fill(0);
 
-    try {
-      const baseConfig = createSDKInstance(participant.privateKey, false);
+      // If using weights, multiply by participant weight
+      if (useWeights) {
+        question1Choices[choice1] = weight;
+        question2Choices[choice2] = weight;
+      } else {
+        question1Choices[choice1] = 1;
+        question2Choices[choice2] = 1;
+      }
 
-      const voterConfig: any =
-        censusType === CensusOrigin.CSP
-          ? {
-              ...baseConfig,
-              censusProviders: {
-                csp: createCSPCensusProvider(sdk, participants),
-              } as CensusProviders,
-            }
-          : baseConfig;
+      const colorChoice = ['Red', 'Blue', 'Green', 'Yellow'][choice1];
+      const transportChoice = ['Car', 'Bike', 'Public Transport', 'Walking'][choice2];
 
-      const voterSDK = new DavinciSDK(voterConfig);
-      await voterSDK.init();
+      info(
+        `[${globalIndex + 1}/${participants.length}] ${participant.address} (weight: ${weight}) voting: ${colorChoice}, ${transportChoice}`
+      );
+      info(
+        `   Choice arrays: Q1=[${question1Choices.join(', ')}], Q2=[${question2Choices.join(', ')}]`
+      );
 
-      const voteResult = await voterSDK.submitVote({
-        processId,
-        choices: [...question1Choices, ...question2Choices], // Array of 8 positions
-      });
+      try {
+        const baseConfig = createSDKInstance(participant.privateKey, false);
 
-      voteIds.push(voteResult.voteId);
-      success(`[${i + 1}/${participants.length}] Vote submitted: ${voteResult.voteId}`);
+        const voterConfig: any =
+          censusType === CensusOrigin.CSP
+            ? {
+                ...baseConfig,
+                censusProviders: {
+                  csp: createCSPCensusProvider(sdk, participants),
+                } as CensusProviders,
+              }
+            : baseConfig;
 
-      // Small delay between votes
-      await new Promise(r => setTimeout(r, 1000));
-    } catch (error) {
-      console.error(chalk.red(`Failed to submit vote for ${participant.address}:`), error);
-      throw error;
+        const voterSDK = new DavinciSDK(voterConfig);
+        await voterSDK.init();
+
+        const voteResult = await voterSDK.submitVote({
+          processId,
+          choices: [...question1Choices, ...question2Choices], // Array of 8 positions
+        });
+
+        voteIds.push(voteResult.voteId);
+        success(`[${globalIndex + 1}/${participants.length}] ✅ Vote submitted: ${voteResult.voteId}`);
+
+        return { success: true, voteId: voteResult.voteId };
+      } catch (error) {
+        // Log the error but don't throw - we want to try all votes
+        console.error(chalk.red(`[${globalIndex + 1}/${participants.length}] ❌ Failed to submit vote for ${participant.address}:`), error);
+        errors.push({ participant, error, index: globalIndex });
+        return { success: false, error };
+      }
+    });
+
+    // Wait for all votes in this batch to complete
+    await Promise.all(batchPromises);
+    
+    // Small delay between batches
+    if (batchIndex < batches.length - 1) {
+      info(chalk.gray(`   Waiting 2 seconds before next batch...`));
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
 
-  success(`All ${voteIds.length} votes submitted successfully`);
+  // Summary
+  console.log(chalk.cyan('\n📊 Vote Submission Summary:'));
+  info(`   Total participants: ${participants.length}`);
+  success(`   Successfully submitted: ${voteIds.length}`);
+  if (errors.length > 0) {
+    console.error(chalk.red(`   Failed: ${errors.length}`));
+  }
+
+  // If there were any errors, throw them now after attempting all votes
+  if (errors.length > 0) {
+    console.error(chalk.red('\n❌ The following votes failed:'));
+    errors.forEach(({ participant, error, index }) => {
+      console.error(chalk.red(`   [${index + 1}] ${participant.address}: ${error.message || error}`));
+    });
+    throw new Error(
+      `Failed to submit ${errors.length} out of ${participants.length} votes. See above for details.`
+    );
+  }
+
+  success(`\n✅ All ${voteIds.length} votes submitted successfully`);
   return voteIds;
 }
 

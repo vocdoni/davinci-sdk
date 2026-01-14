@@ -1,4 +1,5 @@
 import { Census, CensusType } from './Census';
+import { CensusOrigin } from '../types';
 
 /**
  * CSP (Certificate Service Provider) census
@@ -9,7 +10,8 @@ export class CspCensus extends Census {
   private _cspURI: string;
 
   constructor(publicKey: string, cspURI: string, size: number) {
-    super(CensusType.CSP);
+    // CSP census always uses CensusOrigin.CSP
+    super(CensusType.CSP, CensusOrigin.CSP);
 
     // Validate public key
     if (!/^(0x)?[0-9a-fA-F]+$/.test(publicKey)) {
