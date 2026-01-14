@@ -25,10 +25,29 @@ export abstract class Census {
   protected _censusRoot: string | null = null;
   protected _censusURI: string | null = null;
   protected _type: CensusType;
+  protected _censusOrigin: CensusOrigin;
   protected _size: number | null = null;
 
-  constructor(type: CensusType) {
+  constructor(type: CensusType, censusOrigin?: CensusOrigin) {
     this._type = type;
+    
+    // If censusOrigin is provided, use it; otherwise derive from type
+    if (censusOrigin !== undefined) {
+      this._censusOrigin = censusOrigin;
+    } else {
+      // Default behavior for backward compatibility
+      switch (type) {
+        case CensusType.PLAIN:
+        case CensusType.WEIGHTED:
+          this._censusOrigin = CensusOrigin.OffchainStatic;
+          break;
+        case CensusType.CSP:
+          this._censusOrigin = CensusOrigin.CSP;
+          break;
+        default:
+          throw new Error(`Unknown census type: ${type}`);
+      }
+    }
   }
 
   get censusId(): string | null {
@@ -56,17 +75,9 @@ export abstract class Census {
   }
 
   /**
-   * Convert CensusType to CensusOrigin enum for API compatibility
+   * Get the census origin (OffchainStatic, OffchainDynamic, Onchain, or CSP)
    */
   get censusOrigin(): CensusOrigin {
-    switch (this._type) {
-      case CensusType.PLAIN:
-      case CensusType.WEIGHTED:
-        return CensusOrigin.OffchainStatic;
-      case CensusType.CSP:
-        return CensusOrigin.CSP;
-      default:
-        throw new Error(`Unknown census type: ${this._type}`);
-    }
+    return this._censusOrigin;
   }
 }

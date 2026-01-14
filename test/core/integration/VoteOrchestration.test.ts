@@ -5,7 +5,7 @@ import { resolve } from 'path';
 // Load environment variables from test/.env
 config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from 'ethers';
-import { DavinciSDK, CensusOrigin, ProcessConfig } from '../../../src';
+import { DavinciSDK, CensusOrigin, ProcessConfig, PlainCensus } from '../../../src';
 import { VoteConfig, VoteResult } from '../../../src/core/vote/VoteOrchestrationService';
 import { VoteStatus } from '../../../src/sequencer/api/types';
 import {
@@ -913,22 +913,14 @@ describe('Vote Orchestration Integration', () => {
       const initialVoter = new Wallet(Wallet.createRandom().privateKey, provider);
       const newVoter = new Wallet(Wallet.createRandom().privateKey, provider);
 
-      const initialCensusId = await organizerSdk.api.census.createCensus();
-      await organizerSdk.api.census.addParticipants(initialCensusId, [
-        { key: initialVoter.address, weight: '1' },
-      ]);
-      const initialPublishResult = await organizerSdk.api.census.publishCensus(initialCensusId);
+      const census = new PlainCensus(CensusOrigin.OffchainDynamic);
+      census.add(initialVoter.address);
 
       // Step 2: Create a process with the initial census
       const processConfig: ProcessConfig = {
         title: 'Census Update Test Process',
         description: 'A test process for census update functionality',
-        census: {
-          type: CensusOrigin.OffchainDynamic,
-          root: initialPublishResult.root,
-          size: initialPublishResult.size,
-          uri: initialPublishResult.uri,
-        },
+        census,
         ballot: {
           numFields: 1,
           maxValue: '2',

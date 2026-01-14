@@ -1,4 +1,5 @@
 import { Census, CensusType, CensusParticipant } from './Census';
+import { CensusOrigin } from '../types';
 
 /**
  * Plain census where all participants have equal voting power (weight=1)
@@ -7,8 +8,12 @@ import { Census, CensusType, CensusParticipant } from './Census';
 export class PlainCensus extends Census {
   private _participants: Set<string> = new Set();
 
-  constructor() {
-    super(CensusType.PLAIN);
+  /**
+   * Creates a new PlainCensus
+   * @param censusOrigin - The census origin (defaults to OffchainStatic for backward compatibility)
+   */
+  constructor(censusOrigin?: CensusOrigin) {
+    super(CensusType.PLAIN, censusOrigin);
   }
 
   /**
