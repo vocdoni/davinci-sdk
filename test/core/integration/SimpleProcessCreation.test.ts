@@ -5,7 +5,7 @@ import { resolve } from 'path';
 // Load environment variables from test/.env
 config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from 'ethers';
-import { DavinciSDK, CensusOrigin, ProcessConfig, PlainCensus, WeightedCensus } from '../../../src';
+import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainCensus } from '../../../src';
 import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
 import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
 
@@ -49,6 +49,7 @@ describe('Simple Process Creation Integration', () => {
         size: censusSize,
         uri: `ipfs://test-census-${Date.now()}`,
       },
+      maxVoters: censusSize,
       ballot: {
         numFields: 2,
         maxValue: '3',
@@ -113,6 +114,7 @@ describe('Simple Process Creation Integration', () => {
         size: 10,
         uri: `ipfs://minimal-census-${Date.now()}`,
       },
+      maxVoters: 10,
       ballot: {
         numFields: 1,
         maxValue: '2',
@@ -159,6 +161,7 @@ describe('Simple Process Creation Integration', () => {
         size: 50,
         uri: `ipfs://timed-census-${Date.now()}`,
       },
+      maxVoters: 50,
       ballot: {
         numFields: 1,
         maxValue: '1', // Simple yes/no
@@ -241,6 +244,7 @@ describe('Simple Process Creation Integration', () => {
         size: 100,
         uri: `ipfs://csp-census-${Date.now()}`,
       },
+      maxVoters: 100,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -334,6 +338,7 @@ describe('Simple Process Creation Integration', () => {
         size: 25,
         uri: `ipfs://date-based-census-${Date.now()}`,
       },
+      maxVoters: 25,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -385,6 +390,7 @@ describe('Simple Process Creation Integration', () => {
         size: 15,
         uri: `ipfs://iso-string-census-${Date.now()}`,
       },
+      maxVoters: 15,
       ballot: {
         numFields: 1,
         maxValue: '2',
@@ -555,6 +561,7 @@ describe('Simple Process Creation Integration', () => {
         size: 50,
         uri: `ipfs://get-process-test-${Date.now()}`,
       },
+      maxVoters: 50,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -637,6 +644,7 @@ describe('Simple Process Creation Integration', () => {
         size: 30,
         uri: `ipfs://stream-test-census-${Date.now()}`,
       },
+      maxVoters: 30,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -717,6 +725,7 @@ describe('Simple Process Creation Integration', () => {
         size: 20,
         uri: `ipfs://end-process-test-${Date.now()}`,
       },
+      maxVoters: 20,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -806,6 +815,7 @@ describe('Simple Process Creation Integration', () => {
         size: 15,
         uri: `ipfs://simple-end-test-${Date.now()}`,
       },
+      maxVoters: 15,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -891,6 +901,7 @@ describe('Simple Process Creation Integration', () => {
         size: 20,
         uri: `ipfs://pause-process-test-${Date.now()}`,
       },
+      maxVoters: 20,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -977,6 +988,7 @@ describe('Simple Process Creation Integration', () => {
         size: 15,
         uri: `ipfs://simple-pause-test-${Date.now()}`,
       },
+      maxVoters: 15,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -1061,6 +1073,7 @@ describe('Simple Process Creation Integration', () => {
         size: 20,
         uri: `ipfs://cancel-process-test-${Date.now()}`,
       },
+      maxVoters: 20,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -1147,6 +1160,7 @@ describe('Simple Process Creation Integration', () => {
         size: 15,
         uri: `ipfs://simple-cancel-test-${Date.now()}`,
       },
+      maxVoters: 15,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -1231,6 +1245,7 @@ describe('Simple Process Creation Integration', () => {
         size: 20,
         uri: `ipfs://resume-process-test-${Date.now()}`,
       },
+      maxVoters: 20,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -1324,6 +1339,7 @@ describe('Simple Process Creation Integration', () => {
         size: 15,
         uri: `ipfs://simple-resume-test-${Date.now()}`,
       },
+      maxVoters: 15,
       ballot: {
         numFields: 1,
         maxValue: '1',
@@ -1405,9 +1421,9 @@ describe('Simple Process Creation Integration', () => {
   // ==================== NEW: Census Object Tests ====================
 
   describe('Census Object Support (Auto-Publishing)', () => {
-    it('should create a process using PlainCensus (auto-publishes)', async () => {
-      // Create a plain census
-      const census = new PlainCensus();
+    it('should create a process using OffchainCensus with plain addresses (auto-publishes)', async () => {
+      // Create an offchain census with plain addresses
+      const census = new OffchainCensus();
       census.add([
         '0x1234567890123456789012345678901234567890',
         '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
@@ -1418,8 +1434,8 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(false);
 
       const processConfig: ProcessConfig = {
-        title: 'PlainCensus Test Election',
-        description: 'Testing automatic census publishing with PlainCensus',
+        title: 'OffchainCensus Test Election',
+        description: 'Testing automatic census publishing with OffchainCensus',
         census: census, // Just pass the census object! SDK auto-publishes ✨
         ballot: {
           numFields: 1,
@@ -1436,7 +1452,7 @@ describe('Simple Process Creation Integration', () => {
         },
         questions: [
           {
-            title: 'Do you approve this PlainCensus test?',
+            title: 'Do you approve this OffchainCensus test?',
             choices: [
               { title: 'Yes', value: 0 },
               { title: 'No', value: 1 },
@@ -1457,7 +1473,7 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(true);
       expect(census.censusRoot).toBeDefined();
       expect(census.censusURI).toBeDefined();
-      expect(census.size).toBe(3);
+      expect(census.participants.length).toBe(3);
 
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);
@@ -1466,9 +1482,9 @@ describe('Simple Process Creation Integration', () => {
       );
     });
 
-    it('should create a process using WeightedCensus with string weights (auto-publishes)', async () => {
-      // Create a weighted census with string weights
-      const census = new WeightedCensus();
+    it('should create a process using OffchainCensus with string weights (auto-publishes)', async () => {
+      // Create an offchain census with string weights
+      const census = new OffchainCensus();
       census.add([
         { key: '0x1234567890123456789012345678901234567890', weight: '1' },
         { key: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', weight: '5' },
@@ -1479,8 +1495,8 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(false);
 
       const processConfig: ProcessConfig = {
-        title: 'WeightedCensus String Test',
-        description: 'Testing automatic publishing with WeightedCensus (string weights)',
+        title: 'OffchainCensus String Test',
+        description: 'Testing automatic publishing with OffchainCensus (string weights)',
         census: census, // SDK auto-publishes! ✨
         ballot: {
           numFields: 1,
@@ -1497,7 +1513,7 @@ describe('Simple Process Creation Integration', () => {
         },
         questions: [
           {
-            title: 'Do you approve this WeightedCensus test?',
+            title: 'Do you approve this OffchainCensus test?',
             choices: [
               { title: 'Yes', value: 0 },
               { title: 'No', value: 1 },
@@ -1513,12 +1529,12 @@ describe('Simple Process Creation Integration', () => {
 
       // Verify census was published
       expect(census.isPublished).toBe(true);
-      expect(census.size).toBe(3);
+      expect(census.participants.length).toBe(3);
     });
 
-    it('should create a process using WeightedCensus with number weights (auto-publishes)', async () => {
-      // Create a weighted census with number weights
-      const census = new WeightedCensus();
+    it('should create a process using OffchainCensus with number weights (auto-publishes)', async () => {
+      // Create an offchain census with number weights
+      const census = new OffchainCensus();
       census.add([
         { key: '0x1234567890123456789012345678901234567890', weight: 1 }, // number
         { key: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', weight: 5 }, // number
@@ -1528,8 +1544,8 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(false);
 
       const processConfig: ProcessConfig = {
-        title: 'WeightedCensus Number Test',
-        description: 'Testing automatic publishing with WeightedCensus (number weights)',
+        title: 'OffchainCensus Number Test',
+        description: 'Testing automatic publishing with OffchainCensus (number weights)',
         census: census,
         ballot: {
           numFields: 1,
@@ -1562,9 +1578,9 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(true);
     });
 
-    it('should create a process using WeightedCensus with bigint weights (auto-publishes)', async () => {
-      // Create a weighted census with bigint weights
-      const census = new WeightedCensus();
+    it('should create a process using OffchainCensus with bigint weights (auto-publishes)', async () => {
+      // Create an offchain census with bigint weights
+      const census = new OffchainCensus();
       census.add([
         { key: '0x1234567890123456789012345678901234567890', weight: 100n }, // bigint
         { key: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', weight: 500n }, // bigint
@@ -1574,8 +1590,8 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(false);
 
       const processConfig: ProcessConfig = {
-        title: 'WeightedCensus BigInt Test',
-        description: 'Testing automatic publishing with WeightedCensus (bigint weights)',
+        title: 'OffchainCensus BigInt Test',
+        description: 'Testing automatic publishing with OffchainCensus (bigint weights)',
         census: census,
         ballot: {
           numFields: 1,
@@ -1608,9 +1624,9 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(true);
     });
 
-    it('should create a process using WeightedCensus with mixed weight types', async () => {
-      // Create a weighted census with mixed weight types
-      const census = new WeightedCensus();
+    it('should create a process using OffchainCensus with mixed weight types', async () => {
+      // Create an offchain census with mixed weight types
+      const census = new OffchainCensus();
       census.add([
         { key: '0x1234567890123456789012345678901234567890', weight: '1' }, // string
         { key: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', weight: 10 }, // number
@@ -1620,7 +1636,7 @@ describe('Simple Process Creation Integration', () => {
       expect(census.isPublished).toBe(false);
 
       const processConfig: ProcessConfig = {
-        title: 'WeightedCensus Mixed Types Test',
+        title: 'OffchainCensus Mixed Types Test',
         description: 'Testing automatic publishing with mixed weight types',
         census: census,
         ballot: {
@@ -1652,12 +1668,12 @@ describe('Simple Process Creation Integration', () => {
       expect(result).toBeDefined();
       expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
       expect(census.isPublished).toBe(true);
-      expect(census.size).toBe(3);
+      expect(census.participants.length).toBe(3);
     });
 
     it('should work with already published census (no re-publish)', async () => {
       // Create a census
-      const census = new PlainCensus();
+      const census = new OffchainCensus();
       census.add([
         '0x1234567890123456789012345678901234567890',
         '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
@@ -1753,6 +1769,7 @@ describe('Simple Process Creation Integration', () => {
           size: 25,
           uri: `ipfs://manual-census-${Date.now()}`,
         },
+        maxVoters: 25,
         ballot: {
           numFields: 1,
           maxValue: '1',
@@ -1953,6 +1970,7 @@ describe('Simple Process Creation Integration', () => {
         size: 10,
         uri: `ipfs://metadatauri-test-${Date.now()}`,
       },
+      maxVoters: 10,
       ballot: {
         numFields: 1,
         maxValue: '1',

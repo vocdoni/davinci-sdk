@@ -7,7 +7,7 @@ import {
   CensusOrigin,
   VoteStatus,
   TxStatus,
-  WeightedCensus,
+  OffchainCensus,
   CspCensus,
   Census,
   CensusProviders,
@@ -135,7 +135,7 @@ async function step2_createCensus(
     );
 
     const cspUri = `https://csp-server.com`;
-    const census = new CspCensus(censusRoot, cspUri, numParticipants);
+    const census = new CspCensus(censusRoot, cspUri);
 
     success(`✨ CSP census created with root: ${censusRoot}`);
     success(`   CSP URI: ${cspUri}`);
@@ -143,8 +143,8 @@ async function step2_createCensus(
 
     return { census, participants };
   } else {
-    // Create WeightedCensus object
-    const census = new WeightedCensus();
+    // Create OffchainCensus object
+    const census = new OffchainCensus();
 
     // Add participants
     census.add(
@@ -154,7 +154,7 @@ async function step2_createCensus(
       }))
     );
 
-    success(`WeightedCensus created with ${participants.length} participants`);
+    success(`OffchainCensus created with ${participants.length} participants`);
 
     return { census, participants };
   }
@@ -167,7 +167,8 @@ async function step3_createProcess(
   sdk: DavinciSDK,
   census: Census,
   useWeights: boolean,
-  maxWeight: number
+  maxWeight: number,
+  numParticipants: number
 ): Promise<string> {
   step(3, `Create voting process${useWeights ? ' (with weighted voting)' : ''}`);
 
@@ -178,7 +179,7 @@ async function step3_createProcess(
   const maxValue = useWeights ? maxOption * maxWeight : maxOption;
   const maxValueSum = useWeights ? maxValue * 2 : maxOption * 2; // 2 questions
 
-  const stream = sdk.createProcessStream({
+  const processConfig = {
     title: 'Simplified Test Election ' + Date.now(),
     description: 'A simplified test election created with DavinciSDK',
     census: census,
@@ -218,7 +219,15 @@ async function step3_createProcess(
         ],
       },
     ],
-  });
+  };
+
+  // For CSP census, maxVoters is required
+  // For OffchainCensus, maxVoters is optional (auto-calculated from published census)
+  if (census instanceof CspCensus) {
+    processConfig.maxVoters = numParticipants;
+  }
+
+  const stream = sdk.createProcessStream(processConfig);
 
   let processId = '';
   let transactionHash = '';
@@ -617,7 +626,7 @@ async function run() {
     const maxWeight = Math.max(...participants.map(p => parseInt(p.weight)));
 
     // Step 3: Create process
-    const processId = await step3_createProcess(sdk, census, userConfig.useWeights, maxWeight);
+    const processId = await step3_createProcess(sdk, census, userConfig.useWeights, maxWeight, participants.length);
 
     // Step 4: Wait for process to be ready
     await step4_waitForProcessReady(sdk, processId);

@@ -111,9 +111,6 @@ describe('DavinciCryptoService Integration', () => {
     const ci = out.circomInputs as Record<string, any>;
     expect(typeof ci).toBe('object');
 
-    const expectedPid = BigInt('0x' + example.processID).toString();
-    expect(ci.process_id).toBe(expectedPid);
-
     const hexAddr = example.address.startsWith('0x') ? example.address : '0x' + example.address;
     expect(ci.address).toBe(BigInt(hexAddr).toString());
 

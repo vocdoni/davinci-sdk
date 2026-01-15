@@ -5,7 +5,7 @@ import { resolve } from 'path';
 // Load environment variables from test/.env
 config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from 'ethers';
-import { DavinciSDK, CensusOrigin, ProcessConfig, PlainCensus } from '../../../src';
+import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainDynamicCensus } from '../../../src';
 import { VoteConfig, VoteResult } from '../../../src/core/vote/VoteOrchestrationService';
 import { VoteStatus } from '../../../src/sequencer/api/types';
 import {
@@ -76,6 +76,7 @@ describe('Vote Orchestration Integration', () => {
         size: censusSize,
         uri: publishResult.uri,
       },
+      maxVoters: censusSize,
       ballot: {
         numFields: 2,
         maxValue: '2',
@@ -592,6 +593,7 @@ describe('Vote Orchestration Integration', () => {
           size: censusSize,
           uri: publishResult.uri,
         },
+        maxVoters: censusSize,
         ballot: {
           numFields: 2,
           maxValue: '2',
@@ -732,6 +734,7 @@ describe('Vote Orchestration Integration', () => {
             size: customVoters.length,
             uri: 'https://csp.example.com/census',
           },
+          maxVoters: customVoters.length,
           ballot: {
             numFields: 2,
             maxValue: '2',
@@ -913,7 +916,7 @@ describe('Vote Orchestration Integration', () => {
       const initialVoter = new Wallet(Wallet.createRandom().privateKey, provider);
       const newVoter = new Wallet(Wallet.createRandom().privateKey, provider);
 
-      const census = new PlainCensus(CensusOrigin.OffchainDynamic);
+      const census = new OffchainDynamicCensus();
       census.add(initialVoter.address);
 
       // Step 2: Create a process with the initial census

@@ -1,7 +1,6 @@
 import { VocdoniCensusService } from './CensusService';
 import { Census } from './classes/Census';
-import { PlainCensus } from './classes/PlainCensus';
-import { WeightedCensus } from './classes/WeightedCensus';
+import { MerkleCensus } from './classes/MerkleCensus';
 import { CensusOrigin } from './types';
 
 /**
@@ -11,10 +10,10 @@ export class CensusOrchestrator {
   constructor(private censusService: VocdoniCensusService) {}
 
   /**
-   * Publishes a PlainCensus or WeightedCensus
+   * Publishes a MerkleCensus (OffchainCensus, OffchainDynamicCensus, or OnchainCensus)
    * Creates a working census, adds participants, and publishes it
    */
-  async publish(census: PlainCensus | WeightedCensus): Promise<void> {
+  async publish(census: MerkleCensus): Promise<void> {
     if (census.isPublished) {
       throw new Error('Census is already published');
     }
@@ -26,7 +25,7 @@ export class CensusOrchestrator {
     // 1. Create working census
     const censusId = await this.censusService.createCensus();
 
-    // 2. Add participants (both Plain and Weighted have .participants getter)
+    // 2. Add participants
     await this.censusService.addParticipants(censusId, census.participants);
 
     // 3. Publish
@@ -36,30 +35,33 @@ export class CensusOrchestrator {
     census._setPublishedData(
       publishResponse.root,
       publishResponse.uri,
-      publishResponse.participantCount,
       censusId
     );
   }
 
   /**
    * Gets census data for process creation
-   * Throws if census is not published
+   * Throws if census is not ready (published for Merkle/CSP, or constructed for Onchain)
    */
   getCensusData(census: Census): {
     type: CensusOrigin;
     root: string;
     uri: string;
-    size: number;
   } {
-    if (!census.isPublished) {
-      throw new Error('Census must be published before creating a process');
+    // Only Merkle censuses (OffchainStatic, OffchainDynamic) need to be published
+    // Onchain and CSP censuses are ready immediately upon construction
+    if (census.requiresPublishing && !census.isPublished) {
+      throw new Error('Merkle census must be published before creating a process');
+    }
+
+    if (!census.censusRoot || !census.censusURI) {
+      throw new Error('Census data is incomplete');
     }
 
     return {
       type: census.censusOrigin,
-      root: census.censusRoot!,
-      uri: census.censusURI!,
-      size: census.size!,
+      root: census.censusRoot,
+      uri: census.censusURI,
     };
   }
 }

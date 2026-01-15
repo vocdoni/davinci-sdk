@@ -20,7 +20,7 @@ yarn add @vocdoni/davinci-sdk
 ### Basic Usage
 
 ```typescript
-import { DavinciSDK, PlainCensus, WeightedCensus } from '@vocdoni/davinci-sdk';
+import { DavinciSDK, OffchainCensus } from '@vocdoni/davinci-sdk';
 import { Wallet } from 'ethers';
 
 // Initialize the SDK
@@ -34,7 +34,7 @@ const sdk = new DavinciSDK({
 await sdk.init();
 
 // 1. Create a census with eligible voters
-const census = new PlainCensus(); // or WeightedCensus for custom voting power
+const census = new OffchainCensus(); // Supports both plain and weighted voting
 census.add([
   '0x1234567890123456789012345678901234567890',
   '0x2345678901234567890123456789012345678901',
@@ -152,14 +152,16 @@ The SDK provides simple-to-use census classes that make voter management easy. C
 
 ### Census Types
 
-#### PlainCensus - Equal Voting Power
+#### OffchainCensus - Static Merkle Tree Census
 
-Everyone gets the same voting weight (weight = 1).
+A flexible census that supports both plain addresses (equal voting power) and weighted participants.
+
+**Plain addresses (everyone gets weight = 1):**
 
 ```typescript
-import { PlainCensus } from '@vocdoni/davinci-sdk';
+import { OffchainCensus } from '@vocdoni/davinci-sdk';
 
-const census = new PlainCensus();
+const census = new OffchainCensus();
 census.add([
   '0x1234567890123456789012345678901234567890',
   '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
@@ -168,19 +170,19 @@ census.add([
 
 // Use directly in process creation - SDK auto-publishes!
 const process = await sdk.createProcess({
-  census: census, // ✨ Auto-published!
+  census: census, // ✨ Auto-published! maxVoters auto-calculated!
   // ... rest of config
 });
 ```
 
-#### WeightedCensus - Custom Voting Power
+**Weighted participants (custom voting power):**
 
-Assign different voting weights to participants. Supports flexible weight types: **string**, **number**, or **bigint**.
+Supports flexible weight types: **string**, **number**, or **bigint**.
 
 ```typescript
-import { WeightedCensus } from '@vocdoni/davinci-sdk';
+import { OffchainCensus } from '@vocdoni/davinci-sdk';
 
-const census = new WeightedCensus();
+const census = new OffchainCensus();
 
 census.add([
   { key: '0x123...', weight: "1" },    // string
@@ -188,7 +190,27 @@ census.add([
   { key: '0x789...', weight: 100n },   // bigint
 ]);
 
-// Auto-published when creating process
+// Auto-published when creating process, maxVoters auto-set to participant count
+const process = await sdk.createProcess({
+  census: census,
+  // ... rest of config
+});
+```
+
+#### OffchainDynamicCensus - Updatable Merkle Tree Census
+
+Similar to OffchainCensus but allows census updates after process creation.
+
+```typescript
+import { OffchainDynamicCensus } from '@vocdoni/davinci-sdk';
+
+const census = new OffchainDynamicCensus();
+census.add([
+  { key: '0x123...', weight: 10 },
+  { key: '0x456...', weight: 20 }
+]);
+
+// Auto-published and updatable
 const process = await sdk.createProcess({
   census: census,
   // ... rest of config
@@ -204,12 +226,12 @@ import { CspCensus } from '@vocdoni/davinci-sdk';
 
 const census = new CspCensus(
   "0x1234567890abcdef", // Root hash (public key)
-  "https://csp-server.com", // CSP URL
-  1000 // Expected number of voters
+  "https://csp-server.com"  // CSP URL
 );
 
 const process = await sdk.createProcess({
   census: census,
+  maxVoters: 1000, // Required for CSP census
   // ... rest of config
 });
 ```
@@ -219,17 +241,17 @@ const process = await sdk.createProcess({
 For censuses already published to the network.
 
 ```typescript
-import { PublishedCensus, CensusType } from '@vocdoni/davinci-sdk';
+import { PublishedCensus, CensusOrigin } from '@vocdoni/davinci-sdk';
 
 const census = new PublishedCensus(
-  CensusType.WEIGHTED,
+  CensusOrigin.OffchainStatic,
   "0xroot...",
-  "ipfs://uri...",
-  100 // size
+  "ipfs://uri..."
 );
 
 const process = await sdk.createProcess({
   census: census,
+  maxVoters: 100, // Required for pre-published census
   // ... rest of config
 });
 ```
@@ -239,7 +261,7 @@ const process = await sdk.createProcess({
 The SDK automatically publishes unpublished censuses when creating a process:
 
 ```typescript
-const census = new PlainCensus();
+const census = new OffchainCensus();
 census.add(['0x123...', '0x456...']);
 
 console.log(census.isPublished); // false
@@ -257,10 +279,10 @@ console.log(census.censusURI);    // Published URI
 
 ### Flexible Weight Types
 
-WeightedCensus accepts weights as strings, numbers, or bigints for maximum flexibility:
+OffchainCensus accepts weights as strings, numbers, or bigints for maximum flexibility:
 
 ```typescript
-const census = new WeightedCensus();
+const census = new OffchainCensus();
 
 // String weights (recommended for very large numbers)
 census.add({ key: '0x123...', weight: "999999999999" });
@@ -282,7 +304,7 @@ census.add([
 ### Census Operations
 
 ```typescript
-const census = new WeightedCensus();
+const census = new OffchainCensus();
 
 // Add single participant
 census.add({ key: '0x123...', weight: 5 });
@@ -310,7 +332,6 @@ const participants = census.participants;
 if (census.isPublished) {
   console.log('Root:', census.censusRoot);
   console.log('URI:', census.censusURI);
-  console.log('Size:', census.size);
 }
 ```
 
@@ -323,9 +344,9 @@ const process = await sdk.createProcess({
   census: {
     type: CensusOrigin.OffchainStatic,
     root: "0xabc...",
-    size: 100,
     uri: "ipfs://..."
   },
+  maxVoters: 100, // Required for manual census config
   // ... rest of config
 });
 ```
@@ -408,7 +429,6 @@ const processResult = await sdk.createProcess({
   census: {
     type: CensusOrigin.OffchainStatic,
     root: "0x...",
-    size: 1000,
     uri: "ipfs://..."
   },
   
@@ -431,8 +451,8 @@ const processResult = await sdk.createProcess({
     minValueSum: "0"
   },
   
-  // Maximum voters (optional, defaults to census size)
-  maxVoters: 500, // Limit the process to 500 voters
+  // Maximum voters (required for manual census config)
+  maxVoters: 500,
   
   // Questions
   questions: [{
@@ -664,9 +684,9 @@ async function completeVotingExample() {
     census: {
       type: CensusOrigin.OffchainStatic,
       root: publishResult.root,
-      size: censusSize,
       uri: publishResult.uri
     },
+    maxVoters: censusSize,
     timing: {
       startDate: new Date(Date.now() + 60000), // Start in 1 minute
       duration: 3600 // 1 hour
