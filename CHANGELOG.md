@@ -7,6 +7,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-01-15
+
+### Changed
+- **BREAKING**: Complete census class refactor for improved API ergonomics
+  - Removed `PlainCensus` and `WeightedCensus` classes
+  - Added new named census classes that automatically determine their census origin:
+    - `OffchainCensus()` - Static Merkle tree census for OffchainStatic origin
+    - `OffchainDynamicCensus()` - Updatable Merkle tree census for OffchainDynamic origin
+    - `OnchainCensus(contractAddress, uri?)` - On-chain census for Onchain origin
+    - `CspCensus(publicKey, cspURI)` - Certificate Service Provider census for CSP origin
+  - New unified `MerkleCensus` base class that supports both plain and weighted participants
+    - Single `add()` method intelligently handles plain addresses (weight=1) and weighted participants
+    - Flexible weight types: accepts string, number, or bigint values
+  - Removed `CensusType` enum (redundant with named census classes)
+  - Removed `size` parameter from all census classes (no longer needed)
+  - **Smart maxVoters logic**: `maxVoters` is now optional for published MerkleCensus objects (OffchainCensus, OffchainDynamicCensus)
+    - SDK automatically calculates `maxVoters` from participant count when using census objects
+    - Still required for manual census configs, OnchainCensus, CspCensus, and PublishedCensus
+- Updated `PublishedCensus` constructor to accept `CensusOrigin` instead of deprecated `CensusType`
+- Updated `CspCensus` constructor to only require (publicKey, cspURI) parameters
+
+### Added
+- New `Participant` interface exported from `MerkleCensus` for type safety
+- Comprehensive unit tests for all new census classes:
+  - `test/census/unit/OffchainCensus.test.ts` - Tests for plain and weighted OffchainCensus
+  - `test/census/unit/OffchainDynamicCensus.test.ts` - Tests for dynamic census functionality
+  - `test/census/unit/OnchainCensus.test.ts` - Tests for on-chain census
+- Updated existing tests:
+  - `test/census/unit/PublishedCensus.test.ts` - Updated for new API
+  - `test/census/unit/CspCensus.test.ts` - Updated for new constructor
+  - `test/census/unit/CensusOrchestrator.test.ts` - Updated for new census classes
+- Updated integration tests to use new census classes and maxVoters behavior:
+  - `test/core/integration/SimpleProcessCreation.test.ts` - Updated all census usage
+  - `test/core/integration/VoteOrchestration.test.ts` - Updated all census configs
+
+### Removed
+- Removed `PlainCensus` class (replaced by `OffchainCensus`)
+- Removed `WeightedCensus` class (replaced by `OffchainCensus` with weighted participants)
+- Removed `CensusType` enum (replaced by `CensusOrigin` usage)
+- Removed `size` property from all census classes
+- Removed legacy census test files:
+  - `test/census/unit/PlainCensus.test.ts`
+  - `test/census/unit/WeightedCensus.test.ts`
+
+### Fixed
+- Fixed `Participant` type export issue in census classes index file
+- Updated example script to showcase new census API and optional maxVoters feature
+- Updated README.md documentation to reflect new census class names and usage patterns
+- Corrected all manual census configuration examples to exclude deprecated `size` parameter
+
+### Migration Guide
+
+#### Updating Census Classes
+
+**Before (v0.0.7):**
+```typescript
+import { PlainCensus, WeightedCensus } from '@vocdoni/davinci-sdk';
+
+// Plain census
+const plainCensus = new PlainCensus();
+plainCensus.add(['0x123...', '0x456...']);
+
+// Weighted census
+const weightedCensus = new WeightedCensus();
+weightedCensus.add([
+  { key: '0x123...', weight: 10 },
+  { key: '0x456...', weight: 20 }
+]);
+```
+
+**After (v0.1.0):**
+```typescript
+import { OffchainCensus } from '@vocdoni/davinci-sdk';
+
+// Plain addresses (weight defaults to 1)
+const census = new OffchainCensus();
+census.add(['0x123...', '0x456...']);
+
+// Weighted participants (same class!)
+const census = new OffchainCensus();
+census.add([
+  { key: '0x123...', weight: 10 },
+  { key: '0x456...', weight: 20 }
+]);
+```
+
+#### Updating Process Creation with Census Objects
+
+**Before (v0.0.7):**
+```typescript
+const census = new PlainCensus();
+census.add(['0x123...', '0x456...']);
+
+const process = await sdk.createProcess({
+  census: census,
+  maxVoters: 100, // Always required
+  // ... other config
+});
+```
+
+**After (v0.1.0):**
+```typescript
+const census = new OffchainCensus();
+census.add(['0x123...', '0x456...']);
+
+const process = await sdk.createProcess({
+  census: census,
+  // maxVoters is optional - auto-calculated from census!
+  // ... other config
+});
+```
+
+#### Updating Manual Census Configurations
+
+**Before (v0.0.7):**
+```typescript
+const process = await sdk.createProcess({
+  census: {
+    type: CensusOrigin.OffchainStatic,
+    root: "0x...",
+    size: 100, // Had size parameter
+    uri: "ipfs://..."
+  },
+  // ... other config
+});
+```
+
+**After (v0.1.0):**
+```typescript
+const process = await sdk.createProcess({
+  census: {
+    type: CensusOrigin.OffchainStatic,
+    root: "0x...",
+    uri: "ipfs://..." // No size parameter
+  },
+  maxVoters: 100, // Now required for manual configs
+  // ... other config
+});
+```
+
+#### Updating CspCensus Usage
+
+**Before (v0.0.7):**
+```typescript
+const census = new CspCensus(
+  CensusOrigin.CSP,
+  "0x...",
+  "https://csp.example.com",
+  1000
+);
+```
+
+**After (v0.1.0):**
+```typescript
+const census = new CspCensus(
+  "0x...", // publicKey
+  "https://csp.example.com" // cspURI
+);
+
+// Use with maxVoters in process config
+const process = await sdk.createProcess({
+  census: census,
+  maxVoters: 1000, // Required for CSP
+  // ... other config
+});
+```
+
+### Technical Details
+- Census classes now use the class name itself to determine census origin, eliminating the need to pass `CensusOrigin` as a constructor parameter
+- The `MerkleCensus` base class provides a unified implementation for both plain and weighted participants
+- Automatic maxVoters calculation reduces boilerplate and prevents mismatches between census size and maxVoters
+- All census classes properly extend the base `Census` class with appropriate origin types
+- Type exports fixed to properly handle both type and value exports
+
 ## [0.0.7] - 2026-01-14
 
 ### Added
