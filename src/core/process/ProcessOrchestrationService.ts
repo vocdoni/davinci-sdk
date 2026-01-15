@@ -9,8 +9,7 @@ import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
 import { Census } from '../../census/classes/Census';
-import { PlainCensus } from '../../census/classes/PlainCensus';
-import { WeightedCensus } from '../../census/classes/WeightedCensus';
+import { MerkleCensus } from '../../census/classes/MerkleCensus';
 import { CensusOrchestrator } from '../../census/CensusOrchestrator';
 
 /**
@@ -86,8 +85,10 @@ interface BaseProcessConfig {
   };
 
   /** 
-   * Maximum number of voters allowed for this process (optional, defaults to census size)
-   * This parameter limits how many votes can be cast in the process.
+   * Maximum number of voters allowed for this process
+   * Optional only if census is a published MerkleCensus (OffchainCensus/OffchainDynamicCensus)
+   * - defaults to participant count from the census
+   * Required in all other cases (OnchainCensus, CspCensus, manual config, unpublished census)
    */
   maxVoters?: number;
 }
@@ -218,26 +219,24 @@ export class ProcessOrchestrationService {
   private async handleCensus(census: ProcessConfig['census']): Promise<{
     type: CensusOrigin;
     root: string;
-    size: number;
     uri: string;
   }> {
     // Check if it's a Census object
     if ('isPublished' in census) {
       // It's a Census object
-      // Only PlainCensus and WeightedCensus need publishing (CSP and Published are already published)
-      if (census instanceof PlainCensus || census instanceof WeightedCensus) {
-        // Auto-publish if not published
-        if (!census.isPublished) {
-          // Check if census service has a valid base URL configured
-          const censusBaseURL = this.apiService.census?.['axios']?.defaults?.baseURL;
-          if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
-            throw new Error(
-              'Census API URL is required to publish PlainCensus or WeightedCensus. ' +
-              'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
-            );
-          }
-          await this.censusOrchestrator.publish(census);
+      // Only Merkle censuses (OffchainCensus, OffchainDynamicCensus) need publishing
+      // Onchain and CSP are ready immediately
+      if (census.requiresPublishing && !census.isPublished) {
+        // Check if census service has a valid base URL configured
+        const censusBaseURL = this.apiService.census?.['axios']?.defaults?.baseURL;
+        if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
+          throw new Error(
+            'Census API URL is required to publish Merkle censuses (OffchainCensus, OffchainDynamicCensus). ' +
+            'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
+          );
         }
+        // Type guard: if requiresPublishing is true, it must be a MerkleCensus
+        await this.censusOrchestrator.publish(census as MerkleCensus);
       }
       
       // Extract census data
@@ -245,13 +244,13 @@ export class ProcessOrchestrationService {
       return {
         type: censusData.type,
         root: censusData.root,
-        size: censusData.size,
         uri: censusData.uri,
       };
     }
     
-    // It's manual config - return as-is
-    return census;
+    // It's manual config - return as-is (but remove size if present for backward compatibility)
+    const { size, ...censusWithoutSize } = census;
+    return censusWithoutSize;
   }
 
   /**
@@ -505,8 +504,30 @@ export class ProcessOrchestrationService {
       signature,
     });
 
-    // 7. Determine maxVoters (use config value or default to census size)
-    const maxVoters = config.maxVoters ?? censusConfig.size;
+    // 7. Determine maxVoters
+    let maxVoters: number;
+    
+    if (config.maxVoters !== undefined) {
+      // User explicitly provided maxVoters
+      maxVoters = config.maxVoters;
+    } else if ('isPublished' in config.census && config.census.isPublished) {
+      // Census is published - can only use participant count for MerkleCensus
+      if ('participants' in config.census) {
+        // It's a MerkleCensus with participants
+        maxVoters = (config.census as any).participants.length;
+      } else {
+        throw new Error(
+          'maxVoters is required when using OnchainCensus, CspCensus, or PublishedCensus. ' +
+          'It can only be auto-calculated for published MerkleCensus (OffchainCensus/OffchainDynamicCensus).'
+        );
+      }
+    } else {
+      // Census is not published yet, or it's manual config
+      throw new Error(
+        'maxVoters is required. It can only be omitted when using a published MerkleCensus ' +
+        '(OffchainCensus/OffchainDynamicCensus), in which case it defaults to the participant count.'
+      );
+    }
 
     // 8. Create census object for on-chain call
     const census: CensusData = {
