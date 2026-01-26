@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-01-26
+
+### Changed
+- Updated `@vocdoni/davinci-contracts` dependency from version 0.0.31 to 0.0.35
+  - **v0.0.33**: Added `onchainAllowAnyValidRoot: boolean` field to census data
+  - **v0.0.34**: Added `contractAddress: AddressLike` field for onchain censuses
+- **BREAKING**: `OnchainCensus` constructor now requires `uri` parameter (no longer optional)
+  - URI must point to a data source like a subgraph endpoint, not explorers
+  - Added validation to reject empty URI strings
+  - Example: `new OnchainCensus(tokenAddress, "https://api.studio.thegraph.com/...")`
+
+### Added
+- Added `contractAddress?: string` field to `CensusData` interface for onchain census support
+- Added `onchainAllowAnyValidRoot?: boolean` field to `CensusData` interface
+  - Automatically set to `true` for onchain censuses, `false` for others
+- `CensusOrchestrator.getCensusData()` now extracts and returns `contractAddress` from `OnchainCensus` objects
+- Enhanced README with comprehensive `OnchainCensus` documentation
+  - Added token-based voting examples
+  - Documented subgraph integration patterns
+  - Provided examples for different subgraph providers (The Graph Studio, custom deployments)
+
+### Fixed
+- **CRITICAL**: `OnchainCensus` now sets `censusRoot` to 32-byte zero value (`0x0000...000`)
+  - Required when `contractAddress` is set to prevent smart contract validation failures
+  - Contract address is now properly passed through `contractAddress` field instead of `censusRoot`
+- Fixed `ProcessRegistryService.newProcess()` to include both new census fields with proper defaults
+- Fixed `ProcessRegistryService.setProcessCensus()` to include both new census fields with proper defaults
+- Fixed `ProcessOrchestrationService.handleCensus()` to properly extract and pass `contractAddress`
+- Updated all test files to provide required URI parameter for `OnchainCensus`
+  - Fixed 17 tests in `test/census/unit/OnchainCensus.test.ts`
+  - Fixed 3 tests in `test/census/unit/CensusOrchestrator.test.ts`
+  - Added new test for URI validation
+
+### Technical Details
+- `censusRoot` for onchain censuses: `0x0000000000000000000000000000000000000000000000000000000000000000`
+- `contractAddress` properly stored and exposed via getter in `OnchainCensus` class
+- `onchainAllowAnyValidRoot` automatically managed based on census type
+- Census data flow: `OnchainCensus` → `CensusOrchestrator` → `ProcessOrchestrationService` → `ProcessRegistryService` → Smart Contract
+
+### Migration Guide
+
+**Before (v0.1.0):**
+```typescript
+// URI was optional
+const census = new OnchainCensus("0xTokenAddress...");
+```
+
+**After (v0.1.1):**
+```typescript
+// URI is required and should be a subgraph endpoint
+const census = new OnchainCensus(
+  "0xTokenAddress...",
+  "https://api.studio.thegraph.com/query/12345/token-holders/v1.0.0"
+);
+```
+
 ## [0.1.0] - 2026-01-15
 
 ### Changed
