@@ -11,9 +11,9 @@ export class OnchainCensus extends Census {
   /**
    * Creates an OnchainCensus
    * @param contractAddress - The address of the smart contract (e.g., ERC20, ERC721)
-   * @param uri - Optional URI with census information
+   * @param uri - The URI pointing to census data source (e.g., subgraph endpoint)
    */
-  constructor(contractAddress: string, uri?: string) {
+  constructor(contractAddress: string, uri: string) {
     super(CensusOrigin.Onchain);
 
     // Validate contract address
@@ -21,11 +21,15 @@ export class OnchainCensus extends Census {
       throw new Error('Contract address is missing or invalid');
     }
 
+    if (!uri || uri.trim() === '') {
+      throw new Error('URI is required for onchain census');
+    }
+
     this._contractAddress = contractAddress;
     
-    // For onchain census, these are known immediately
-    this._censusRoot = contractAddress; // Contract address serves as root
-    this._censusURI = uri || `contract://${contractAddress}`;
+    // For onchain census with contractAddress, censusRoot must be 32-byte zero value
+    this._censusRoot = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    this._censusURI = uri;
   }
 
   get contractAddress(): string {

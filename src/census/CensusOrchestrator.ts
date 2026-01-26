@@ -47,6 +47,7 @@ export class CensusOrchestrator {
     type: CensusOrigin;
     root: string;
     uri: string;
+    contractAddress?: string;
   } {
     // Only Merkle censuses (OffchainStatic, OffchainDynamic) need to be published
     // Onchain and CSP censuses are ready immediately upon construction
@@ -58,10 +59,16 @@ export class CensusOrchestrator {
       throw new Error('Census data is incomplete');
     }
 
+    // Extract contract address for onchain censuses
+    const contractAddress = 'contractAddress' in census 
+      ? (census as any).contractAddress 
+      : undefined;
+
     return {
       type: census.censusOrigin,
       root: census.censusRoot,
       uri: census.censusURI,
+      contractAddress,
     };
   }
 }

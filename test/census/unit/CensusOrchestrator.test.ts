@@ -162,14 +162,16 @@ describe('CensusOrchestrator', () => {
 
     it('should get census data from OnchainCensus (no publishing needed)', () => {
       const contractAddress = '0x1234567890123456789012345678901234567890';
-      const census = new OnchainCensus(contractAddress);
+      const subgraphUri = 'https://api.thegraph.com/subgraphs/name/token-holders';
+      const census = new OnchainCensus(contractAddress, subgraphUri);
 
       const data = orchestrator.getCensusData(census);
 
       expect(data).toEqual({
         type: CensusOrigin.Onchain,
-        root: contractAddress,
-        uri: `contract://${contractAddress}`,
+        contractAddress: contractAddress,
+        root: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        uri: subgraphUri,
       });
     });
 
@@ -197,7 +199,7 @@ describe('CensusOrchestrator', () => {
     });
 
     it('should NOT throw error for OnchainCensus even if not "published"', () => {
-      const census = new OnchainCensus('0x1234567890123456789012345678901234567890');
+      const census = new OnchainCensus('0x1234567890123456789012345678901234567890', 'https://api.thegraph.com/subgraphs/name/token-holders');
       
       // OnchainCensus is always ready, no publishing needed
       expect(() => orchestrator.getCensusData(census)).not.toThrow();
@@ -215,7 +217,7 @@ describe('CensusOrchestrator', () => {
     it('should identify which censuses require publishing', () => {
       const offchain = new OffchainCensus();
       const offchainDynamic = new OffchainDynamicCensus();
-      const onchain = new OnchainCensus('0x1234567890123456789012345678901234567890');
+      const onchain = new OnchainCensus('0x1234567890123456789012345678901234567890', 'https://api.thegraph.com/subgraphs/name/token-holders');
       const csp = new CspCensus('0xabcdef', 'https://csp.com');
 
       expect(offchain.requiresPublishing).toBe(true);

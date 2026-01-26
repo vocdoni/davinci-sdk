@@ -220,6 +220,7 @@ export class ProcessOrchestrationService {
     type: CensusOrigin;
     root: string;
     uri: string;
+    contractAddress?: string;
   }> {
     // Check if it's a Census object
     if ('isPublished' in census) {
@@ -239,13 +240,8 @@ export class ProcessOrchestrationService {
         await this.censusOrchestrator.publish(census as MerkleCensus);
       }
       
-      // Extract census data
-      const censusData = this.censusOrchestrator.getCensusData(census);
-      return {
-        type: censusData.type,
-        root: censusData.root,
-        uri: censusData.uri,
-      };
+      // Extract census data (includes contractAddress for onchain censuses)
+      return this.censusOrchestrator.getCensusData(census);
     }
     
     // It's manual config - return as-is (but remove size if present for backward compatibility)
@@ -533,7 +529,11 @@ export class ProcessOrchestrationService {
     const census: CensusData = {
       censusOrigin: censusConfig.type,
       censusRoot,
+      contractAddress: censusConfig.contractAddress,  // Only set for onchain censuses
       censusURI: censusConfig.uri,
+      // For onchain censuses (ERC20 token snapshots), allow any valid merkle root
+      // For other census types, require the specific censusRoot
+      onchainAllowAnyValidRoot: censusConfig.type === CensusOrigin.Onchain,
     };
 
     return {

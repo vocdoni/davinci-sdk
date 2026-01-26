@@ -114,7 +114,9 @@ export class ProcessRegistryService extends SmartContractService {
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
       censusRoot: census.censusRoot,
+      contractAddress: census.contractAddress ?? '0x0000000000000000000000000000000000000000',
       censusURI: census.censusURI,
+      onchainAllowAnyValidRoot: census.onchainAllowAnyValidRoot ?? false,
     };
 
     return this.sendTx(
@@ -151,7 +153,9 @@ export class ProcessRegistryService extends SmartContractService {
     const contractCensus: IProcessRegistry.CensusStruct = {
       censusOrigin: BigInt(census.censusOrigin),
       censusRoot: census.censusRoot,
+      contractAddress: census.contractAddress ?? '0x0000000000000000000000000000000000000000',
       censusURI: census.censusURI,
+      onchainAllowAnyValidRoot: census.onchainAllowAnyValidRoot ?? false,
     };
 
     return this.sendTx(
