@@ -256,6 +256,55 @@ const process = await sdk.createProcess({
 });
 ```
 
+#### OnchainCensus - Token-Based Voting
+
+Use existing on-chain token contracts (ERC20, ERC721) for voting eligibility. Perfect for DAO governance where voting power comes from token holdings.
+
+```typescript
+import { OnchainCensus } from '@vocdoni/davinci-sdk';
+
+// Create census from token contract address with subgraph URI
+const census = new OnchainCensus(
+  "0x1234567890123456789012345678901234567890", // Token contract address
+  "https://api.studio.thegraph.com/query/12345/token-holders/v1.0.0" // Subgraph endpoint
+);
+
+const process = await sdk.createProcess({
+  census: census,
+  maxVoters: 10000, // Required for onchain census
+  // ... rest of config
+});
+```
+
+**Key Features:**
+- **No Publishing Required**: Uses existing on-chain data, no need to publish
+- **Automatic Validation**: Contract address and URI validated on construction
+- **Token Agnostic**: Works with any ERC20 or ERC721 contract
+- **DAO Ready**: Perfect for token-based governance systems
+- **Subgraph Integration**: URI should point to a subgraph or API endpoint for census data
+
+**Technical Details:**
+- `censusRoot` automatically set to 32-byte zero value (`0x0000...000`)
+- `contractAddress` properly passed to smart contracts
+- `uri` parameter is **required** and should point to a data source (e.g., subgraph)
+- Census is immediately ready for process creation
+
+**Example with different subgraph providers:**
+
+```typescript
+// The Graph Studio
+const census = new OnchainCensus(
+  "0xTokenAddress...",
+  "https://api.studio.thegraph.com/query/12345/my-token/v1.0.0"
+);
+
+// Custom subgraph deployment
+const census = new OnchainCensus(
+  "0xTokenAddress...",
+  "https://subgraph.example.com/api/token-holders"
+);
+```
+
 ### Auto-Publishing Feature
 
 The SDK automatically publishes unpublished censuses when creating a process:
