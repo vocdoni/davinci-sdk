@@ -3,6 +3,8 @@ import { VocdoniApiService } from './core/api/ApiService';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { OrganizationRegistryService } from './contracts/OrganizationRegistry';
 import { DavinciCrypto } from './sequencer/DavinciCryptoService';
+import { DavinciCSP } from './sequencer/DavinciCSP';
+import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
   ProcessOrchestrationService,
   ProcessConfig,
@@ -79,6 +81,8 @@ export class DavinciSDK {
   private _processOrchestrator?: ProcessOrchestrationService;
   private _voteOrchestrator?: VoteOrchestrationService;
   private davinciCrypto?: DavinciCrypto;
+  private davinciCSP?: DavinciCSP;
+  private ballotInputGenerator?: BallotInputGenerator;
   private initialized = false;
   private censusProviders: CensusProviders;
 
@@ -192,6 +196,37 @@ export class DavinciSDK {
   }
 
   /**
+   * Get or initialize the DavinciCSP service for CSP cryptographic operations
+   */
+  async getCSP(): Promise<DavinciCSP> {
+    if (!this.davinciCSP) {
+      // Get WASM URLs from sequencer info
+      const info = await this.apiService.sequencer.getInfo();
+
+      this.davinciCSP = new DavinciCSP({
+        wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
+        wasmUrl: info.ballotProofWasmHelperUrl,
+      });
+
+      await this.davinciCSP.init();
+    }
+
+    return this.davinciCSP;
+  }
+
+  /**
+   * Get or initialize the BallotInputGenerator service for ballot input generation
+   */
+  async getBallotInputGenerator(): Promise<BallotInputGenerator> {
+    if (!this.ballotInputGenerator) {
+      this.ballotInputGenerator = new BallotInputGenerator();
+      await this.ballotInputGenerator.init();
+    }
+
+    return this.ballotInputGenerator;
+  }
+
+  /**
    * Get the process orchestration service for simplified process creation.
    * Requires a signer with a provider for blockchain interactions.
    *
@@ -218,7 +253,7 @@ export class DavinciSDK {
     if (!this._voteOrchestrator) {
       this._voteOrchestrator = new VoteOrchestrationService(
         this.apiService,
-        () => this.getCrypto(),
+        () => this.getBallotInputGenerator(),
         this.config.signer,
         this.censusProviders,
         {
