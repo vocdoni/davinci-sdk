@@ -71,8 +71,8 @@ export interface VoteRequest {
   censusProof?: CensusProof;
   /** Your encrypted ballot. */
   ballot: VoteBallot;
-  /** The zkSNARK proof that the ballot is well‐formed. */
-  ballotProof: VoteProof;
+  /** The zkSNARK proof that the ballot is well‐formed (optional - sequencer generates for CSP). */
+  ballotProof?: VoteProof;
   /** Hash of the ballot inputs (decimal string). */
   ballotInputsHash: string;
   /** Your Ethereum address (hex-prefixed). */

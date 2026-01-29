@@ -1,15 +1,8 @@
 import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
-import {
-  DavinciCrypto,
-  DavinciCryptoInputs,
-  DavinciCryptoOutput,
-} from '../../sequencer/DavinciCryptoService';
-import {
-  CircomProof,
-  Groth16Proof,
-  ProofInputs as Groth16ProofInputs,
-} from '../../sequencer/CircomProofService';
+import { BallotInputGenerator } from '../../sequencer/BallotInputGenerator';
+import { BallotInputsOutput } from '../../crypto/types';
+import { ProofInputs as Groth16ProofInputs } from '../../sequencer/CircomProofService';
 import {
   CensusOrigin,
   CensusProof,
@@ -88,7 +81,7 @@ export class VoteOrchestrationService {
 
   constructor(
     private apiService: VocdoniApiService,
-    private getCrypto: () => Promise<DavinciCrypto>,
+    private getBallotInputGenerator: () => Promise<BallotInputGenerator>,
     private signer: Signer,
     private censusProviders: CensusProviders = {},
     config: VoteOrchestrationConfig = {}
@@ -139,17 +132,13 @@ export class VoteOrchestrationService {
       config.randomness
     );
 
-    // 5. Generate zk-SNARK proof
-    const { proof } = await this.generateZkProof(circomInputs);
-
-    // 6. Sign the vote
+    // 5. Sign the vote (no client-side proof generation - sequencer handles it)
     const signature = await this.signVote(voteId);
 
-    // 7. Submit the vote
+    // 6. Submit the vote (no proof - sequencer generates it)
     const voteRequest: VoteRequest = {
       processId: config.processId,
       ballot: cryptoOutput.ballot,
-      ballotProof: proof,
       ballotInputsHash: cryptoOutput.ballotInputsHash,
       address: voterAddress,
       signature,
@@ -161,7 +150,7 @@ export class VoteOrchestrationService {
       voteRequest.censusProof = censusProof;
     }
 
-    await this.submitVoteRequest(voteRequest);
+    await this.apiService.sequencer.submitVote(voteRequest);
 
     // 8. Get initial vote status
     const status = await this.apiService.sequencer.getVoteStatus(config.processId, voteId);
@@ -363,7 +352,7 @@ export class VoteOrchestrationService {
   }
 
   /**
-   * Generate vote proof inputs using DavinciCrypto
+   * Generate vote proof inputs using BallotInputGenerator
    */
   private async generateVoteProofInputs(
     processId: string,
@@ -375,42 +364,38 @@ export class VoteOrchestrationService {
     customRandomness?: string
   ): Promise<{
     voteId: string;
-    cryptoOutput: DavinciCryptoOutput;
+    cryptoOutput: BallotInputsOutput;
     circomInputs: Groth16ProofInputs;
   }> {
-    const crypto = await this.getCrypto();
+    const generator = await this.getBallotInputGenerator();
 
     // Validate choices based on ballot mode
     this.validateChoices(choices, ballotMode);
 
-    // Use choices directly as field values (no conversion for this version)
-    const fieldValues = choices.map(choice => choice.toString());
-
-    const inputs: DavinciCryptoInputs = {
-      address: voterAddress.replace(/^0x/, ''),
-      processID: processId.replace(/^0x/, ''),
-      encryptionKey: [encryptionKey.x, encryptionKey.y],
-      ballotMode,
-      weight,
-      fieldValues,
-    };
-
-    // Only include k if customRandomness is provided
+    // Convert custom randomness if provided
+    let k: string | undefined;
     if (customRandomness) {
-      // Check if customRandomness already has 0x prefix
       const hexRandomness = customRandomness.startsWith('0x')
         ? customRandomness
         : '0x' + customRandomness;
-      const k = BigInt(hexRandomness).toString();
-      inputs.k = k;
+      k = BigInt(hexRandomness).toString();
     }
 
-    const cryptoOutput = await crypto.proofInputs(inputs);
+    // Generate ballot inputs using the new TypeScript implementation
+    const result = await generator.generateInputs(
+      processId.replace(/^0x/, ''),
+      voterAddress.replace(/^0x/, ''),
+      encryptionKey,
+      ballotMode,
+      choices,
+      weight,
+      k
+    );
 
     return {
-      voteId: cryptoOutput.voteId,
-      cryptoOutput,
-      circomInputs: cryptoOutput.circomInputs,
+      voteId: result.voteId,
+      cryptoOutput: result,
+      circomInputs: result.circomInputs,
     };
   }
 
@@ -431,42 +416,6 @@ export class VoteOrchestrationService {
     }
   }
 
-  /**
-   * Generate zk-SNARK proof using CircomProof
-   */
-  private async generateZkProof(circomInputs: Groth16ProofInputs): Promise<{
-    proof: Groth16Proof;
-    publicSignals: string[];
-  }> {
-    // Get circuit URLs and hashes from sequencer info
-    const info = await this.apiService.sequencer.getInfo();
-
-    // Create CircomProof instance with optional hash verification
-    const circomProof = new CircomProof({
-      wasmUrl: info.circuitUrl,
-      zkeyUrl: info.provingKeyUrl,
-      vkeyUrl: info.verificationKeyUrl,
-      // Only pass hashes if verifyCircuitFiles is enabled
-      ...(this.verifyCircuitFiles && {
-        wasmHash: info.circuitHash,
-        zkeyHash: info.provingKeyHash,
-        vkeyHash: info.verificationKeyHash,
-      }),
-    });
-
-    const { proof, publicSignals } = await circomProof.generate(circomInputs);
-
-    // Optionally verify the generated proof based on configuration
-    if (this.verifyProof) {
-      const isValid = await circomProof.verify(proof, publicSignals);
-      if (!isValid) {
-        throw new Error('Generated proof is invalid');
-      }
-    }
-
-    return { proof, publicSignals };
-  }
-
   private hexToBytes(hex: string): Uint8Array {
     const clean = hex.replace(/^0x/, '');
     if (clean.length % 2) throw new Error('Invalid hex length');
@@ -480,25 +429,5 @@ export class VoteOrchestrationService {
    */
   private async signVote(voteId: string): Promise<string> {
     return this.signer.signMessage(this.hexToBytes(voteId));
-  }
-
-  /**
-   * Submit the vote request to the sequencer
-   */
-  private async submitVoteRequest(voteRequest: VoteRequest): Promise<void> {
-    // Convert Groth16Proof to VoteProof format
-    const ballotProof: VoteProof = {
-      pi_a: voteRequest.ballotProof.pi_a,
-      pi_b: voteRequest.ballotProof.pi_b,
-      pi_c: voteRequest.ballotProof.pi_c,
-      protocol: voteRequest.ballotProof.protocol,
-    };
-
-    const request: VoteRequest = {
-      ...voteRequest,
-      ballotProof,
-    };
-
-      await this.apiService.sequencer.submitVote(request);
   }
 }

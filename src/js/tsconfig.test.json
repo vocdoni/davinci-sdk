@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*", "test/**/*", "types/**/*"],
+  "ts-node": {
+    "esm": true,
+    "files": true
+  }
+}
