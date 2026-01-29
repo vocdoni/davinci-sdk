@@ -18,7 +18,7 @@ export interface ProofInputs {
   vote_id: string;
   encryption_pubkey: [string, string];
   k: string;
-  cipherfields: string[];
+  cipherfields: string[][][]; // 3D array: [field][c1/c2][x/y]
   inputs_hash: string;
 }
 

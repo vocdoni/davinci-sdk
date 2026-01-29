@@ -2,6 +2,7 @@ import { BallotMode } from '../core/types';
 import { ProofInputs } from './CircomProofService';
 import { CensusOrigin } from '../census/types';
 import { sha256 } from 'ethers';
+import { BallotBuilder, BallotConfig } from './crypto';
 
 export interface DavinciCryptoInputs {
   address: string;
@@ -40,13 +41,12 @@ export interface CSPSignOutput {
   signature: string;
 }
 
-// internal shapes returned by the Go runtime
+// internal shapes returned by the Go runtime (only used for CSP functions now)
 interface RawResult<T = any> {
   error?: string;
   data?: T;
 }
 interface GoDavinciCryptoWasm {
-  proofInputs(inputJson: string): RawResult<DavinciCryptoOutput>;
   cspSign(
     censusOrigin: number,
     privKey: string,
@@ -67,10 +67,10 @@ declare global {
 }
 
 export interface DavinciCryptoOptions {
-  /** URL to wasm_exec.js */
-  wasmExecUrl: string;
-  /** URL to the compiled davinci_crypto.wasm */
-  wasmUrl: string;
+  /** URL to wasm_exec.js (only needed for CSP functions) */
+  wasmExecUrl?: string;
+  /** URL to the compiled davinci_crypto.wasm (only needed for CSP functions) */
+  wasmUrl?: string;
   /** How long (ms) to wait for the Go runtime to attach DavinciCrypto */
   initTimeoutMs?: number;
   /** Optional SHA-256 hash to verify wasm_exec.js integrity */
@@ -80,23 +80,21 @@ export interface DavinciCryptoOptions {
 }
 
 export class DavinciCrypto {
-  private go!: InstanceType<typeof Go>;
-  private initialized = false;
-  private readonly wasmExecUrl: string;
-  private readonly wasmUrl: string;
+  private go?: InstanceType<typeof Go>;
+  private wasmInitialized = false;
+  private ballotBuilder?: BallotBuilder;
+  private readonly wasmExecUrl?: string;
+  private readonly wasmUrl?: string;
   private readonly initTimeoutMs: number;
   private readonly wasmExecHash?: string;
   private readonly wasmHash?: string;
 
-  // Cache for wasm files
+  // Cache for wasm files (only used for CSP)
   private static wasmExecCache = new Map<string, string>();
   private static wasmBinaryCache = new Map<string, ArrayBuffer>();
 
-  constructor(opts: DavinciCryptoOptions) {
+  constructor(opts: DavinciCryptoOptions = {}) {
     const { wasmExecUrl, wasmUrl, initTimeoutMs, wasmExecHash, wasmHash } = opts;
-
-    if (!wasmExecUrl) throw new Error('`wasmExecUrl` is required');
-    if (!wasmUrl) throw new Error('`wasmUrl` is required');
 
     this.wasmExecUrl = wasmExecUrl;
     this.wasmUrl = wasmUrl;
@@ -135,11 +133,26 @@ export class DavinciCrypto {
   }
 
   /**
-   * Must be awaited before calling `proofInputs()`.
+   * Initialize the BallotBuilder (TypeScript implementation)
+   * This is called automatically by proofInputs if not already initialized
+   */
+  private async initBallotBuilder(): Promise<void> {
+    if (!this.ballotBuilder) {
+      this.ballotBuilder = await BallotBuilder.build();
+    }
+  }
+
+  /**
+   * Initialize WASM for CSP functions only
+   * Must be awaited before calling CSP methods (cspSign, cspVerify, cspCensusRoot).
    * Safe to call multiple times.
    */
-  async init(): Promise<void> {
-    if (this.initialized) return;
+  async initWasm(): Promise<void> {
+    if (this.wasmInitialized) return;
+
+    if (!this.wasmExecUrl || !this.wasmUrl) {
+      throw new Error('WASM URLs are required for CSP functions. Provide wasmExecUrl and wasmUrl.');
+    }
 
     // 1) Fetch & eval Go runtime shim (with caching and hash verification)
     let shimCode = DavinciCrypto.wasmExecCache.get(this.wasmExecUrl);
@@ -196,39 +209,113 @@ export class DavinciCrypto {
       throw new Error('`DavinciCrypto` not initialized within timeout');
     }
 
-    this.initialized = true;
+    this.wasmInitialized = true;
   }
 
   /**
-   * Convert your inputs into JSON, hand off to Go/WASM, then parse & return.
-   * @throws if called before `await init()`, or if Go returns an error
+   * Generate proof inputs using the TypeScript implementation (no WASM needed)
+   * @throws if any error occurs during ballot generation
    */
   async proofInputs(inputs: DavinciCryptoInputs): Promise<DavinciCryptoOutput> {
-    if (!this.initialized) {
-      throw new Error('DavinciCrypto not initialized — call `await init()` first');
-    }
+    // Initialize BallotBuilder if not already done
+    await this.initBallotBuilder();
 
-    const raw = globalThis.DavinciCrypto.proofInputs(JSON.stringify(inputs));
+    const builder = this.ballotBuilder!;
 
-    if (raw.error) {
-      throw new Error(`Go/WASM proofInputs error: ${raw.error}`);
-    }
-    if (!raw.data) {
-      throw new Error('Go/WASM proofInputs returned no data');
-    }
+    // Parse encryption key - keep as strings, builder will handle conversion
+    const pubKey = [inputs.encryptionKey[0], inputs.encryptionKey[1]];
 
-    return raw.data;
+    // Generate or use provided k
+    const k = inputs.k || builder.randomK();
+
+    // Parse field values to numbers
+    const fields = inputs.fieldValues.map(v => parseInt(v, 10));
+
+    // Create ballot config from ballotMode
+    const config: BallotConfig = {
+      numFields: inputs.ballotMode.numFields,
+      uniqueValues: inputs.ballotMode.uniqueValues ? 1 : 0,
+      maxValue: parseInt(inputs.ballotMode.maxValue, 10),
+      minValue: parseInt(inputs.ballotMode.minValue, 10),
+      maxValueSum: parseInt(inputs.ballotMode.maxValueSum, 10),
+      minValueSum: parseInt(inputs.ballotMode.minValueSum, 10),
+      costExponent: inputs.ballotMode.costExponent,
+      costFromWeight: inputs.ballotMode.costFromWeight ? 1 : 0,
+    };
+
+    // Prepare inputs for builder
+    const processId = inputs.processID.startsWith('0x')
+      ? BigInt(inputs.processID).toString()
+      : BigInt('0x' + inputs.processID).toString();
+
+    const address = inputs.address.startsWith('0x')
+      ? BigInt(inputs.address).toString()
+      : BigInt('0x' + inputs.address).toString();
+
+    const weight = parseInt(inputs.weight, 10);
+
+    // Generate ballot inputs using BallotBuilder
+    const ballotInputs = builder.generateInputs(
+      fields,
+      weight,
+      pubKey,
+      processId,
+      address,
+      k,
+      config,
+      8 // circuit capacity
+    );
+
+    // Convert to DavinciCryptoOutput format
+    const ciphertexts: DavinciCryptoCiphertext[] = ballotInputs.cipherfields.map(cf => ({
+      c1: [cf[0][0], cf[0][1]] as [string, string],
+      c2: [cf[1][0], cf[1][1]] as [string, string],
+    }));
+
+    // Build circom inputs (convert types to match ProofInputs interface)
+    const circomInputs: ProofInputs = {
+      process_id: ballotInputs.process_id,
+      num_fields: ballotInputs.num_fields.toString(),
+      unique_values: ballotInputs.unique_values.toString(),
+      max_value: ballotInputs.max_value.toString(),
+      min_value: ballotInputs.min_value.toString(),
+      max_value_sum: ballotInputs.max_value_sum.toString(),
+      min_value_sum: ballotInputs.min_value_sum.toString(),
+      cost_exponent: ballotInputs.cost_exponent.toString(),
+      cost_from_weight: ballotInputs.cost_from_weight.toString(),
+      encryption_pubkey: [ballotInputs.encryption_pubkey[0], ballotInputs.encryption_pubkey[1]],
+      address: ballotInputs.address,
+      vote_id: ballotInputs.vote_id,
+      cipherfields: ballotInputs.cipherfields,
+      weight: ballotInputs.weight.toString(),
+      fields: ballotInputs.fields.map(f => f.toString()),
+      k: ballotInputs.k,
+      inputs_hash: ballotInputs.inputs_hash,
+    };
+
+    return {
+      processId: inputs.processID,
+      address: inputs.address,
+      ballot: {
+        curveType: 'bjj_iden3',
+        ciphertexts,
+      },
+      ballotInputsHash: ballotInputs.inputs_hash,
+      voteId: ballotInputs.vote_id,
+      circomInputs,
+    };
   }
 
   /**
    * Generate a CSP (Credential Service Provider) signature for census proof.
+   * Requires WASM to be initialized first via initWasm()
    * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
    * @param privKey - The private key in hex format
    * @param processId - The process ID in hex format
    * @param address - The address in hex format
    * @param weight - The vote weight as a decimal string
    * @returns The CSP proof as a parsed JSON object
-   * @throws if called before `await init()`, or if Go returns an error
+   * @throws if called before `await initWasm()`, or if Go returns an error
    */
   async cspSign(
     censusOrigin: CensusOrigin,
@@ -237,8 +324,8 @@ export class DavinciCrypto {
     address: string,
     weight: string
   ): Promise<CSPSignOutput> {
-    if (!this.initialized) {
-      throw new Error('DavinciCrypto not initialized — call `await init()` first');
+    if (!this.wasmInitialized) {
+      throw new Error('WASM not initialized for CSP functions — call `await initWasm()` first');
     }
 
     const raw = globalThis.DavinciCrypto.cspSign(censusOrigin, privKey, processId, address, weight);
@@ -255,6 +342,7 @@ export class DavinciCrypto {
 
   /**
    * Verify a CSP (Credential Service Provider) proof.
+   * Requires WASM to be initialized first via initWasm()
    * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
    * @param root - The census root
    * @param address - The address
@@ -263,7 +351,7 @@ export class DavinciCrypto {
    * @param publicKey - The public key
    * @param signature - The signature
    * @returns The verification result
-   * @throws if called before `await init()`, or if Go returns an error
+   * @throws if called before `await initWasm()`, or if Go returns an error
    */
   async cspVerify(
     censusOrigin: CensusOrigin,
@@ -274,8 +362,8 @@ export class DavinciCrypto {
     publicKey: string,
     signature: string
   ): Promise<boolean> {
-    if (!this.initialized) {
-      throw new Error('DavinciCrypto not initialized — call `await init()` first');
+    if (!this.wasmInitialized) {
+      throw new Error('WASM not initialized for CSP functions — call `await initWasm()` first');
     }
 
     // Create the CSP proof object and stringify it for the WASM call
@@ -303,14 +391,15 @@ export class DavinciCrypto {
 
   /**
    * Generate a CSP (Credential Service Provider) census root.
+   * Requires WASM to be initialized first via initWasm()
    * @param censusOrigin - The census origin type (e.g., CensusOrigin.CensusOriginCSP)
    * @param privKey - The private key in hex format
    * @returns The census root as a hexadecimal string
-   * @throws if called before `await init()`, or if Go returns an error
+   * @throws if called before `await initWasm()`, or if Go returns an error
    */
   async cspCensusRoot(censusOrigin: CensusOrigin, privKey: string): Promise<string> {
-    if (!this.initialized) {
-      throw new Error('DavinciCrypto not initialized — call `await init()` first');
+    if (!this.wasmInitialized) {
+      throw new Error('WASM not initialized for CSP functions — call `await initWasm()` first');
     }
 
     const raw = globalThis.DavinciCrypto.cspCensusRoot(censusOrigin, privKey);

@@ -45,7 +45,8 @@ describe('DavinciCryptoService Integration', () => {
       wasmExecHash: info.ballotProofWasmHelperExecJsHash,
       wasmHash: info.ballotProofWasmHelperHash,
     });
-    await service.init();
+    // Note: No init needed for proofInputs (auto-initializes)
+    // For CSP tests, we'll call initWasm() where needed
   });
 
   it('should produce a complete DavinciCryptoOutput with all fields typed correctly', async () => {
@@ -135,6 +136,11 @@ describe('DavinciCryptoService Integration', () => {
     };
 
     describe('CSP Signing and Verification', () => {
+      beforeAll(async () => {
+        // Initialize WASM for CSP functions
+        await service.initWasm();
+      });
+
       it('should generate a CSP signature and return valid proof', async () => {
         const cspProof = await service.cspSign(
           cspTestData.censusOrigin,
@@ -405,7 +411,7 @@ describe('DavinciCryptoService Integration', () => {
       });
 
       // Should not throw an error
-      await expect(serviceWithHashes.init()).resolves.not.toThrow();
+      await expect(serviceWithHashes.initWasm()).resolves.not.toThrow();
     });
 
     it('should work without hash verification (backward compatibility)', async () => {
@@ -416,7 +422,7 @@ describe('DavinciCryptoService Integration', () => {
       });
 
       // Should not throw an error
-      await expect(serviceWithoutHashes.init()).resolves.not.toThrow();
+      await expect(serviceWithoutHashes.initWasm()).resolves.not.toThrow();
     });
 
     it('should throw error with invalid wasm exec hash', async () => {
@@ -428,7 +434,7 @@ describe('DavinciCryptoService Integration', () => {
         wasmHash: info.ballotProofWasmHelperHash,
       });
 
-      await expect(serviceWithInvalidExecHash.init()).rejects.toThrow(
+      await expect(serviceWithInvalidExecHash.initWasm()).rejects.toThrow(
         /Hash verification failed for wasm_exec\.js/
       );
     });
@@ -442,7 +448,7 @@ describe('DavinciCryptoService Integration', () => {
         wasmHash: 'invalid_hash_value_that_will_not_match_the_actual_file_content',
       });
 
-      await expect(serviceWithInvalidWasmHash.init()).rejects.toThrow(
+      await expect(serviceWithInvalidWasmHash.initWasm()).rejects.toThrow(
         /Hash verification failed for davinci_crypto\.wasm/
       );
     });
@@ -456,7 +462,7 @@ describe('DavinciCryptoService Integration', () => {
       });
 
       try {
-        await serviceWithInvalidHash.init();
+        await serviceWithInvalidHash.initWasm();
         throw new Error('Expected hash verification to fail');
       } catch (error: any) {
         expect(error.message).toContain('Hash verification failed for wasm_exec.js');
@@ -479,7 +485,7 @@ describe('DavinciCryptoService Integration', () => {
       });
 
       // Should not throw an error even with uppercase hash
-      await expect(serviceWithUpperCaseHash.init()).resolves.not.toThrow();
+      await expect(serviceWithUpperCaseHash.initWasm()).resolves.not.toThrow();
     });
 
     it('should verify only provided hashes (partial verification)', async () => {
@@ -491,7 +497,7 @@ describe('DavinciCryptoService Integration', () => {
         // wasmHash intentionally omitted
       });
 
-      await expect(serviceWithOnlyExecHash.init()).resolves.not.toThrow();
+      await expect(serviceWithOnlyExecHash.initWasm()).resolves.not.toThrow();
 
       // Test with only wasm binary hash provided
       const serviceWithOnlyWasmHash = new DavinciCrypto({
@@ -501,7 +507,7 @@ describe('DavinciCryptoService Integration', () => {
         // wasmExecHash intentionally omitted
       });
 
-      await expect(serviceWithOnlyWasmHash.init()).resolves.not.toThrow();
+      await expect(serviceWithOnlyWasmHash.initWasm()).resolves.not.toThrow();
     });
   });
 });

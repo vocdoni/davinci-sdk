@@ -173,19 +173,24 @@ export class DavinciSDK {
   }
 
   /**
-   * Get or initialize the DavinciCrypto service for cryptographic operations
+   * Get or initialize the DavinciCrypto service for cryptographic operations.
+   * Note: For voting (proofInputs), no initialization is needed - it's automatic.
+   * For CSP functions, you need to call initWasm() separately if needed.
    */
   async getCrypto(): Promise<DavinciCrypto> {
     if (!this.davinciCrypto) {
-      // Get WASM URLs from sequencer info
+      // Get WASM URLs from sequencer info (for CSP functions if needed)
       const info = await this.apiService.sequencer.getInfo();
 
       this.davinciCrypto = new DavinciCrypto({
         wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
         wasmUrl: info.ballotProofWasmHelperUrl,
+        wasmExecHash: info.ballotProofWasmHelperExecJsHash,
+        wasmHash: info.ballotProofWasmHelperHash,
       });
 
-      await this.davinciCrypto.init();
+      // No initialization needed - proofInputs() auto-initializes the TypeScript implementation
+      // If CSP functions are needed, call crypto.initWasm() separately
     }
 
     return this.davinciCrypto;
