@@ -104,7 +104,7 @@ export class BallotInputGenerator {
         ciphertexts,
       },
       ballotInputsHash: ballotInputs.inputs_hash,
-      voteId: '0x' + BigInt(ballotInputs.vote_id).toString(16).padStart(40, '0'),
+      voteId: '0x' + BigInt(ballotInputs.vote_id).toString(16).padStart(64, '0'),
       circomInputs,
     };
 

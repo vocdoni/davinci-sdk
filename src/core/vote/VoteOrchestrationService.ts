@@ -386,7 +386,7 @@ export class VoteOrchestrationService {
       k = BigInt(hexRandomness).toString();
     }
 
-    // Generate ballot inputs using the new TypeScript implementation
+    // Generate ballot inputs
     const result = await generator.generateInputs(
       processId.replace(/^0x/, ''),
       voterAddress.replace(/^0x/, ''),
