@@ -2,7 +2,7 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { BallotInputGenerator } from '../../sequencer/BallotInputGenerator';
 import { BallotInputsOutput } from '../../crypto/types';
-import { ProofInputs as Groth16ProofInputs } from '../../sequencer/CircomProofService';
+import { ProofInputs as Groth16ProofInputs, Groth16Proof } from '../../sequencer/CircomProofService';
 import {
   CensusOrigin,
   CensusProof,
@@ -12,6 +12,7 @@ import {
 } from '../../census/types';
 import { VoteRequest, VoteBallot, VoteProof, VoteStatus } from '../../sequencer/api/types';
 import { BallotMode } from '../types';
+import * as snarkjs from 'snarkjs';
 
 /**
  * Simplified vote configuration interface for end users
@@ -132,13 +133,17 @@ export class VoteOrchestrationService {
       config.randomness
     );
 
-    // 5. Sign the vote (no client-side proof generation - sequencer handles it)
+    // 5. Generate zk-SNARK proof using snarkjs
+    const { proof } = await this.generateZkProof(circomInputs);
+
+    // 6. Sign the vote
     const signature = await this.signVote(voteId);
 
-    // 6. Submit the vote (no proof - sequencer generates it)
+    // 7. Submit the vote
     const voteRequest: VoteRequest = {
       processId: config.processId,
       ballot: cryptoOutput.ballot,
+      ballotProof: proof,
       ballotInputsHash: cryptoOutput.ballotInputsHash,
       address: voterAddress,
       signature,
@@ -414,6 +419,49 @@ export class VoteOrchestrationService {
         throw new Error(`Choice ${choice} is out of range [${minValue}, ${maxValue}]`);
       }
     }
+  }
+
+  /**
+   * Generate zk-SNARK proof using snarkjs directly (no CircomProof wrapper)
+   */
+  private async generateZkProof(circomInputs: Groth16ProofInputs): Promise<{
+    proof: VoteProof;
+    publicSignals: string[];
+  }> {
+    // Get circuit URLs from sequencer info
+    const info = await this.apiService.sequencer.getInfo();
+
+    // Download WASM and zkey files as bytes (snarkjs needs actual files, not URLs)
+    const [wasmBytes, zkeyBytes] = await Promise.all([
+      fetch(info.circuitUrl).then(r => r.arrayBuffer()),
+      fetch(info.provingKeyUrl).then(r => r.arrayBuffer()),
+    ]);
+
+    // Use snarkjs.groth16.fullProve with file bytes
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circomInputs,
+      new Uint8Array(wasmBytes),
+      new Uint8Array(zkeyBytes)
+    );
+
+    // Optionally verify the generated proof
+    if (this.verifyProof) {
+      const vkey = await fetch(info.verificationKeyUrl).then(r => r.json());
+      const isValid = await snarkjs.groth16.verify(vkey, publicSignals, proof);
+      if (!isValid) {
+        throw new Error('Generated proof is invalid');
+      }
+    }
+
+    // Convert proof to VoteProof format
+    const voteProof: VoteProof = {
+      pi_a: proof.pi_a,
+      pi_b: proof.pi_b,
+      pi_c: proof.pi_c,
+      protocol: proof.protocol,
+    };
+
+    return { proof: voteProof, publicSignals };
   }
 
   private hexToBytes(hex: string): Uint8Array {

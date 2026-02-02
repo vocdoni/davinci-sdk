@@ -107,7 +107,7 @@ export class BallotInputGenerator {
       voteId: '0x' + BigInt(ballotInputs.vote_id).toString(16).padStart(40, '0'),
       circomInputs,
     };
-console.log("Generated ballot inputs:", JSON.stringify(output, null, 4));
+
     return output;
   }
 }
