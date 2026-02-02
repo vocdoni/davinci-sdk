@@ -283,7 +283,8 @@ export class BallotBuilder {
     // Build Inputs Hash - MUST MATCH ballot_proof.circom ORDER
     const inputsList: any[] = [];
 
-    inputsList.push(BigInt(processId));
+    const ffProcessID = mod(BigInt(processId), FIELD_MODULUS);
+    inputsList.push(ffProcessID);
     inputsList.push(BigInt(activeFields)); // num_fields
     inputsList.push(BigInt(config.uniqueValues));
     inputsList.push(BigInt(config.maxValue));
