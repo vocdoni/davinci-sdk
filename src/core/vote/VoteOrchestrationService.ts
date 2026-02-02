@@ -1,4 +1,4 @@
-import { Signer } from 'ethers';
+import { Signer, sha256 } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { BallotInputGenerator } from '../../sequencer/BallotInputGenerator';
 import { BallotInputsOutput } from '../../crypto/types';
@@ -79,6 +79,11 @@ export interface VoteOrchestrationConfig {
 export class VoteOrchestrationService {
   private readonly verifyCircuitFiles: boolean;
   private readonly verifyProof: boolean;
+  
+  // Cache for circuit files
+  private wasmCache = new Map<string, Uint8Array>();
+  private zkeyCache = new Map<string, Uint8Array>();
+  private vkeyCache = new Map<string, any>();
 
   constructor(
     private apiService: VocdoniApiService,
@@ -422,6 +427,20 @@ export class VoteOrchestrationService {
   }
 
   /**
+   * Verify hash of downloaded file
+   */
+  private verifyHash(data: Uint8Array, expectedHash: string, filename: string): void {
+    const computedHash = sha256(data).slice(2); // Remove '0x' prefix
+    if (computedHash.toLowerCase() !== expectedHash.toLowerCase()) {
+      throw new Error(
+        `Hash verification failed for ${filename}. ` +
+          `Expected: ${expectedHash.toLowerCase()}, ` +
+          `Computed: ${computedHash.toLowerCase()}`
+      );
+    }
+  }
+
+  /**
    * Generate zk-SNARK proof using snarkjs directly (no CircomProof wrapper)
    */
   private async generateZkProof(circomInputs: Groth16ProofInputs): Promise<{
@@ -431,22 +450,70 @@ export class VoteOrchestrationService {
     // Get circuit URLs from sequencer info
     const info = await this.apiService.sequencer.getInfo();
 
-    // Download WASM and zkey files as bytes (snarkjs needs actual files, not URLs)
-    const [wasmBytes, zkeyBytes] = await Promise.all([
-      fetch(info.circuitUrl).then(r => r.arrayBuffer()),
-      fetch(info.provingKeyUrl).then(r => r.arrayBuffer()),
-    ]);
+    // Download WASM file (with caching)
+    let wasmBytes = this.wasmCache.get(info.circuitUrl);
+    if (!wasmBytes) {
+      const response = await fetch(info.circuitUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WASM at ${info.circuitUrl}: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      wasmBytes = new Uint8Array(buffer);
+      
+      // Verify hash if enabled
+      if (this.verifyCircuitFiles) {
+        this.verifyHash(wasmBytes, info.circuitHash, 'circuit.wasm');
+      }
+      
+      this.wasmCache.set(info.circuitUrl, wasmBytes);
+    }
+
+    // Download zkey file (with caching)
+    let zkeyBytes = this.zkeyCache.get(info.provingKeyUrl);
+    if (!zkeyBytes) {
+      const response = await fetch(info.provingKeyUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch zkey at ${info.provingKeyUrl}: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      zkeyBytes = new Uint8Array(buffer);
+      
+      // Verify hash if enabled
+      if (this.verifyCircuitFiles) {
+        this.verifyHash(zkeyBytes, info.provingKeyHash, 'proving_key.zkey');
+      }
+      
+      this.zkeyCache.set(info.provingKeyUrl, zkeyBytes);
+    }
 
     // Use snarkjs.groth16.fullProve with file bytes
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(
       circomInputs,
-      new Uint8Array(wasmBytes),
-      new Uint8Array(zkeyBytes)
+      wasmBytes,
+      zkeyBytes
     );
 
     // Optionally verify the generated proof
     if (this.verifyProof) {
-      const vkey = await fetch(info.verificationKeyUrl).then(r => r.json());
+      // Download and cache verification key
+      let vkey = this.vkeyCache.get(info.verificationKeyUrl);
+      if (!vkey) {
+        const response = await fetch(info.verificationKeyUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch vkey at ${info.verificationKeyUrl}: ${response.status}`);
+        }
+        const vkeyText = await response.text();
+        
+        // Verify hash if enabled
+        if (this.verifyCircuitFiles) {
+          const vkeyBytes = new TextEncoder().encode(vkeyText);
+          this.verifyHash(vkeyBytes, info.verificationKeyHash, 'verification_key.json');
+        }
+        
+        vkey = JSON.parse(vkeyText);
+        this.vkeyCache.set(info.verificationKeyUrl, vkey);
+      }
+      
       const isValid = await snarkjs.groth16.verify(vkey, publicSignals, proof);
       if (!isValid) {
         throw new Error('Generated proof is invalid');
