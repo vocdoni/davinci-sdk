@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-02
+
+### Added
+- **Circuit File Caching**: Implemented in-memory caching for WASM, zkey, and verification key files
+  - Prevents re-downloading circuit files when submitting votes in parallel
+  - Files are downloaded once per `VoteOrchestrationService` instance and cached for all subsequent votes
+  - Significantly improves performance for batch voting scenarios
+- **Hash Verification**: Added SHA-256 hash verification for downloaded circuit files
+  - Verifies integrity of `circuit.wasm`, `proving_key.zkey`, and `verification_key.json`
+  - Controlled by `verifyCircuitFiles` configuration option (enabled by default)
+  - Enhances security by ensuring downloaded files match expected hashes from sequencer
+- Added `verifyHash()` private method in `VoteOrchestrationService` for file integrity checks
+
+### Changed
+- **VoteId Signing**: Modified `signVote()` method to pad voteId to 32 bytes (64 hex characters) before signing
+  - Ensures consistent signature format for vote verification
+  - Pads with leading zeros to meet required byte length
+- Imported `sha256` from ethers for hash verification functionality
+
+### Fixed
+- Fixed Rollup configuration warning for `circomlibjs` global variable
+  - Added `'circomlibjs': 'circomlibjs'` to UMD globals in `rollup.config.js`
+  - Eliminates build warnings about missing global variable names
+
+### Performance
+- Circuit file downloads reduced from N downloads to 1 download when submitting N votes in parallel
+  - Example: 5 parallel votes now download files once instead of 5 times
+  - Cache is maintained per service instance throughout its lifetime
+
+### Technical Details
+- Cache implementation uses `Map<string, Uint8Array>` for WASM and zkey files
+- Cache implementation uses `Map<string, any>` for parsed verification key JSON
+- Hash verification uses ethers' `sha256` function for consistency
+- All verification is performed after download but before caching
+- `verifyCircuitFiles` and `verifyProof` options both default to `true` for maximum security
+
 ## [0.1.1] - 2026-01-26
 
 ### Changed
