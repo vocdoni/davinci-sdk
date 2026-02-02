@@ -29,7 +29,8 @@ const createOutput = (name, options) => [
       '@vocdoni/davinci-contracts': 'davinciContracts',
       'ethers': 'ethers',
       'snarkjs': 'snarkjs',
-      '@ethereumjs/common': 'ethereumjsCommon'
+      '@ethereumjs/common': 'ethereumjsCommon',
+      'circomlibjs': 'circomlibjs'
     }
   }
 ];
