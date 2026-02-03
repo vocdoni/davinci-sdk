@@ -26,7 +26,7 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint-staged": "lint-staged",
     "test": "yarn test:unit && yarn test:integration",
-    "test:unit": "yarn test:contracts:unit && yarn test:sequencer:unit",
+    "test:unit": "yarn test:contracts:unit && yarn test:sequencer:unit && yarn test:crypto:unit",
     "test:integration": "yarn test:contracts:integration && yarn test:sequencer:integration && yarn test:census:integration",
     "test:contracts": "yarn test:contracts:unit && yarn test:contracts:integration",
     "test:contracts:unit": "jest 'test/contracts/unit'",
@@ -34,6 +34,7 @@
     "test:sequencer": "yarn test:sequencer:unit && yarn test:sequencer:integration",
     "test:sequencer:unit": "jest 'test/sequencer/unit'",
     "test:sequencer:integration": "jest 'test/sequencer/integration' --runInBand",
+    "test:crypto:unit": "jest 'test/crypto/unit'",
     "test:census": "yarn test:census:integration",
     "test:census:integration": "jest 'test/census/integration' --runInBand"
   },

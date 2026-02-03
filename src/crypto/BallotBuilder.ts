@@ -1,9 +1,11 @@
 import { buildElGamal, ElGamal } from './ElGamal';
 import { buildPoseidon } from 'circomlibjs';
+import { FIELDS_PER_BALLOT } from './constants';
+import { FIELD_MODULUS, mod } from './field';
+import { multiPoseidon } from './poseidon';
 
 // BN254 scalar field modulus (Fr)
-export const FIELD_MODULUS =
-  21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export { FIELD_MODULUS };
 
 // Scaling factor for RTE <-> TE conversion
 // This is used to convert between Gnark's BabyJubJub (Reduced Twisted Edwards)
@@ -25,13 +27,6 @@ function modInverse(a: bigint, m: bigint): bigint {
   }
 
   return ((old_s % m) + m) % m;
-}
-
-/**
- * Modular arithmetic helper
- */
-function mod(n: bigint, m: bigint): bigint {
-  return ((n % m) + m) % m;
 }
 
 /**
@@ -177,24 +172,7 @@ export class BallotBuilder {
 
   // Matches circuits/lib/multiposeidon.circom logic
   multiHash(inputs: bigint[]): bigint {
-    const nInputs = inputs.length;
-    if (nInputs <= 16) {
-      return this.F.toObject(this.poseidon(inputs));
-    }
-
-    // Split into chunks of 16
-    const chunks: bigint[][] = [];
-    for (let i = 0; i < nInputs; i += 16) {
-      chunks.push(inputs.slice(i, i + 16));
-    }
-
-    const intermediateHashes: bigint[] = [];
-    for (const chunk of chunks) {
-      intermediateHashes.push(this.F.toObject(this.poseidon(chunk)));
-    }
-
-    // Hash the chunk hashes
-    return this.F.toObject(this.poseidon(intermediateHashes));
+    return multiPoseidon(this.poseidon, this.F, inputs);
   }
 
   encryptFields(fields: number[], pubKey: any, seedK: string, nFields: number) {
@@ -273,7 +251,7 @@ export class BallotBuilder {
     address: string,
     k: string,
     config: BallotConfig,
-    circuitCapacity: number = 8
+    circuitCapacity: number = FIELDS_PER_BALLOT
   ): BallotInputs {
     const activeFields = fields.length;
 
@@ -352,7 +330,7 @@ export class BallotBuilder {
     fields: number[],
     weight: number,
     k?: string,
-    circuitCapacity: number = 8
+    circuitCapacity: number = FIELDS_PER_BALLOT
   ): BallotInputs {
     // Convert process ID and address from hex to decimal
     const processId = hexToDecimal(sequencerData.processId);
