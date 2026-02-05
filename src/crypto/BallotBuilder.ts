@@ -275,7 +275,7 @@ export class BallotBuilder {
     config: BallotConfig,
     circuitCapacity: number = 8
   ): BallotInputs {
-    const activeFields = fields.length;
+    const activeFields = config.numFields;
 
     const { cipherfields, paddedFields } = this.encryptFields(fields, pubKey, k, circuitCapacity);
     const voteId = this.computeVoteID(processId, address, k);
