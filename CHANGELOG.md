@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-02-05
+
+### Fixed
+- **Buffer Polyfill**: Fixed browser compatibility by adding proper buffer polyfill configuration
+  - Added `buffer` package as a dependency
+  - Added `@rollup/plugin-inject` for automatic Buffer injection in browser environments
+  - Updated Rollup configuration to properly inject Buffer polyfill for browser builds
+  - Ensures SDK works correctly in browser environments without manual Buffer setup
+- Improved Rollup build configuration for better browser compatibility
+
+### Removed
+- Removed obsolete `src/js/` directory containing old JavaScript implementation
+  - Cleaned up legacy code that was no longer in use
+  - Reduced repository size and complexity
+
+### Technical Details
+- Browser builds now automatically include Buffer polyfill via Rollup plugin injection
+- UMD, ESM, and CommonJS builds all properly handle Buffer dependencies
+- No breaking changes - existing code continues to work without modifications
+
 ## [0.1.2] - 2026-02-02
 
 ### Added

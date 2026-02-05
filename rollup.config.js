@@ -23,6 +23,19 @@ const createBundle = (config, options) => ({
     if (FORCE_BUNDLE_DEPS.has(dep)) return false;
     return options.includeSnarkjs ? true : dep !== 'snarkjs';
   }),
+  onwarn(warning, warn) {
+    // Suppress circular dependency warnings from stream polyfills
+    // These are expected and harmless in Node.js stream implementations
+    if (
+      warning.code === 'CIRCULAR_DEPENDENCY' &&
+      (warning.message.includes('_stream_') ||
+       warning.message.includes('readable-stream'))
+    ) {
+      return;
+    }
+    // Show all other warnings
+    warn(warning);
+  }
 });
 
 const createOutput = (name, options) => [
