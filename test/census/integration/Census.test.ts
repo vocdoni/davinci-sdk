@@ -1,8 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
 import { VocdoniCensusService } from '../../../src/census';
 import { CensusParticipant, CensusOrigin } from '../../../src/census/types';
 import {
@@ -10,8 +5,10 @@ import {
   isValidUUID,
   isValidHex,
 } from '../../sequencer/integration/utils';
+import { getApiUrls } from '../../helpers/integrationRuntime';
 
-const censusService = new VocdoniCensusService(process.env.CENSUS_API_URL!);
+const { censusUrl } = getApiUrls();
+const censusService = new VocdoniCensusService(censusUrl);
 let workingCensusId: string;
 let publishedCensusRoot: string;
 

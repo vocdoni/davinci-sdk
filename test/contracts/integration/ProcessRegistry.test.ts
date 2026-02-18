@@ -1,9 +1,4 @@
 // test/integration/ProcessRegistry.test.ts
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet, hexlify } from 'ethers';
 import {
   ProcessRegistryService,
@@ -13,11 +8,10 @@ import {
 import { BallotMode, CensusData, EncryptionKey } from '../../../src/core';
 import { CensusOrigin } from '../../../src/census';
 import { VocdoniSequencerService } from '../../../src/sequencer';
-
-jest.setTimeout(Number(process.env.TIME_OUT) || 120_000);
-
-const provider = new JsonRpcProvider(process.env.RPC_URL);
-const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
+import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+const { sequencerUrl } = getApiUrls();
+const provider: JsonRpcProvider = createIntegrationProvider();
+const wallet: Wallet = createIntegrationWallet().connect(provider);
 
 function randomHex(bytes: number): string {
   let hex = '';
@@ -38,7 +32,7 @@ describe('ProcessRegistryService Integration', () => {
 
   beforeAll(async () => {
     // Fetch contract address from sequencer
-    const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    const sequencerService = new VocdoniSequencerService(sequencerUrl);
     const info = await sequencerService.getInfo();
     const PROC_REGISTRY_ADDR = info.contracts.process;
     procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);

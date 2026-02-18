@@ -2,11 +2,9 @@ import { DavinciCrypto, DavinciCryptoInputs } from '../../../src/sequencer';
 import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
 import { InfoResponse } from '../../../src/sequencer/api/types';
 import { CensusOrigin } from '../../../src/census/';
-import { config } from 'dotenv';
-import { resolve } from 'path';
+import { getApiUrls } from '../../helpers/integrationRuntime';
 
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
+const { sequencerUrl } = getApiUrls();
 
 describe('DavinciCryptoService Integration', () => {
   let service: DavinciCrypto;
@@ -35,7 +33,7 @@ describe('DavinciCryptoService Integration', () => {
   };
 
   beforeAll(async () => {
-    api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    api = new VocdoniSequencerService(sequencerUrl);
     const info = await api.getInfo();
 
     service = new DavinciCrypto({
@@ -392,7 +390,7 @@ describe('DavinciCryptoService Integration', () => {
     let info: InfoResponse;
 
     beforeAll(async () => {
-      api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+      api = new VocdoniSequencerService(sequencerUrl);
       info = await api.getInfo();
     });
 

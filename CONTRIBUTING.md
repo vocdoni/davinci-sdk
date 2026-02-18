@@ -71,8 +71,10 @@ davinci-sdk/
 │   ├── sequencer/         # Sequencer API and crypto
 │   └── census/            # Census management
 ├── test/                  # Test files
-│   ├── unit/              # Unit tests
-│   └── integration/       # Integration tests
+│   ├── <domain>/unit/     # Unit tests
+│   ├── <domain>/integration/ # Integration tests
+│   ├── helpers/           # Shared test utilities
+│   └── setup/             # Jest setup files
 ├── examples/              # Usage examples
 ├── docs/                  # Documentation
 └── dist/                  # Built files (generated)
@@ -93,6 +95,8 @@ yarn test:integration      # Run integration tests only
 yarn test:contracts        # Run contract tests
 yarn test:sequencer        # Run sequencer tests
 yarn test:census           # Run census tests
+yarn test:core             # Run core tests
+yarn test:crypto           # Run crypto tests
 
 # Code Quality
 yarn lint                  # Run ESLint
@@ -109,7 +113,9 @@ yarn lint-staged           # Run pre-commit checks
 For integration tests, create a `.env` file in the `test/` directory:
 
 ```env
-SEPOLIA_RPC=https://sepolia.infura.io/v3/your-key
+RPC_URL=https://sepolia.infura.io/v3/your-key
+SEQUENCER_API_URL=https://your-sequencer.example
+CENSUS_API_URL=https://your-census.example
 PRIVATE_KEY=0x...
 TIME_OUT=600000
 ```

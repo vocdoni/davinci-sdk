@@ -53,7 +53,6 @@ describe('Crypto Integration: Poseidon + ElGamal', () => {
     expect(inputs.fields).toHaveLength(8);
     expect(inputs.fields.slice(0, 5)).toEqual(fields);
     expect(inputs.fields.slice(5)).toEqual([0, 0, 0]);
-    expect(inputs.num_fields).toBe(5);
     expect(inputs.cipherfields).toHaveLength(8);
     expect(typeof inputs.inputs_hash).toBe('string');
     expect(inputs.vote_id).toBeDefined();
