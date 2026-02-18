@@ -1,9 +1,10 @@
 import { Wallet, JsonRpcProvider } from 'ethers';
 import { CensusOrigin } from '../../../src/census/types';
+import { getRequiredEnv } from '../../helpers/integrationEnv';
 
 // Create mock provider and wallet
-export const mockProvider = new JsonRpcProvider(process.env.SEPOLIA_RPC);
-export const mockWallet = new Wallet(process.env.PRIVATE_KEY!, mockProvider);
+export const mockProvider = new JsonRpcProvider(getRequiredEnv('RPC_URL'));
+export const mockWallet = new Wallet(getRequiredEnv('PRIVATE_KEY'), mockProvider);
 
 // Mock data generators
 export const generateMockCensusParticipants = (count: number) => {

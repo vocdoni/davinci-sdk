@@ -1,10 +1,8 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
 import { DavinciSDK, DavinciSDKConfig } from '../../../src/DavinciSDK';
 import { Wallet, JsonRpcProvider } from 'ethers';
+import { getApiUrls } from '../../helpers/integrationRuntime';
+
+const { sequencerUrl, censusUrl } = getApiUrls();
 
 describe('DavinciSDK Integration Tests', () => {
   let mockSigner: Wallet;
@@ -23,26 +21,26 @@ describe('DavinciSDK Integration Tests', () => {
     it('should initialize with sequencer URL only', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       const config = sdk.getConfig();
 
-      expect(config.sequencerUrl).toBe(process.env.SEQUENCER_API_URL!);
+      expect(config.sequencerUrl).toBe(sequencerUrl);
       expect(config.censusUrl).toBeUndefined();
     });
 
     it('should initialize with both sequencer and census URLs', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
-        censusUrl: process.env.CENSUS_API_URL!,
+        sequencerUrl: sequencerUrl,
+        censusUrl: censusUrl,
       });
 
       const config = sdk.getConfig();
 
-      expect(config.sequencerUrl).toBe(process.env.SEQUENCER_API_URL!);
-      expect(config.censusUrl).toBe(process.env.CENSUS_API_URL!);
+      expect(config.sequencerUrl).toBe(sequencerUrl);
+      expect(config.censusUrl).toBe(censusUrl);
     });
 
     it('should accept custom URLs', () => {
@@ -66,7 +64,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should fetch addresses from sequencer when no custom addresses provided', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       const config = sdk.getConfig();
@@ -84,7 +82,7 @@ describe('DavinciSDK Integration Tests', () => {
 
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
         addresses: customAddresses,
       });
 
@@ -100,7 +98,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should not fetch from sequencer when custom addresses provided', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
         addresses: {
           processRegistry: '0xCustom123456789012345678901234',
         },
@@ -115,7 +113,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should initialize all required services', async () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       // Check that API service is available before init
@@ -135,7 +133,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should initialize SDK and mark as initialized', async () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       // Should not be initialized initially
@@ -155,7 +153,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should not fetch addresses when custom addresses provided', async () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
         addresses: {
           processRegistry: '0xCustom123',
         },
@@ -178,7 +176,7 @@ describe('DavinciSDK Integration Tests', () => {
       // Create SDK without custom addresses
       const sdk = new DavinciSDK({
         signer: mockSigner,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       const initialConfig = sdk.getConfig();
@@ -186,7 +184,7 @@ describe('DavinciSDK Integration Tests', () => {
       // Should be empty initially
       expect(Object.keys(initialConfig.customAddresses).length).toBe(0);
       expect(initialConfig.fetchAddressesFromSequencer).toBe(true);
-      expect(initialConfig.sequencerUrl).toBe(process.env.SEQUENCER_API_URL!);
+      expect(initialConfig.sequencerUrl).toBe(sequencerUrl);
 
       // Get sequencer info to know what addresses should be set
       const sequencerInfo = await sdk.api.sequencer.getInfo();
@@ -267,7 +265,7 @@ describe('DavinciSDK Integration Tests', () => {
       expect(() => {
         new DavinciSDK({
           signer: bareWallet,
-          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          sequencerUrl: sequencerUrl,
         });
       }).not.toThrow();
     });
@@ -275,7 +273,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should allow SDK initialization without provider', async () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       await expect(sdk.init()).resolves.not.toThrow();
@@ -285,7 +283,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should allow access to API service without provider', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.api).not.toThrow();
@@ -295,7 +293,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should allow access to vote orchestrator without provider', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.voteOrchestrator).not.toThrow();
@@ -305,7 +303,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when accessing processes getter without provider', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.processes).toThrow(
@@ -316,7 +314,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when accessing organizations getter without provider', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.organizations).toThrow(
@@ -327,7 +325,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when accessing processOrchestrator getter without provider', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.processOrchestrator).toThrow(
@@ -338,7 +336,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when calling getProcess without provider', async () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       await sdk.init();
@@ -351,7 +349,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when calling createProcess without provider', async () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       await sdk.init();
@@ -397,7 +395,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should throw error when calling createProcessStream without provider', async () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       await sdk.init();
@@ -442,7 +440,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should provide helpful error message mentioning wallet.connect(provider)', () => {
       const sdk = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       try {
@@ -471,7 +469,7 @@ describe('DavinciSDK Integration Tests', () => {
       expect(() => {
         new DavinciSDK({
           signer: connectedWallet,
-          sequencerUrl: process.env.SEQUENCER_API_URL!,
+          sequencerUrl: sequencerUrl,
         });
       }).not.toThrow();
     });
@@ -479,7 +477,7 @@ describe('DavinciSDK Integration Tests', () => {
     it('should allow access to all services with connected wallet', async () => {
       const sdk = new DavinciSDK({
         signer: connectedWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       // API and vote services are available before init
@@ -518,7 +516,7 @@ describe('DavinciSDK Integration Tests', () => {
 
       const sdk = new DavinciSDK({
         signer: wallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
       });
 
       expect(() => sdk.processes).toThrow('Provider required for blockchain operations');
@@ -545,13 +543,13 @@ describe('DavinciSDK Integration Tests', () => {
 
       const sdkBare = new DavinciSDK({
         signer: bareWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
         addresses: customAddresses,
       });
 
       const sdkConnected = new DavinciSDK({
         signer: connectedWallet,
-        sequencerUrl: process.env.SEQUENCER_API_URL!,
+        sequencerUrl: sequencerUrl,
         addresses: customAddresses,
       });
 

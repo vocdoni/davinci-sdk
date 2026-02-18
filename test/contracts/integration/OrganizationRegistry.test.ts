@@ -1,9 +1,4 @@
 // test/integration/OrganizationRegistry.test.ts
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
 import { JsonRpcProvider, Wallet } from 'ethers';
 import {
   OrganizationRegistryService,
@@ -11,12 +6,11 @@ import {
   OrganizationCreateError,
 } from '../../../src/contracts';
 import { VocdoniSequencerService } from '../../../src/sequencer';
-
-jest.setTimeout(Number(process.env.TIMEOUT) || 60000);
-
-const provider = new JsonRpcProvider(process.env.RPC_URL);
+import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+const { sequencerUrl } = getApiUrls();
+const provider: JsonRpcProvider = createIntegrationProvider();
 provider.pollingInterval = 1_000;
-const wallet = new Wallet(process.env.PRIVATE_KEY!, provider);
+const wallet: Wallet = createIntegrationWallet().connect(provider);
 
 const admin = wallet.address;
 let service: OrganizationRegistryService;
@@ -26,7 +20,7 @@ describe('OrganizationRegistryService Integration', () => {
 
   beforeAll(async () => {
     // Fetch contract address from sequencer
-    const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    const sequencerService = new VocdoniSequencerService(sequencerUrl);
     const info = await sequencerService.getInfo();
     const contractAddress = info.contracts.organization;
     service = new OrganizationRegistryService(contractAddress, wallet);

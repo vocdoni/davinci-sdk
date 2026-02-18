@@ -1,10 +1,8 @@
 import { Groth16Proof, CircomProof, ProofInputs } from '../../../src/sequencer';
 import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
-import { config } from 'dotenv';
-import { resolve } from 'path';
+import { getApiUrls } from '../../helpers/integrationRuntime';
 
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
+const { sequencerUrl } = getApiUrls();
 
 const finalInputs: ProofInputs = {
   fields: ['14', '5', '4', '7', '7', '0', '0', '0'],
@@ -69,7 +67,7 @@ describe('CircomProofService Integration', () => {
   let api: VocdoniSequencerService;
 
   beforeAll(async () => {
-    api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    api = new VocdoniSequencerService(sequencerUrl);
     const info = await api.getInfo();
 
     service = new CircomProof({
@@ -127,7 +125,7 @@ describe('CircomProofService Hash Verification Integration', () => {
   let info: any;
 
   beforeAll(async () => {
-    api = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
+    api = new VocdoniSequencerService(sequencerUrl);
     info = await api.getInfo();
   });
 

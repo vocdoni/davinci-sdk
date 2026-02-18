@@ -940,10 +940,12 @@ npm run test:unit
 # Run integration tests only
 npm run test:integration
 
-# Run specific test suites
+# Run domain suites
 npm run test:contracts
 npm run test:sequencer
 npm run test:census
+npm run test:core
+npm run test:crypto
 ```
 
 ### Test Environment Setup
@@ -951,7 +953,9 @@ npm run test:census
 Create a `.env` file in the test directory:
 
 ```env
-SEPOLIA_RPC=https://sepolia.infura.io/v3/your-key
+RPC_URL=https://sepolia.infura.io/v3/your-key
+SEQUENCER_API_URL=https://your-sequencer.example
+CENSUS_API_URL=https://your-census.example
 PRIVATE_KEY=0x...
 TIME_OUT=600000
 ```

@@ -1,8 +1,3 @@
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from test/.env
-config({ path: resolve(__dirname, '../../.env') });
 import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
 import { VocdoniCensusService, CensusOrigin } from '../../../src/census';
 import { createProcessSignatureMessage, signProcessCreation } from '../../../src/sequencer/api';
@@ -15,9 +10,11 @@ import {
   isValidHex,
 } from './utils';
 import { getElectionMetadataTemplate } from '../../../src/core/types';
+import { getApiUrls } from '../../helpers/integrationRuntime';
 
-const sequencerService = new VocdoniSequencerService(process.env.SEQUENCER_API_URL!);
-const censusService = new VocdoniCensusService(process.env.CENSUS_API_URL!);
+const { sequencerUrl, censusUrl } = getApiUrls();
+const sequencerService = new VocdoniSequencerService(sequencerUrl);
+const censusService = new VocdoniCensusService(censusUrl);
 let censusId: string;
 
 // Generate test participants
