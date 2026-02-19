@@ -2,7 +2,6 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
 import { OrganizationRegistryService } from '../../contracts/OrganizationRegistry';
-import { DavinciCrypto } from '../../sequencer/DavinciCryptoService';
 import { signProcessCreation } from '../../sequencer/api/helpers';
 import { BallotMode, CensusData, EncryptionKey } from '../types';
 import { CensusOrigin } from '../../census/types';
@@ -205,7 +204,6 @@ export class ProcessOrchestrationService {
     private processRegistry: ProcessRegistryService,
     private apiService: VocdoniApiService,
     private organizationRegistry: OrganizationRegistryService,
-    private getCrypto: () => Promise<DavinciCrypto>,
     private signer: Signer
   ) {
     // Initialize CensusOrchestrator with VocdoniCensusService from apiService

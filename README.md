@@ -887,7 +887,7 @@ const process = await sdk.createProcess({
 const processRegistry = sdk.processes;
 const organizationRegistry = sdk.organizations;
 const apiService = sdk.api;
-const crypto = await sdk.getCrypto();
+const csp = await sdk.getCSP();
 
 // Direct API calls
 const processInfo = await sdk.api.sequencer.getProcess(processId);

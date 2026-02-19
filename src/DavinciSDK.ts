@@ -2,7 +2,6 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from './core/api/ApiService';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { OrganizationRegistryService } from './contracts/OrganizationRegistry';
-import { DavinciCrypto } from './sequencer/DavinciCryptoService';
 import { DavinciCSP } from './sequencer/DavinciCSP';
 import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
@@ -80,7 +79,6 @@ export class DavinciSDK {
   private _organizationRegistry?: OrganizationRegistryService;
   private _processOrchestrator?: ProcessOrchestrationService;
   private _voteOrchestrator?: VoteOrchestrationService;
-  private davinciCrypto?: DavinciCrypto;
   private davinciCSP?: DavinciCSP;
   private ballotInputGenerator?: BallotInputGenerator;
   private initialized = false;
@@ -177,36 +175,11 @@ export class DavinciSDK {
   }
 
   /**
-   * Get or initialize the DavinciCrypto service for cryptographic operations
-   */
-  async getCrypto(): Promise<DavinciCrypto> {
-    if (!this.davinciCrypto) {
-      // Get WASM URLs from sequencer info
-      const info = await this.apiService.sequencer.getInfo();
-
-      this.davinciCrypto = new DavinciCrypto({
-        wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
-        wasmUrl: info.ballotProofWasmHelperUrl,
-      });
-
-      await this.davinciCrypto.init();
-    }
-
-    return this.davinciCrypto;
-  }
-
-  /**
    * Get or initialize the DavinciCSP service for CSP cryptographic operations
    */
   async getCSP(): Promise<DavinciCSP> {
     if (!this.davinciCSP) {
-      // Get WASM URLs from sequencer info
-      const info = await this.apiService.sequencer.getInfo();
-
-      this.davinciCSP = new DavinciCSP({
-        wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
-        wasmUrl: info.ballotProofWasmHelperUrl,
-      });
+      this.davinciCSP = new DavinciCSP();
 
       await this.davinciCSP.init();
     }
@@ -239,7 +212,6 @@ export class DavinciSDK {
         this.processes,
         this.apiService,
         this.organizations,
-        () => this.getCrypto(),
         this.config.signer
       );
     }

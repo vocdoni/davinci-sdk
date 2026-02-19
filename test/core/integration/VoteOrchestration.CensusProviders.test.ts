@@ -8,7 +8,7 @@ import {
   MerkleCensusProofProvider,
   CSPCensusProofProvider,
 } from '../../../src/census/types';
-import { DavinciCrypto } from '../../../src/sequencer/DavinciCryptoService';
+import { DavinciCSP } from '../../../src/sequencer/DavinciCSP';
 import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
@@ -270,23 +270,18 @@ describe('Vote Orchestration Integration', () => {
       let cspProcessId: string;
       let cspCensusRoot: string;
       const CSP_PRIVATE_KEY = Wallet.createRandom().privateKey;
+      let davinciCSP: DavinciCSP;
 
       beforeAll(async () => {
-        // Get sequencer info for WASM URLs
-        const info = await organizerSdk.api.sequencer.getInfo();
-
-        // Initialize DavinciCrypto for CSP operations
-        const davinciCrypto = new DavinciCrypto({
-          wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
-          wasmUrl: info.ballotProofWasmHelperUrl,
-        });
-        await davinciCrypto.init();
+        // Initialize CSP helper for CSP operations
+        davinciCSP = new DavinciCSP();
+        await davinciCSP.init();
 
         // Generate CSP process ID and census root
         const registry = organizerSdk.processes;
         cspProcessId = await registry.getNextProcessId(organizerWallet.address);
 
-        cspCensusRoot = await davinciCrypto.cspCensusRoot(
+        cspCensusRoot = await davinciCSP.cspCensusRoot(
           CensusOrigin.CSP,
           CSP_PRIVATE_KEY
         );
@@ -362,24 +357,14 @@ describe('Vote Orchestration Integration', () => {
       });
 
       it('should use custom CSP provider when provided', async () => {
-        // Get sequencer info for WASM URLs
-        const info = await organizerSdk.api.sequencer.getInfo();
-
         // Create a custom CSP provider
         const customCSPProvider: CSPCensusProofProvider = async ({ processId, address }) => {
-          // Initialize DavinciCrypto
-          const davinciCrypto = new DavinciCrypto({
-            wasmExecUrl: info.ballotProofWasmHelperExecJsUrl,
-            wasmUrl: info.ballotProofWasmHelperUrl,
-          });
-          await davinciCrypto.init();
-
           // Generate CSP proof using the dummy CSP
-          const cspProofData = await davinciCrypto.cspSign(
+          const cspProofData = await davinciCSP.cspSign(
             CensusOrigin.CSP,
             CSP_PRIVATE_KEY,
-            processId.replace(/^0x/, ''),
-            address.replace(/^0x/, ''),
+            processId,
+            address,
             '100'
           );
 

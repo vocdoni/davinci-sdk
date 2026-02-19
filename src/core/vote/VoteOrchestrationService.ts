@@ -2,7 +2,7 @@ import { Signer, sha256 } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { BallotInputGenerator } from '../../sequencer/BallotInputGenerator';
 import { BallotInputsOutput } from '../../crypto/types';
-import { ProofInputs as Groth16ProofInputs, Groth16Proof } from '../../sequencer/CircomProofService';
+import { ProofInputs as Groth16ProofInputs } from '../../sequencer/types';
 import {
   CensusOrigin,
   CensusProof,
