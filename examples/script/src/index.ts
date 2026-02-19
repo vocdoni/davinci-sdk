@@ -31,7 +31,7 @@ import {
 //   CSP CENSUS PROVIDER
 // ────────────────────────────────────────────────────────────
 /**
- * Create a CSP census proof provider that uses DavinciCrypto
+ * Create a CSP census proof provider that uses DavinciCSP
  */
 function createCSPCensusProvider(
   sdk: DavinciSDK,
@@ -42,19 +42,19 @@ function createCSPCensusProvider(
       `🔐 CSP Provider: Generating proof for ${address} in process ${processId.substring(0, 10)}...`
     );
 
-    // Get DavinciCrypto from the existing SDK instance
-    const davinciCrypto = await sdk.getCrypto();
+    // Get CSP helper from the existing SDK instance
+    const csp = await sdk.getCSP();
 
     // Find the participant's weight
     const participant = participants.find(p => p.address.toLowerCase() === address.toLowerCase());
     const weight = participant?.weight || '1';
 
     // Generate CSP proof using the dummy CSP
-    const cspProofData = await davinciCrypto.cspSign(
+    const cspProofData = await csp.cspSign(
       CensusOrigin.CSP,
       CSP_PRIVATE_KEY,
-      processId.replace(/^0x/, ''),
-      address.replace(/^0x/, ''),
+      processId,
+      address,
       weight
     );
 
@@ -128,8 +128,8 @@ async function step2_createCensus(
 
   if (censusType === CensusOrigin.CSP) {
     // Create CSP census object
-    const davinciCrypto = await sdk.getCrypto();
-    const censusRoot = await davinciCrypto.cspCensusRoot(
+    const csp = await sdk.getCSP();
+    const censusRoot = await csp.cspCensusRoot(
       CensusOrigin.CSP,
       CSP_PRIVATE_KEY
     );

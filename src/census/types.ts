@@ -8,7 +8,7 @@ export enum CensusOrigin {
   OffchainDynamic = 2,
   /** Onchain Merkle Tree census */
   Onchain = 3,
-  /** Credential Service Provider (CSP) census using EdDSA BLS12-377 */
+  /** Credential Service Provider (CSP) census using BabyJubJub EdDSA */
   CSP = 4,
 }
 

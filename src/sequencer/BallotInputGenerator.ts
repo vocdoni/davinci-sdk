@@ -1,6 +1,6 @@
 import { BallotBuilder, BallotInputsOutput, BallotConfig } from '../crypto';
 import { BallotMode } from '../core/types';
-import { ProofInputs } from './CircomProofService';
+import { ProofInputs } from './types';
 
 export class BallotInputGenerator {
   private builder?: BallotBuilder;

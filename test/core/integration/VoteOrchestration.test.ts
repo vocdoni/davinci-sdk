@@ -8,7 +8,6 @@ import {
   MerkleCensusProofProvider,
   CSPCensusProofProvider,
 } from '../../../src/census/types';
-import { DavinciCrypto } from '../../../src/sequencer/DavinciCryptoService';
 import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();

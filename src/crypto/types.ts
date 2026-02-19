@@ -1,4 +1,4 @@
-import { ProofInputs } from '../sequencer/CircomProofService';
+import { ProofInputs } from '../sequencer/types';
 
 // Re-export types from BallotBuilder to avoid duplication
 export type { BallotConfig, BallotInputs, SequencerProcessData } from './BallotBuilder';
