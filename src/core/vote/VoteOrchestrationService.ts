@@ -128,7 +128,7 @@ export class VoteOrchestrationService {
     );
 
     // 4. Generate vote proof inputs
-    const { voteId, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
+    const { voteId, voteIdDecimal, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
       config.processId,
       voterAddress,
       process.encryptionKey,
@@ -141,7 +141,7 @@ export class VoteOrchestrationService {
     // 5. Generate zk-SNARK proof using snarkjs
     const { proof } = await this.generateZkProof(circomInputs);
 
-    // 6. Sign the vote
+    // 6. Sign the vote using raw VoteID bytes (canonical format)
     const signature = await this.signVote(voteId);
 
     // 7. Submit the vote
@@ -374,6 +374,7 @@ export class VoteOrchestrationService {
     customRandomness?: string
   ): Promise<{
     voteId: string;
+    voteIdDecimal: string;
     cryptoOutput: BallotInputsOutput;
     circomInputs: Groth16ProofInputs;
   }> {
@@ -404,6 +405,7 @@ export class VoteOrchestrationService {
 
     return {
       voteId: result.voteId,
+      voteIdDecimal: result.circomInputs.vote_id,
       cryptoOutput: result,
       circomInputs: result.circomInputs,
     };
@@ -531,18 +533,19 @@ export class VoteOrchestrationService {
     return { proof: voteProof, publicSignals };
   }
 
-  private hexToBytes(hex: string): Uint8Array {
-    const clean = hex.replace(/^0x/, '');
-    if (clean.length % 2) throw new Error('Invalid hex length');
-    const out = new Uint8Array(clean.length / 2);
-    for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
-    return out;
-  }
-
   /**
    * Sign the vote using the signer
    */
-  private async signVote(voteId: string): Promise<string> {
-    return this.signer.signMessage(this.hexToBytes(voteId));
+  private async signVote(voteIdHex: string): Promise<string> {
+    // Sequencer VerifyVoteID currently verifies signature over a 32-byte
+    // big-endian VoteID message (left-padded), while voteId transport is 8-byte.
+    const voteId = BigInt(voteIdHex);
+    const bytes = new Uint8Array(32);
+    let value = voteId;
+    for (let i = 31; i >= 0; i--) {
+      bytes[i] = Number(value & 0xffn);
+      value >>= 8n;
+    }
+    return this.signer.signMessage(bytes);
   }
 }

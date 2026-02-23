@@ -413,7 +413,6 @@ interface DavinciSDKConfig {
   censusUrl?: string;                // Census API URL (optional, only needed for census creation)
   addresses?: {                      // Custom contract addresses (optional)
     processRegistry?: string;
-    organizationRegistry?: string;
     stateTransitionVerifier?: string;
     resultsVerifier?: string;
     sequencerRegistry?: string;
@@ -829,7 +828,6 @@ const sdk = new DavinciSDK({
   censusUrl: 'https://your-custom-census.com',
   addresses: {
     processRegistry: '0x...',
-    organizationRegistry: '0x...',
     stateTransitionVerifier: '0x...',
     resultsVerifier: '0x...'
   }
@@ -885,7 +883,6 @@ const process = await sdk.createProcess({
 ```typescript
 // Access underlying services for advanced operations
 const processRegistry = sdk.processes;
-const organizationRegistry = sdk.organizations;
 const apiService = sdk.api;
 const csp = await sdk.getCSP();
 

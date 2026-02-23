@@ -1,11 +1,10 @@
 import { BaseService } from '../core/api/BaseService';
 import {
-  CreateProcessRequest,
-  CreateProcessResponse,
   GetProcessResponse,
   InfoResponse,
   ListProcessesResponse,
   ParticipantInfoResponse,
+  ProcessKeysResponse,
   SequencerStats,
   VoteBallot,
   VoteRequest,
@@ -28,16 +27,15 @@ export class VocdoniSequencerService extends BaseService {
     await this.request({ method: 'GET', url: '/ping' });
   }
 
-  createProcess(body: CreateProcessRequest): Promise<CreateProcessResponse> {
-    // Validate processId format
-    if (!validateProcessId(body.processId)) {
-      throw new Error('Invalid processId format. Must be a 64-character hex string (32 bytes)');
+  getProcessKeys(processId: string): Promise<ProcessKeysResponse> {
+    if (!validateProcessId(processId)) {
+      throw new Error('Invalid processId format. Must be a 62-character hex string (31 bytes)');
     }
 
     return this.request({
       method: 'POST',
-      url: '/processes',
-      data: body,
+      url: '/processes/keys',
+      data: { processId },
     });
   }
 

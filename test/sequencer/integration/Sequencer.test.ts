@@ -77,7 +77,7 @@ describe('VocdoniSequencerService Integration', () => {
     expect(Array.isArray(processes)).toBe(true);
     // Each process ID should be a valid hex string
     processes.forEach((processId: string) => {
-      expect(isValidHex(processId, 64)).toBe(true);
+      expect(isValidHex(processId, 62)).toBe(true);
     });
   });
 
@@ -141,25 +141,25 @@ describe('VocdoniSequencerService Integration', () => {
 
   describe('Helper functions', () => {
     it('should create correct signature message', () => {
-      const processId = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const processId = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
       const expectedMessage =
-        'I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+        'I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
 
       const message = createProcessSignatureMessage(processId);
       expect(message).toBe(expectedMessage);
     });
 
     it('should handle processId without 0x prefix', () => {
-      const processId = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const processId = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
       const expectedMessage =
-        'I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+        'I am creating a new voting process for the davinci.vote protocol identified with id 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
 
       const message = createProcessSignatureMessage(processId);
       expect(message).toBe(expectedMessage);
     });
 
     it('should sign process creation message', async () => {
-      const processId = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const processId = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
       const signature = await signProcessCreation(processId, mockWallet);
 
       expect(typeof signature).toBe('string');
