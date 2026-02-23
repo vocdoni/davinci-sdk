@@ -87,7 +87,7 @@ describe('Simple Process Creation Integration', () => {
     // Verify the result structure
     expect(result).toBeDefined();
     expect(result.processId).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toBeDefined();
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
@@ -137,7 +137,7 @@ describe('Simple Process Creation Integration', () => {
     const result = await sdk.createProcess(minimalConfig);
 
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
   });
 
@@ -184,7 +184,7 @@ describe('Simple Process Creation Integration', () => {
     const result = await sdk.createProcess(timedConfig);
 
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     // Verify timing on-chain
     const onChainProcess = await sdk.processes.getProcess(result.processId);
@@ -266,7 +266,7 @@ describe('Simple Process Creation Integration', () => {
     const result = await sdk.createProcess(cspConfig);
 
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
     // Verify on-chain
@@ -361,7 +361,7 @@ describe('Simple Process Creation Integration', () => {
     const result = await sdk.createProcess(dateBasedConfig);
 
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
     // Verify timing on-chain (duration should be calculated automatically)
@@ -414,7 +414,7 @@ describe('Simple Process Creation Integration', () => {
     const result = await sdk.createProcess(isoStringConfig);
 
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
     // Verify timing on-chain (duration should be calculated automatically)
@@ -582,7 +582,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     // Now test getting the process information
     const processInfo = await sdk.getProcess(createResult.processId);
@@ -684,7 +684,7 @@ describe('Simple Process Creation Integration', () => {
 
         expect(event.response).toBeDefined();
         expect(event.response.processId).toBeDefined();
-        expect(event.response.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        expect(event.response.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
         expect(event.response.transactionHash).toBeDefined();
         expect(event.response.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
       } else if (event.status === 'failed') {
@@ -747,7 +747,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -837,7 +837,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -922,7 +922,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1009,7 +1009,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1094,7 +1094,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1181,7 +1181,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1266,7 +1266,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1360,7 +1360,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     const processId = createResult.processId;
 
@@ -1455,7 +1455,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     // Verify initial maxVoters
     let processInfo = await sdk.getProcess(createResult.processId);
@@ -1511,7 +1511,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Create the process
     const createResult = await sdk.createProcess(processConfig);
-    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(createResult.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
     // Update maxVoters using stream API
     const newMaxVoters = 75;
@@ -1599,7 +1599,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Verify the process was created successfully
     expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
     expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
     // Verify the process uses the uploaded metadata URI

@@ -77,7 +77,6 @@ describe('DavinciSDK Integration Tests', () => {
     it('should store custom addresses when provided', () => {
       const customAddresses = {
         processRegistry: '0xCustomProcessRegistry123456789012345678901234',
-        organizationRegistry: '0xCustomOrgRegistry123456789012345678901234567',
       };
 
       const sdk = new DavinciSDK({
@@ -89,9 +88,6 @@ describe('DavinciSDK Integration Tests', () => {
       const config = sdk.getConfig();
 
       expect(config.customAddresses.processRegistry).toBe(customAddresses.processRegistry);
-      expect(config.customAddresses.organizationRegistry).toBe(
-        customAddresses.organizationRegistry
-      );
       expect(config.fetchAddressesFromSequencer).toBe(false);
     });
 
@@ -125,9 +121,8 @@ describe('DavinciSDK Integration Tests', () => {
       // Initialize to fetch addresses
       await sdk.init();
 
-      // After init, process and organization services should be accessible
+      // After init, process service should be accessible
       expect(sdk.processes).toBeDefined();
-      expect(sdk.organizations).toBeDefined();
     });
 
     it('should initialize SDK and mark as initialized', async () => {
@@ -192,7 +187,6 @@ describe('DavinciSDK Integration Tests', () => {
       // Verify sequencer provides contract addresses
       expect(sequencerInfo.contracts).toBeDefined();
       expect(sequencerInfo.contracts).toHaveProperty('process');
-      expect(sequencerInfo.contracts).toHaveProperty('organization');
 
       // Initialize the SDK - this should fetch and apply sequencer addresses
       await sdk.init();
@@ -201,9 +195,6 @@ describe('DavinciSDK Integration Tests', () => {
 
       // Verify that the configuration now contains the sequencer addresses
       expect(finalConfig.customAddresses.processRegistry).toBe(sequencerInfo.contracts.process);
-      expect(finalConfig.customAddresses.organizationRegistry).toBe(
-        sequencerInfo.contracts.organization
-      );
 
       // Verify other sequencer addresses are also set if available
       if (sequencerInfo.contracts.stateTransitionVerifier) {
@@ -307,18 +298,7 @@ describe('DavinciSDK Integration Tests', () => {
       });
 
       expect(() => sdk.processes).toThrow(
-        'Provider required for blockchain operations (process/organization management)'
-      );
-    });
-
-    it('should throw error when accessing organizations getter without provider', () => {
-      const sdk = new DavinciSDK({
-        signer: bareWallet,
-        sequencerUrl: sequencerUrl,
-      });
-
-      expect(() => sdk.organizations).toThrow(
-        'Provider required for blockchain operations (process/organization management)'
+        'Provider required for blockchain operations (process management)'
       );
     });
 
@@ -329,7 +309,7 @@ describe('DavinciSDK Integration Tests', () => {
       });
 
       expect(() => sdk.processOrchestrator).toThrow(
-        'Provider required for blockchain operations (process/organization management)'
+        'Provider required for blockchain operations (process management)'
       );
     });
 
@@ -342,7 +322,7 @@ describe('DavinciSDK Integration Tests', () => {
       await sdk.init();
 
       await expect(sdk.getProcess('0x1234567890abcdef1234567890abcdef12345678')).rejects.toThrow(
-        'Provider required for blockchain operations (process/organization management)'
+        'Provider required for blockchain operations (process management)'
       );
     });
 
@@ -388,7 +368,7 @@ describe('DavinciSDK Integration Tests', () => {
       };
 
       await expect(sdk.createProcess(processConfig as any)).rejects.toThrow(
-        'Provider required for blockchain operations (process/organization management)'
+        'Provider required for blockchain operations (process management)'
       );
     });
 
@@ -433,7 +413,7 @@ describe('DavinciSDK Integration Tests', () => {
       };
 
       expect(() => sdk.createProcessStream(processConfig as any)).toThrow(
-        'Provider required for blockchain operations (process/organization management)'
+        'Provider required for blockchain operations (process management)'
       );
     });
 
@@ -489,13 +469,11 @@ describe('DavinciSDK Integration Tests', () => {
 
       // After init, all services including blockchain ones should be accessible
       expect(() => sdk.processes).not.toThrow();
-      expect(() => sdk.organizations).not.toThrow();
       expect(() => sdk.processOrchestrator).not.toThrow();
 
       expect(sdk.api).toBeDefined();
       expect(sdk.voteOrchestrator).toBeDefined();
       expect(sdk.processes).toBeDefined();
-      expect(sdk.organizations).toBeDefined();
       expect(sdk.processOrchestrator).toBeDefined();
     });
 

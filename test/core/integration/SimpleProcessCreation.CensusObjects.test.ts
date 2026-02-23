@@ -75,7 +75,7 @@ describe('Simple Process Creation Integration', () => {
 
       // Verify result
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
       expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
 
       // Verify census was published
@@ -134,7 +134,7 @@ describe('Simple Process Creation Integration', () => {
       const result = await sdk.createProcess(processConfig);
 
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
       // Verify census was published
       expect(census.isPublished).toBe(true);
@@ -183,7 +183,7 @@ describe('Simple Process Creation Integration', () => {
       const result = await sdk.createProcess(processConfig);
 
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
       expect(census.isPublished).toBe(true);
     });
 
@@ -229,7 +229,7 @@ describe('Simple Process Creation Integration', () => {
       const result = await sdk.createProcess(processConfig);
 
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
       expect(census.isPublished).toBe(true);
     });
 
@@ -275,7 +275,7 @@ describe('Simple Process Creation Integration', () => {
       const result = await sdk.createProcess(processConfig);
 
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
       expect(census.isPublished).toBe(true);
       expect(census.participants.length).toBe(3);
     });
@@ -321,7 +321,7 @@ describe('Simple Process Creation Integration', () => {
 
       const result1 = await sdk.createProcess(processConfig1);
       expect(result1).toBeDefined();
-      expect(result1.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result1.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
       // Verify census was published
       expect(census.isPublished).toBe(true);
@@ -359,7 +359,7 @@ describe('Simple Process Creation Integration', () => {
 
       const result2 = await sdk.createProcess(processConfig2);
       expect(result2).toBeDefined();
-      expect(result2.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result2.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
       // Census root should be the same (not re-published)
       expect(census.censusRoot).toBe(originalRoot);
@@ -406,7 +406,7 @@ describe('Simple Process Creation Integration', () => {
       const result = await sdk.createProcess(processConfig);
 
       expect(result).toBeDefined();
-      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
 
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);

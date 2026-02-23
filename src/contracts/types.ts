@@ -11,37 +11,6 @@
  */
 export type EntityCallback<T extends any[]> = (...args: T) => void;
 
-// ─── ORGANIZATION REGISTRY CALLBACKS ───────────────────────────────────────
-
-/**
- * Callback for when an organization is created.
- * @param id - The organization ID
- */
-export type OrganizationCreatedCallback = EntityCallback<[string]>;
-
-/**
- * Callback for when an organization is updated.
- * @param id - The organization ID
- * @param updater - Address of the account that updated the organization
- */
-export type OrganizationUpdatedCallback = EntityCallback<[string, string]>;
-
-/**
- * Callback for when an administrator is added to an organization.
- * @param id - The organization ID
- * @param administrator - Address of the administrator that was added
- */
-export type OrganizationAdministratorAddedCallback = EntityCallback<[string, string]>;
-
-/**
- * Callback for when an administrator is removed from an organization.
- * @param id - The organization ID
- * @param administrator - Address of the administrator that was removed
- * @param remover - Address of the account that removed the administrator
- */
-export type OrganizationAdministratorRemovedCallback = EntityCallback<[string, string, string]>;
-
-// ─── PROCESS REGISTRY CALLBACKS ────────────────────────────────────────────
 
 /**
  * Callback for when a process is created.

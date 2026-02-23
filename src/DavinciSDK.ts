@@ -1,7 +1,6 @@
 import { Signer } from 'ethers';
 import { VocdoniApiService } from './core/api/ApiService';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
-import { OrganizationRegistryService } from './contracts/OrganizationRegistry';
 import { DavinciCSP } from './sequencer/DavinciCSP';
 import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
@@ -21,7 +20,7 @@ export interface DavinciSDKConfig {
   /**
    * Ethers.js Signer for signing operations.
    * - For voting only: Can be a bare Wallet (no provider needed)
-   * - For process/organization operations: Must be connected to a provider
+   * - For process operations: Must be connected to a provider
    */
   signer: Signer;
 
@@ -34,7 +33,6 @@ export interface DavinciSDKConfig {
   /** Custom contract addresses (optional, fetched from sequencer if not provided) */
   addresses?: {
     processRegistry?: string;
-    organizationRegistry?: string;
     stateTransitionVerifier?: string;
     resultsVerifier?: string;
     sequencerRegistry?: string;
@@ -59,7 +57,6 @@ interface InternalDavinciSDKConfig {
   censusUrl?: string;
   customAddresses: {
     processRegistry?: string;
-    organizationRegistry?: string;
     stateTransitionVerifier?: string;
     resultsVerifier?: string;
     sequencerRegistry?: string;
@@ -76,7 +73,6 @@ export class DavinciSDK {
   private config: InternalDavinciSDKConfig;
   private apiService: VocdoniApiService;
   private _processRegistry?: ProcessRegistryService;
-  private _organizationRegistry?: OrganizationRegistryService;
   private _processOrchestrator?: ProcessOrchestrationService;
   private _voteOrchestrator?: VoteOrchestrationService;
   private davinciCSP?: DavinciCSP;
@@ -157,24 +153,6 @@ export class DavinciSDK {
   }
 
   /**
-   * Get the organization registry service for organization management.
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @throws Error if signer does not have a provider
-   */
-  get organizations(): OrganizationRegistryService {
-    this.ensureProvider();
-    if (!this._organizationRegistry) {
-      const organizationRegistryAddress = this.resolveContractAddress('organizationRegistry');
-      this._organizationRegistry = new OrganizationRegistryService(
-        organizationRegistryAddress,
-        this.config.signer
-      );
-    }
-    return this._organizationRegistry;
-  }
-
-  /**
    * Get or initialize the DavinciCSP service for CSP cryptographic operations
    */
   async getCSP(): Promise<DavinciCSP> {
@@ -211,7 +189,6 @@ export class DavinciSDK {
       this._processOrchestrator = new ProcessOrchestrationService(
         this.processes,
         this.apiService,
-        this.organizations,
         this.config.signer
       );
     }
@@ -1102,14 +1079,6 @@ export class DavinciSDK {
         this._processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
       }
 
-      if (contracts.organization) {
-        this.config.customAddresses.organizationRegistry = contracts.organization;
-        this._organizationRegistry = new OrganizationRegistryService(
-          contracts.organization,
-          this.config.signer
-        );
-      }
-
       if (contracts.stateTransitionVerifier) {
         this.config.customAddresses.stateTransitionVerifier = contracts.stateTransitionVerifier;
       }
@@ -1149,7 +1118,7 @@ export class DavinciSDK {
   private ensureProvider(): void {
     if (!this.config.signer.provider) {
       throw new Error(
-        'Provider required for blockchain operations (process/organization management). ' +
+        'Provider required for blockchain operations (process management). ' +
           'The signer must be connected to a provider. ' +
           'Use wallet.connect(provider) or a browser signer like MetaMask. ' +
           'Note: Voting operations do not require a provider.'

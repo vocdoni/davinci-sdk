@@ -26,12 +26,12 @@ export async function signProcessCreation(
 }
 
 /**
- * Validates that a process ID is a valid 64-character hex string (32 bytes).
+ * Validates that a process ID is a valid 62-character hex string (31 bytes).
  * @param processId - The process ID to validate
  * @returns True if valid, false otherwise
  */
 export function validateProcessId(processId: string): boolean {
-  // Check if it's a valid 64-character hex string (32 bytes)
+  // Check if it's a valid 62-character hex string (31 bytes)
   const cleanId = processId.replace(/^0x/, '');
-  return /^[0-9a-fA-F]{64}$/.test(cleanId);
+  return /^[0-9a-fA-F]{62}$/.test(cleanId);
 }

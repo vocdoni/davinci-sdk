@@ -50,6 +50,7 @@ export class BallotInputGenerator {
         pubKeyY: encryptionKey.y,
         ballotMode: {
           numFields: ballotMode.numFields,
+          groupSize: ballotMode.groupSize ?? ballotMode.numFields,
           uniqueValues: ballotMode.uniqueValues,
           maxValue: ballotMode.maxValue,
           minValue: ballotMode.minValue,
@@ -68,14 +69,7 @@ export class BallotInputGenerator {
     // Convert to CircomProof inputs format
     const circomInputs: ProofInputs = {
       fields: ballotInputs.fields.map(f => f.toString()),
-      num_fields: ballotInputs.num_fields.toString(),
-      unique_values: ballotInputs.unique_values.toString(),
-      max_value: ballotInputs.max_value.toString(),
-      min_value: ballotInputs.min_value.toString(),
-      max_value_sum: ballotInputs.max_value_sum.toString(),
-      min_value_sum: ballotInputs.min_value_sum.toString(),
-      cost_exponent: ballotInputs.cost_exponent.toString(),
-      cost_from_weight: ballotInputs.cost_from_weight.toString(),
+      packed_ballot_mode: ballotInputs.packed_ballot_mode,
       address: ballotInputs.address,
       weight: ballotInputs.weight.toString(),
       process_id: ballotInputs.process_id,
@@ -85,7 +79,7 @@ export class BallotInputGenerator {
         ballotInputs.encryption_pubkey[1],
       ] as [string, string],
       k: ballotInputs.k,
-      cipherfields: ballotInputs.cipherfields.flat(2),
+      cipherfields: ballotInputs.cipherfields,
       inputs_hash: ballotInputs.inputs_hash,
     };
 
@@ -97,14 +91,15 @@ export class BallotInputGenerator {
 
     // Build final output
     const output: BallotInputsOutput = {
-      processId: '0x' + BigInt(ballotInputs.process_id).toString(16).padStart(64, '0'),
+      processId: '0x' + BigInt(ballotInputs.process_id).toString(16).padStart(62, '0'),
       address: '0x' + BigInt(ballotInputs.address).toString(16).padStart(40, '0'),
       ballot: {
         curveType: 'bjj_iden3',
         ciphertexts,
       },
       ballotInputsHash: ballotInputs.inputs_hash,
-      voteId: '0x' + BigInt(ballotInputs.vote_id).toString(16).padStart(64, '0'),
+      // VoteID is 63 bits + marker, encoded as 8 bytes.
+      voteId: '0x' + BigInt(ballotInputs.vote_id).toString(16).padStart(16, '0'),
       circomInputs,
     };
 

@@ -25,30 +25,6 @@ export abstract class ContractServiceError extends Error {
   }
 }
 
-// ─── ORGANIZATION REGISTRY ERRORS ──────────────────────────────────────────
-
-/**
- * Error thrown when organization creation fails.
- */
-export class OrganizationCreateError extends ContractServiceError {}
-
-/**
- * Error thrown when organization update fails.
- */
-export class OrganizationUpdateError extends ContractServiceError {}
-
-/**
- * Error thrown when organization deletion fails.
- */
-export class OrganizationDeleteError extends ContractServiceError {}
-
-/**
- * Error thrown when administrator operations fail.
- */
-export class OrganizationAdministratorError extends ContractServiceError {}
-
-// ─── PROCESS REGISTRY ERRORS ───────────────────────────────────────────────
-
 /**
  * Error thrown when process creation fails.
  */

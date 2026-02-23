@@ -4,6 +4,8 @@ import { buildPoseidon } from 'circomlibjs';
 // BN254 scalar field modulus (Fr)
 export const FIELD_MODULUS =
   21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+const VOTE_ID_MIN = 0x8000000000000000n;
+const VOTE_ID_HASH_BITS = 63n;
 
 // Scaling factor for RTE <-> TE conversion
 // This is used to convert between Gnark's BabyJubJub (Reduced Twisted Edwards)
@@ -66,6 +68,7 @@ export function fromTEtoRTE(x: bigint, y: bigint): [bigint, bigint] {
 
 export interface BallotConfig {
   numFields: number;
+  groupSize?: number;
   uniqueValues: number;
   maxValue: number;
   minValue: number;
@@ -86,6 +89,7 @@ export interface SequencerProcessData {
   pubKeyY: string; // decimal string - RTE Y coordinate
   ballotMode: {
     numFields: number;
+    groupSize?: number;
     uniqueValues: boolean;
     maxValue: string;
     minValue: string;
@@ -110,6 +114,7 @@ export function hexToDecimal(hex: string): string {
 export function parseBallotMode(ballotMode: SequencerProcessData['ballotMode']): BallotConfig {
   return {
     numFields: ballotMode.numFields,
+    groupSize: ballotMode.groupSize ?? ballotMode.numFields,
     uniqueValues: ballotMode.uniqueValues ? 1 : 0,
     maxValue: parseInt(ballotMode.maxValue),
     minValue: parseInt(ballotMode.minValue),
@@ -130,8 +135,10 @@ export interface BallotInputs {
   k: string;
   vote_id: string;
   inputs_hash: string;
+  packed_ballot_mode: string;
   // Config
   num_fields: number;
+  group_size: number;
   unique_values: number;
   max_value: number;
   min_value: number;
@@ -223,12 +230,29 @@ export class BallotBuilder {
     // Poseidon(3)
     const h = this.poseidon([BigInt(processId), BigInt(address), BigInt(k)]);
     const hBig = BigInt(this.F.toString(h, 10));
-    const mask = (1n << 160n) - 1n;
-    return (hBig & mask).toString();
+    // Match current VoteID spec: low 63 bits of hash + VOTE_ID_MIN marker.
+    const mask = (1n << VOTE_ID_HASH_BITS) - 1n;
+    return ((hBig & mask) + VOTE_ID_MIN).toString();
   }
 
   computeInputsHash(inputs: any[]): string {
     return this.multiHash(inputs).toString();
+  }
+
+  // Packed ballot mode encoding used by proof/state root hashing.
+  packBallotMode(config: BallotConfig): bigint {
+    const groupSize = config.groupSize ?? config.numFields;
+    let packed = 0n;
+    packed |= BigInt(config.numFields);
+    packed |= BigInt(groupSize) << 8n;
+    packed |= BigInt(config.uniqueValues) << 16n;
+    packed |= BigInt(config.costFromWeight) << 17n;
+    packed |= BigInt(config.costExponent) << 18n;
+    packed |= BigInt(config.maxValue) << 26n;
+    packed |= BigInt(config.minValue) << 74n;
+    packed |= BigInt(config.maxValueSum) << 122n;
+    packed |= BigInt(config.minValueSum) << 185n;
+    return packed;
   }
 
   /**
@@ -276,6 +300,7 @@ export class BallotBuilder {
     circuitCapacity: number = 8
   ): BallotInputs {
     const activeFields = config.numFields;
+    const groupSize = config.groupSize ?? config.numFields;
 
     const { cipherfields, paddedFields } = this.encryptFields(fields, pubKey, k, circuitCapacity);
     const voteId = this.computeVoteID(processId, address, k);
@@ -283,16 +308,9 @@ export class BallotBuilder {
     // Build Inputs Hash - MUST MATCH ballot_proof.circom ORDER
     const inputsList: any[] = [];
 
-    const ffProcessID = mod(BigInt(processId), FIELD_MODULUS);
-    inputsList.push(ffProcessID);
-    inputsList.push(BigInt(activeFields)); // num_fields
-    inputsList.push(BigInt(config.uniqueValues));
-    inputsList.push(BigInt(config.maxValue));
-    inputsList.push(BigInt(config.minValue));
-    inputsList.push(BigInt(config.maxValueSum));
-    inputsList.push(BigInt(config.minValueSum));
-    inputsList.push(BigInt(config.costExponent));
-    inputsList.push(BigInt(config.costFromWeight));
+    const packedBallotMode = this.packBallotMode(config);
+    inputsList.push(BigInt(processId));
+    inputsList.push(mod(packedBallotMode, FIELD_MODULUS));
 
     inputsList.push(BigInt(this.elgamal.F.toString(pubKey[0], 10)));
     inputsList.push(BigInt(this.elgamal.F.toString(pubKey[1], 10)));
@@ -324,8 +342,10 @@ export class BallotBuilder {
       k,
       vote_id: voteId,
       inputs_hash: inputsHash,
+      packed_ballot_mode: packedBallotMode.toString(),
       // Config
       num_fields: activeFields,
+      group_size: groupSize,
       unique_values: config.uniqueValues,
       max_value: config.maxValue,
       min_value: config.minValue,

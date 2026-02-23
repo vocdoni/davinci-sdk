@@ -1,22 +1,12 @@
 import { BallotMode, CensusData, EncryptionKey } from '../../core/types';
-import { CensusOrigin, CensusProof } from '../../census/types';
+import { CensusProof } from '../../census/types';
 
-export interface CreateProcessRequest {
+export interface ProcessKeysRequest {
   processId: string;
-  census: {
-    censusOrigin: CensusOrigin;
-    censusRoot: string;
-    censusURI: string;
-  };
-  ballotMode: BallotMode;
-  signature: string;
 }
 
-export interface CreateProcessResponse {
-  processId: string;
+export interface ProcessKeysResponse {
   encryptionPubKey: [string, string];
-  stateRoot: string;
-  ballotMode: BallotMode;
 }
 
 export interface GetProcessResponse {

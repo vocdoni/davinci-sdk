@@ -2,7 +2,6 @@
 import {
   ProcessRegistry__factory,
   type ProcessRegistry,
-  type IProcessRegistry,
 } from '@vocdoni/davinci-contracts';
 import { SmartContractService } from './SmartContractService';
 import type { ContractRunner } from 'ethers';
@@ -107,11 +106,27 @@ export class ProcessRegistryService extends SmartContractService {
     ballotMode: BallotMode,
     census: CensusData,
     metadata: string,
-    encryptionKey: EncryptionKey,
-    initStateRoot: bigint
+    encryptionKey: EncryptionKey
   ) {
+    const contractBallotMode = {
+      costFromWeight: ballotMode.costFromWeight,
+      uniqueValues: ballotMode.uniqueValues,
+      numFields: ballotMode.numFields,
+      groupSize: ballotMode.groupSize ?? ballotMode.numFields,
+      costExponent: ballotMode.costExponent,
+      maxValue: BigInt(ballotMode.maxValue),
+      minValue: BigInt(ballotMode.minValue),
+      maxValueSum: BigInt(ballotMode.maxValueSum),
+      minValueSum: BigInt(ballotMode.minValueSum),
+    };
+
+    const contractEncryptionKey = {
+      x: BigInt(encryptionKey.x),
+      y: BigInt(encryptionKey.y),
+    };
+
     // Convert CensusData type from core to contract format
-    const contractCensus: IProcessRegistry.CensusStruct = {
+    const contractCensus = {
       censusOrigin: BigInt(census.censusOrigin),
       censusRoot: census.censusRoot,
       contractAddress: census.contractAddress ?? '0x0000000000000000000000000000000000000000',
@@ -126,11 +141,10 @@ export class ProcessRegistryService extends SmartContractService {
           startTime,
           duration,
           maxVoters,
-          ballotMode,
+          contractBallotMode,
           contractCensus,
           metadata,
-          encryptionKey,
-          initStateRoot
+          contractEncryptionKey
         )
         .catch(e => {
           throw new ProcessCreateError(e.message, 'create');
@@ -150,7 +164,7 @@ export class ProcessRegistryService extends SmartContractService {
 
   setProcessCensus(processID: string, census: CensusData) {
     // Convert CensusData type from core to contract format
-    const contractCensus: IProcessRegistry.CensusStruct = {
+    const contractCensus = {
       censusOrigin: BigInt(census.censusOrigin),
       censusRoot: census.censusRoot,
       contractAddress: census.contractAddress ?? '0x0000000000000000000000000000000000000000',

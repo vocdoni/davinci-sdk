@@ -1,8 +1,6 @@
 import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
-import { OrganizationRegistryService } from '../../contracts/OrganizationRegistry';
-import { signProcessCreation } from '../../sequencer/api/helpers';
 import { BallotMode, CensusData, EncryptionKey } from '../types';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
@@ -145,7 +143,6 @@ interface ProcessCreationData {
   metadataUri: string;
   sequencerResult: {
     encryptionPubKey: [string, string];
-    stateRoot: string;
   };
   census: CensusData;
 }
@@ -203,7 +200,6 @@ export class ProcessOrchestrationService {
   constructor(
     private processRegistry: ProcessRegistryService,
     private apiService: VocdoniApiService,
-    private organizationRegistry: OrganizationRegistryService,
     private signer: Signer
   ) {
     // Initialize CensusOrchestrator with VocdoniCensusService from apiService
@@ -303,6 +299,7 @@ export class ProcessOrchestrationService {
     // 5. Transform ballot mode (convert BigInt fields to appropriate types)
     const ballot: BallotMode = {
       numFields: Number(rawProcess.ballotMode.numFields),
+      groupSize: Number(rawProcess.ballotMode.groupSize),
       maxValue: rawProcess.ballotMode.maxValue.toString(),
       minValue: rawProcess.ballotMode.minValue.toString(),
       uniqueValues: rawProcess.ballotMode.uniqueValues,
@@ -393,8 +390,7 @@ export class ProcessOrchestrationService {
       data.ballotMode,
       data.census,
       data.metadataUri,
-      encryptionKey,
-      BigInt(data.sequencerResult.stateRoot)
+      encryptionKey
     );
 
     let transactionHash = 'unknown';
@@ -429,8 +425,7 @@ export class ProcessOrchestrationService {
    * For real-time transaction status updates, use createProcessStream() instead.
    *
    * The method automatically:
-   * - Gets encryption keys and initial state root from the sequencer
-   * - Handles process creation signatures
+   * - Gets encryption keys from the sequencer
    * - Coordinates between sequencer API and on-chain contract calls
    * - Creates and pushes metadata
    * - Submits the on-chain transaction
@@ -485,18 +480,8 @@ export class ProcessOrchestrationService {
       metadataUri = this.apiService.sequencer.getMetadataUrl(metadataHash);
     }
 
-    // 6. Create process via sequencer API (this gets encryption key and state root)
-    const signature = await signProcessCreation(processId, this.signer);
-    const sequencerResult = await this.apiService.sequencer.createProcess({
-      processId,
-      census: {
-        censusOrigin: censusConfig.type,
-        censusRoot,
-        censusURI: censusConfig.uri,
-      },
-      ballotMode,
-      signature,
-    });
+    // 6. Get encryption public key from sequencer
+    const sequencerResult = await this.apiService.sequencer.getProcessKeys(processId);
 
     // 7. Determine maxVoters
     let maxVoters: number;

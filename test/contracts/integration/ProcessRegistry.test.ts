@@ -25,7 +25,6 @@ describe('ProcessRegistryService Integration', () => {
   let procService: ProcessRegistryService;
 
   let processId: string;
-  let initStateRoot: string;
   let initDuration: number;
   let initCensus: CensusData;
   const metadataURI = `ipfs://meta-${Date.now()}`;
@@ -47,7 +46,6 @@ describe('ProcessRegistryService Integration', () => {
     // 1) PREPARE PROCESS PARAMETERS
     //
     processId = randomHex(32);
-    initStateRoot = randomHex(32);
     initDuration = 3600; // seconds
     initCensus = {
       censusOrigin: CensusOrigin.OffchainDynamic,
@@ -57,6 +55,7 @@ describe('ProcessRegistryService Integration', () => {
 
     const ballotMode: BallotMode = {
       numFields: 1,
+      groupSize: 1,
       maxValue: '10',
       minValue: '0',
       uniqueValues: false,
@@ -93,8 +92,7 @@ describe('ProcessRegistryService Integration', () => {
       ballotMode,
       initCensus,
       metadataURI,
-      encryptionKey,
-      BigInt(initStateRoot)
+      encryptionKey
     );
 
     for await (const event of newProcessStream) {
@@ -120,7 +118,7 @@ describe('ProcessRegistryService Integration', () => {
     expect(stored.status).toBe(BigInt(ProcessStatus.READY));
     expect(stored.duration).toBe(BigInt(initDuration));
     expect(stored.metadataURI).toBe(metadataURI);
-    expect(stored.latestStateRoot).toBe(BigInt(initStateRoot));
+    expect(typeof stored.latestStateRoot).toBe('bigint');
     expect(stored.census.censusURI).toBe(initCensus.censusURI);
     expect(hexlify(stored.census.censusRoot).toLowerCase()).toBe(
       hexlify(initCensus.censusRoot).toLowerCase()
@@ -280,6 +278,7 @@ describe('ProcessRegistryService Integration', () => {
 
     const ballotMode: BallotMode = {
       numFields: 1,
+      groupSize: 1,
       maxValue: '10',
       minValue: '0',
       uniqueValues: false,
@@ -304,8 +303,7 @@ describe('ProcessRegistryService Integration', () => {
       ballotMode,
       invalidCensus,
       `ipfs://invalid-meta-${Date.now()}`,
-      encryptionKey,
-      BigInt(randomHex(32))
+      encryptionKey
     );
 
     let eventCount = 0;
