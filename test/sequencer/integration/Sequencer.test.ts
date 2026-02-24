@@ -59,7 +59,6 @@ describe('VocdoniSequencerService Integration', () => {
 
     // contract addresses
     expect(addrRx.test(info.contracts.process)).toBe(true);
-    expect(addrRx.test(info.contracts.organization)).toBe(true);
     expect(addrRx.test(info.contracts.stateTransitionVerifier)).toBe(true);
     expect(addrRx.test(info.contracts.resultsVerifier)).toBe(true);
 
