@@ -6,7 +6,8 @@ We actively support the following versions of the Vocdoni DaVinci SDK with secur
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.0.x   | :white_check_mark: |
+| 0.2.x   | :white_check_mark: |
+| 0.1.x   | :x:                |
 
 ## Reporting a Vulnerability
 

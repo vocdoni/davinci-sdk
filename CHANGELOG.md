@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-24
+
+### Added
+- Native TypeScript CSP cryptography flow via `DavinciCSP` (no external CSP WASM runtime required).
+- `DavinciSDK.getCSP()` helper for lazy CSP service initialization.
+- Extended integration coverage for census providers, including CSP provider scenarios and validation.
+- Expanded domain test suites and shared test helpers (`test/helpers/*`) for more consistent integration setup.
+
+### Changed
+- Updated `@vocdoni/davinci-contracts` dependency to `0.0.37` and aligned SDK contract/process wiring with the latest contracts package.
+- CSP proof handling was consolidated around SDK-native types and validation in vote orchestration.
+- Test command organization and docs were updated to include domain suites (`test:core`, `test:crypto`) and clearer environment variable usage.
+- **BREAKING**: SDK configuration no longer accepts `addresses.organizationRegistry`.
+- **BREAKING**: `sdk.organizations` accessor was removed from the public SDK API.
+- **BREAKING**: Legacy sequencer crypto classes were removed in favor of `DavinciCSP` and `BallotInputGenerator`.
+
+### Removed
+- Removed deprecated/legacy sequencer crypto services:
+  - `CircomProofService`
+  - `DavinciCryptoService`
+- Removed `OrganizationRegistry` service and its contract integration tests.
+- Removed the `examples/ui` app and the `deploy-ui` GitHub workflow to keep this repository focused on SDK code and script examples.
+
+### Fixed
+- Minor sequencer integration test stability adjustments.
+
 ## [0.1.3] - 2026-02-05
 
 ### Fixed

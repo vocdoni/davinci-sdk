@@ -401,7 +401,7 @@ A clear and concise description of what you expected to happen.
 **Environment:**
 - OS: [e.g. macOS, Windows, Linux]
 - Node.js version: [e.g. 18.0.0]
-- SDK version: [e.g. 0.0.2]
+- SDK version: [e.g. 0.2.0]
 
 **Additional context**
 Add any other context about the problem here.
