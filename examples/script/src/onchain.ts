@@ -57,6 +57,19 @@ function parseBool(value: string): boolean {
   return v === '1' || v === 'true' || v === 'yes' || v === 'y';
 }
 
+function formatError(error: any): string {
+  if (!error) return 'unknown error';
+  const parts: string[] = [];
+  if (error.name) parts.push(`name=${error.name}`);
+  if (error.code) parts.push(`code=${error.code}`);
+  if (error.shortMessage) parts.push(`shortMessage=${error.shortMessage}`);
+  if (error.reason) parts.push(`reason=${error.reason}`);
+  if (error.message) parts.push(`message=${error.message}`);
+  if (error.data) parts.push(`data=${String(error.data)}`);
+  if (error.info?.error?.message) parts.push(`rpcMessage=${error.info.error.message}`);
+  return parts.join(' | ');
+}
+
 function createSDKInstance(privateKey: string, withProvider: boolean = true): any {
   const signer = withProvider
     ? new Wallet(privateKey, new JsonRpcProvider(RPC_URL))
@@ -244,6 +257,7 @@ async function step4_loadParticipantsWithOnchainWeight(
     [
       'function weightOf(address) view returns (uint88)',
       'function setWeight(address account, uint88 newWeight)',
+      'function setWeights(address[] accounts, uint88[] weights)',
       'function owner() view returns (address)',
     ],
     admin
@@ -275,14 +289,47 @@ async function step4_loadParticipantsWithOnchainWeight(
     info('Contract owner detected. Populating census weights from admin account...');
     const addresses = participants.map(p => p.address);
     const weights = participants.map(p => p.weight);
-    try {
-      const tx = await contract.setWeights(addresses, weights);
-      await tx.wait();
-      success(`Census weights updated for ${participants.length} participant(s)`);
-    } catch {
-      info('Batch setWeights failed, falling back to per-address setWeight...');
+
+    const hasSetWeights = !!contract.interface.getFunction('setWeights', false);
+    if (hasSetWeights) {
+      try {
+        const preflightData = contract.interface.encodeFunctionData('setWeights', [[], []]);
+        await provider.call({
+          from: admin.address,
+          to: contractAddress,
+          data: preflightData,
+        });
+        info('Preflight call for setWeights succeeded');
+      } catch (error: any) {
+        info(`Preflight call for setWeights failed: ${formatError(error)}`);
+      }
+
+      try {
+        const estimated = await contract.setWeights.estimateGas(addresses, weights);
+        info(`Estimated gas for setWeights: ${estimated.toString()}`);
+        const tx = await contract.setWeights(addresses, weights);
+        info(`setWeights tx hash: ${tx.hash}`);
+        await tx.wait();
+        success(`Census weights updated for ${participants.length} participant(s)`);
+      } catch (error: any) {
+        info(`Batch setWeights failed: ${formatError(error)}`);
+        info('Falling back to per-address setWeight...');
+        for (const p of participants) {
+          const estimated = await contract.setWeight.estimateGas(p.address, p.weight);
+          info(`setWeight estimate for ${p.address}: ${estimated.toString()}`);
+          const tx = await contract.setWeight(p.address, p.weight);
+          info(`setWeight tx ${p.address}: ${tx.hash}`);
+          await tx.wait();
+        }
+        success(`Census weights updated for ${participants.length} participant(s)`);
+      }
+    } else {
+      info('Contract ABI/function setWeights not available, using per-address setWeight.');
       for (const p of participants) {
+        const estimated = await contract.setWeight.estimateGas(p.address, p.weight);
+        info(`setWeight estimate for ${p.address}: ${estimated.toString()}`);
         const tx = await contract.setWeight(p.address, p.weight);
+        info(`setWeight tx ${p.address}: ${tx.hash}`);
         await tx.wait();
       }
       success(`Census weights updated for ${participants.length} participant(s)`);
