@@ -117,7 +117,7 @@ async function startIndexer(
   startBlock: number
 ): Promise<void> {
   const url = `${toHttpBase(indexerBase)}/contracts`;
-  const defaultExpiresAt = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+  const defaultExpiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
   const payload = {
     chainId: Number(chainId),
     address: contractAddress,
