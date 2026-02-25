@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-contract StandardOnchainCensus {
-    event WeightChanged(address indexed account, uint88 previousWeight, uint88 newWeight);
+import {ICensusValidator} from "./ICensusValidator.sol";
 
+contract StandardOnchainCensus is ICensusValidator {
     address public owner;
     mapping(address => uint88) public weightOf;
 
-    uint256 private _censusRoot;
-    mapping(uint256 => uint256) private _rootBlockNumber;
+    uint256 private _currentRoot;
+    uint256 private _totalVotingPower;
+    mapping(uint256 => uint256) private _rootLastValidBlock;
+    mapping(uint256 => uint256) private _rootTotalVotingPower;
 
     modifier onlyOwner() {
         require(msg.sender == owner, "only owner");
@@ -17,7 +19,8 @@ contract StandardOnchainCensus {
 
     constructor() {
         owner = msg.sender;
-        _rootBlockNumber[_censusRoot] = block.number;
+        _currentRoot = 0;
+        _rootTotalVotingPower[_currentRoot] = 0;
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -28,6 +31,13 @@ contract StandardOnchainCensus {
     function setWeight(address account, uint88 newWeight) external onlyOwner {
         uint88 previous = weightOf[account];
         weightOf[account] = newWeight;
+
+        if (newWeight >= previous) {
+            _totalVotingPower += (newWeight - previous);
+        } else {
+            _totalVotingPower -= (previous - newWeight);
+        }
+
         emit WeightChanged(account, previous, newWeight);
         _rotateRoot(account, newWeight);
     }
@@ -37,21 +47,47 @@ contract StandardOnchainCensus {
         for (uint256 i = 0; i < accounts.length; i++) {
             uint88 previous = weightOf[accounts[i]];
             weightOf[accounts[i]] = weights[i];
+
+            if (weights[i] >= previous) {
+                _totalVotingPower += (weights[i] - previous);
+            } else {
+                _totalVotingPower -= (previous - weights[i]);
+            }
+
             emit WeightChanged(accounts[i], previous, weights[i]);
             _rotateRoot(accounts[i], weights[i]);
         }
     }
 
     function getCensusRoot() external view returns (uint256 root) {
-        return _censusRoot;
+        return _currentRoot;
     }
 
     function getRootBlockNumber(uint256 root) external view returns (uint256 blockNumber) {
-        return _rootBlockNumber[root];
+        if (root == _currentRoot) {
+            return block.number;
+        }
+        return _rootLastValidBlock[root];
+    }
+
+    function getTotalVotingPowerAtRoot(uint256 root) external view returns (uint256 totalVotingPower) {
+        if (root == _currentRoot) {
+            return _totalVotingPower;
+        }
+        return _rootTotalVotingPower[root];
     }
 
     function _rotateRoot(address account, uint88 newWeight) internal {
-        _censusRoot = uint256(keccak256(abi.encodePacked(_censusRoot, account, newWeight, block.number)));
-        _rootBlockNumber[_censusRoot] = block.number;
+        uint256 oldRoot = _currentRoot;
+        uint256 newRoot = uint256(
+            keccak256(abi.encodePacked(oldRoot, account, newWeight, block.number))
+        );
+
+        if (oldRoot != newRoot) {
+            _rootLastValidBlock[oldRoot] = block.number;
+        }
+
+        _currentRoot = newRoot;
+        _rootTotalVotingPower[newRoot] = _totalVotingPower;
     }
 }
