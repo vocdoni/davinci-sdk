@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "start:onchain": "tsx src/onchain.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
