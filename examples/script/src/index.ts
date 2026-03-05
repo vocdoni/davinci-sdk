@@ -70,6 +70,7 @@ function createCSPCensusProvider(
       processId: cspProofData.processId,
       publicKey: cspProofData.publicKey,
       signature: cspProofData.signature,
+      index: cspProofData.index,
     };
   };
 }

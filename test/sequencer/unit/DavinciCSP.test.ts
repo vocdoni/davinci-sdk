@@ -48,6 +48,10 @@ describe('DavinciCSP', () => {
     expect(proof.root).toMatch(/^0x[0-9a-f]+$/i);
     expect(proof.publicKey).toMatch(/^0x[0-9a-f]+$/i);
     expect(proof.signature).toMatch(/^0x[0-9a-f]+$/i);
+    expect(typeof proof.index).toBe('number');
+    expect(Number.isInteger(proof.index)).toBe(true);
+    expect(proof.index).toBeGreaterThanOrEqual(16);
+    expect(proof.index).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
 
     await expect(
       csp.cspVerify(
