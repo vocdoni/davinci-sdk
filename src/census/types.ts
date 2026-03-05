@@ -44,6 +44,8 @@ export interface CSPCensusProof extends BaseCensusProof {
   publicKey: string;
   /** The signature that proves that the voter is in the census (hex-prefixed). */
   signature: string;
+  /** Optional voter index slot assigned by CSP. */
+  index?: number;
 }
 
 export type CensusProof = MerkleCensusProof | CSPCensusProof;
@@ -116,7 +118,11 @@ export function isCSPCensusProof(proof: any): proof is CSPCensusProof {
     typeof (proof as any).weight === 'string' &&
     typeof (proof as any).processId === 'string' &&
     typeof (proof as any).publicKey === 'string' &&
-    typeof (proof as any).signature === 'string'
+    typeof (proof as any).signature === 'string' &&
+    ((proof as any).index === undefined ||
+      (typeof (proof as any).index === 'number' &&
+        Number.isInteger((proof as any).index) &&
+        (proof as any).index >= 0))
   );
 }
 

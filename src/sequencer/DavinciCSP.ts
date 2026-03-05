@@ -5,6 +5,13 @@ export type HexBytes = Uint8Array;
 export type ProcessID = Uint8Array;
 export type HexString = string;
 
+export type CSPIndexFn = (
+  hashFn: Poseidon,
+  processId: ProcessID,
+  address: HexBytes,
+  weight: bigint
+) => bigint;
+
 export interface CSPSignOutput {
   censusOrigin: CensusOrigin;
   root: HexString;
@@ -13,6 +20,7 @@ export interface CSPSignOutput {
   processId: HexString;
   publicKey: HexString;
   signature: HexString;
+  index: number;
 }
 
 // Kept for backward compatibility with previous constructor signature.
@@ -22,6 +30,7 @@ export interface DavinciCSPOptions {
   initTimeoutMs?: number;
   wasmExecHash?: string;
   wasmHash?: string;
+  cspIndexFn?: CSPIndexFn;
 }
 
 interface InternalCensusProof {
@@ -32,11 +41,15 @@ interface InternalCensusProof {
   processId: HexString;
   publicKey: HexString;
   signature: HexString;
+  index: bigint;
 }
 
 const CENSUS_ROOT_LENGTH = 32;
 const SPONGE_CHUNK_SIZE = 31;
 const DEFAULT_FRAME_SIZE = 6;
+const BALLOT_MIN = 16n;
+// JSON transport uses JS numbers, so keep index in the safe-integer range.
+const BALLOT_MAX = 9007199254740991n; // Number.MAX_SAFE_INTEGER
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -50,9 +63,10 @@ export class DavinciCSP {
   private poseidon!: Poseidon;
   private eddsa!: Eddsa;
   private babyjub!: Babyjub;
+  private readonly indexFn: CSPIndexFn;
 
-  constructor(_opts?: DavinciCSPOptions) {
-    // No-op. We keep this constructor for API compatibility.
+  constructor(opts?: DavinciCSPOptions) {
+    this.indexFn = opts?.cspIndexFn ?? defaultCSPIndexFn;
   }
 
   async init(): Promise<void> {
@@ -95,6 +109,7 @@ export class DavinciCSP {
       processId: proof.processId,
       publicKey: proof.publicKey,
       signature: proof.signature,
+      index: toSafeNumber(proof.index, 'index'),
     };
   }
 
@@ -118,6 +133,7 @@ export class DavinciCSP {
       processId,
       publicKey,
       signature,
+      index: 0n,
     };
 
     try {
@@ -179,6 +195,7 @@ export class DavinciCSP {
       processId: bytesToHexPrefixed(processId),
       publicKey: bytesToHexPrefixed(encPublicKey),
       signature: bytesToHexPrefixed(encSignature),
+      index: this.indexFn(this.poseidon, processId, address, weight),
     };
   }
 
@@ -454,4 +471,17 @@ function decodeBytes(encodedBytes: Uint8Array): Uint8Array {
   }
 
   return hexToBytes(encodedHexText);
+}
+
+export const defaultCSPIndexFn: CSPIndexFn = (hashFn, processId, address, weight) => {
+  const hashValue = poseidonToBigInt(hashFn, [bytesToBigInt(processId), bytesToBigInt(address), weight]);
+  const rangeSize = BALLOT_MAX - BALLOT_MIN + 1n;
+  return (hashValue % rangeSize) + BALLOT_MIN;
+};
+
+function toSafeNumber(value: bigint, fieldName: string): number {
+  if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${fieldName} is out of Number safe range`);
+  }
+  return Number(value);
 }
