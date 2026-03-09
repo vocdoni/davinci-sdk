@@ -3,6 +3,7 @@ import { Wallet, JsonRpcProvider } from 'ethers';
 import { getApiUrls } from '../../helpers/integrationRuntime';
 
 const { sequencerUrl, censusUrl } = getApiUrls();
+const CUSTOM_PROCESS_REGISTRY = '0x1111111111111111111111111111111111111111';
 
 describe('DavinciSDK Integration Tests', () => {
   let mockSigner: Wallet;
@@ -76,7 +77,7 @@ describe('DavinciSDK Integration Tests', () => {
 
     it('should store custom addresses when provided', () => {
       const customAddresses = {
-        processRegistry: '0xCustomProcessRegistry123456789012345678901234',
+        processRegistry: CUSTOM_PROCESS_REGISTRY,
       };
 
       const sdk = new DavinciSDK({
@@ -96,7 +97,7 @@ describe('DavinciSDK Integration Tests', () => {
         signer: mockSigner,
         sequencerUrl: sequencerUrl,
         addresses: {
-          processRegistry: '0xCustom123456789012345678901234',
+          processRegistry: CUSTOM_PROCESS_REGISTRY,
         },
       });
 
@@ -150,7 +151,7 @@ describe('DavinciSDK Integration Tests', () => {
         signer: mockSigner,
         sequencerUrl: sequencerUrl,
         addresses: {
-          processRegistry: '0xCustom123',
+          processRegistry: CUSTOM_PROCESS_REGISTRY,
         },
       });
 
@@ -162,7 +163,7 @@ describe('DavinciSDK Integration Tests', () => {
       const finalConfig = sdk.getConfig();
 
       // Configuration should keep custom addresses
-      expect(finalConfig.customAddresses.processRegistry).toBe('0xCustom123');
+      expect(finalConfig.customAddresses.processRegistry).toBe(CUSTOM_PROCESS_REGISTRY);
       expect(finalConfig.fetchAddressesFromSequencer).toBe(false);
       expect(sdk.isInitialized()).toBe(true);
     });
@@ -516,7 +517,7 @@ describe('DavinciSDK Integration Tests', () => {
 
       // Create SDKs with custom addresses to avoid needing init()
       const customAddresses = {
-        processRegistry: '0xCustom123',
+        processRegistry: CUSTOM_PROCESS_REGISTRY,
       };
 
       const sdkBare = new DavinciSDK({

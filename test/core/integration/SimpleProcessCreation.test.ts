@@ -16,6 +16,21 @@ function randomHex(bytes: number): string {
   return '0x' + hex;
 }
 
+async function waitForProcessStartOnChain(startTimeSec: bigint | number, timeoutMs = 120000): Promise<void> {
+  const target = Number(startTimeSec);
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const latest = await provider.getBlock('latest');
+    if (latest && latest.timestamp >= target) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+
+  throw new Error(`Timed out waiting for chain timestamp to reach process start time ${target}`);
+}
+
 describe('Simple Process Creation Integration', () => {
   let sdk: DavinciSDK;
 
@@ -755,10 +770,9 @@ describe('Simple Process Creation Integration', () => {
     const processBeforeEnd = await sdk.processes.getProcess(processId);
     expect(processBeforeEnd.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start to avoid underflow error (block.timestamp - p.startTime)
-    // The contract calculates newDuration = block.timestamp - p.startTime when ending
-    // If current time < start time, this causes Panic(17) overflow
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    // Wait for chain time to pass the process start time to avoid underflow
+    // in the contract calculation: newDuration = block.timestamp - p.startTime.
+    await waitForProcessStartOnChain(processBeforeEnd.startTime);
 
     // Now end the process using the stream
     const endStream = sdk.endProcessStream(processId);
@@ -845,8 +859,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforeEnd = await sdk.processes.getProcess(processId);
     expect(processBeforeEnd.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start to avoid underflow error
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforeEnd.startTime);
 
     // End the process using the simplified method
     await sdk.endProcess(processId);
@@ -930,8 +943,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforePause = await sdk.processes.getProcess(processId);
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforePause.startTime);
 
     // Now pause the process using the stream
     const pauseStream = sdk.pauseProcessStream(processId);
@@ -1017,8 +1029,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforePause = await sdk.processes.getProcess(processId);
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforePause.startTime);
 
     // Pause the process using the simplified method
     await sdk.pauseProcess(processId);
@@ -1102,8 +1113,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforeCancel = await sdk.processes.getProcess(processId);
     expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforeCancel.startTime);
 
     // Now cancel the process using the stream
     const cancelStream = sdk.cancelProcessStream(processId);
@@ -1189,8 +1199,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforeCancel = await sdk.processes.getProcess(processId);
     expect(processBeforeCancel.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforeCancel.startTime);
 
     // Cancel the process using the simplified method
     await sdk.cancelProcess(processId);
@@ -1274,8 +1283,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforePause = await sdk.processes.getProcess(processId);
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforePause.startTime);
 
     // Pause the process first
     await sdk.pauseProcess(processId);
@@ -1368,8 +1376,7 @@ describe('Simple Process Creation Integration', () => {
     const processBeforePause = await sdk.processes.getProcess(processId);
     expect(processBeforePause.status).toBe(BigInt(ProcessStatus.READY));
 
-    // Wait for process to start
-    await new Promise(resolve => setTimeout(resolve, 24000)); // Wait 24 seconds
+    await waitForProcessStartOnChain(processBeforePause.startTime);
 
     // Pause the process first
     await sdk.pauseProcess(processId);
