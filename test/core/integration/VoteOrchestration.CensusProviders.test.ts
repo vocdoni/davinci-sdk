@@ -376,7 +376,7 @@ describe('Vote Orchestration Integration', () => {
             processId: cspProofData.processId,
             publicKey: cspProofData.publicKey,
             signature: cspProofData.signature,
-            index: cspProofData.index,
+            voterIndex: cspProofData.index,
           };
         };
 
