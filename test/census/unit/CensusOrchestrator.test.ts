@@ -2,16 +2,17 @@ import { CensusOrchestrator } from '../../../src/census/CensusOrchestrator';
 import { OffchainCensus, OffchainDynamicCensus, CspCensus, OnchainCensus } from '../../../src/census/classes';
 import { CensusOrigin } from '../../../src/census/types';
 import type { VocdoniCensusService } from '../../../src/census/CensusService';
+import { vi, type Mocked } from 'vitest';
 
 describe('CensusOrchestrator', () => {
-  let mockCensusService: jest.Mocked<VocdoniCensusService>;
+  let mockCensusService: Mocked<VocdoniCensusService>;
   let orchestrator: CensusOrchestrator;
 
   beforeEach(() => {
     mockCensusService = {
-      createCensus: jest.fn(),
-      addParticipants: jest.fn(),
-      publishCensus: jest.fn(),
+      createCensus: vi.fn(),
+      addParticipants: vi.fn(),
+      publishCensus: vi.fn(),
     } as any;
 
     orchestrator = new CensusOrchestrator(mockCensusService);
