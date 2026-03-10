@@ -13,6 +13,7 @@
     "sourceMap": true,
     "outDir": "dist",
     "baseUrl": ".",
+    "types": ["node", "vitest/globals"],
     "paths": {
       "*": ["node_modules/*"],
       "test/*": ["test/*"]

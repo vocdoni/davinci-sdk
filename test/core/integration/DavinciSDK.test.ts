@@ -426,7 +426,7 @@ describe('DavinciSDK Integration Tests', () => {
 
       try {
         sdk.processes;
-        fail('Should have thrown an error');
+        throw new Error('Should have thrown an error');
       } catch (error: any) {
         expect(error.message).toContain('wallet.connect(provider)');
         expect(error.message).toContain('MetaMask');

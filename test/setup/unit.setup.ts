@@ -1,5 +1,6 @@
-jest.setTimeout(30_000);
+import { afterEach, vi } from 'vitest';
 
 afterEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
