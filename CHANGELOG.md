@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-10
+
+### Changed
+- CSP vote payload compatibility updated to support sequencer field naming migration by normalizing legacy `index`/`voterIndex` handling before vote submission.
+- CSP proof typing was aligned with numeric index transport expectations for sequencer interoperability.
+- Core process lifecycle integration tests were refactored to reduce duplication with shared lifecycle builders and reusable status-stream assertions.
+
+### Fixed
+- Stabilized process status transition integration tests (`end`, `pause`, `cancel`, `resume`) by waiting on on-chain timestamp progression instead of fixed wall-clock sleeps.
+- Reduced teardown-related integration flakiness by improving provider cleanup behavior in integration test runtime.
+
 ## [0.2.0] - 2026-02-24
 
 ### Added
