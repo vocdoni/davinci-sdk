@@ -43,6 +43,8 @@ services:
       SEPOLIA_PRIVATE_KEY: "${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
     ports:
       - "${DEPLOYER_PORT:-8000}:8000"
+    volumes:
+      - run:/workspace
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/addresses.env >/dev/null"]
       interval: 10s
