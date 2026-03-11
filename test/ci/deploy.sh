@@ -59,23 +59,66 @@ latest_broadcast_json() {
     | cut -d' ' -f2-
 }
 
-has_process_registry_in_broadcast() {
+extract_process_registry_from_broadcast() {
   local broadcast_json
   broadcast_json=$(latest_broadcast_json || true)
 
   if [[ -z "${broadcast_json}" || ! -f "${broadcast_json}" ]]; then
+    return 0
+  fi
+
+  jq -r '.transactions[] | select((.contractName // "") | test("^ProcessRegistry$"; "i")) | .contractAddress // empty' \
+    "${broadcast_json}" | head -n 1
+}
+
+is_process_registry_live() {
+  local process_registry
+  local onchain_code
+
+  process_registry=$(extract_process_registry_from_broadcast)
+  if [[ -z "${process_registry}" ]]; then
     return 1
   fi
 
-  jq -e '.transactions[] | select((.contractName // "") | test("^ProcessRegistry$"; "i"))' \
-    "${broadcast_json}" >/dev/null
+  onchain_code=$(cast code --rpc-url "${RPC_URL}" "${process_registry}" 2>/dev/null || true)
+  if [[ -z "${onchain_code}" || "${onchain_code}" == "0x" ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+is_process_registry_initialized() {
+  local process_registry
+  local st_vkey_hash
+  local r_vkey_hash
+  local zero_hash
+
+  process_registry=$(extract_process_registry_from_broadcast)
+  if [[ -z "${process_registry}" ]]; then
+    return 1
+  fi
+
+  zero_hash="0x0000000000000000000000000000000000000000000000000000000000000000"
+  st_vkey_hash=$(cast call --rpc-url "${RPC_URL}" "${process_registry}" "getSTVerifierVKeyHash()(bytes32)" 2>/dev/null || true)
+  r_vkey_hash=$(cast call --rpc-url "${RPC_URL}" "${process_registry}" "getRVerifierVKeyHash()(bytes32)" 2>/dev/null || true)
+
+  if [[ -z "${st_vkey_hash}" || "${st_vkey_hash}" == "${zero_hash}" ]]; then
+    return 1
+  fi
+
+  if [[ -z "${r_vkey_hash}" || "${r_vkey_hash}" == "${zero_hash}" ]]; then
+    return 1
+  fi
+
+  return 0
 }
 
 run_deploy() {
   local candidates=(
     "script/non-proxy/DeployAll.s.sol:TestDeployAllScript"
-    "script/DeployAll.s.sol:DeployAllScript"
     "script/DeployAll.s.sol:TestDeployAllScript"
+    "script/DeployAll.s.sol:DeployAllScript"
   )
 
   for candidate in "${candidates[@]}"; do
@@ -85,15 +128,18 @@ run_deploy() {
     fi
 
     echo "Trying deploy script: ${candidate}"
-    if deploy_contracts "${candidate}"; then
+    if deploy_contracts "${candidate}" && is_process_registry_live && is_process_registry_initialized; then
       return 0
     fi
 
-    # Some forge builds return a non-zero status after a successful broadcast in non-TTY CI.
-    if has_process_registry_in_broadcast; then
-      echo "Detected successful deployment artifacts despite forge non-zero exit; continuing."
+    # Some forge builds return non-zero in non-TTY CI despite broadcasting transactions.
+    # Accept only if contracts are verifiably live and initialized on-chain.
+    if is_process_registry_live && is_process_registry_initialized; then
+      echo "Detected usable on-chain deployment despite forge non-zero exit; continuing."
       return 0
     fi
+
+    echo "Candidate did not produce a usable on-chain ProcessRegistry, trying next..."
   done
 
   return 1
