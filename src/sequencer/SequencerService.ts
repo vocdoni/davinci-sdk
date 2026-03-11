@@ -18,6 +18,26 @@ function isHexString(str: string): boolean {
   return /^0x[0-9a-f]{64}$/i.test(str);
 }
 
+function isHexAddress(value: string | undefined): value is string {
+  return !!value && /^0x[0-9a-f]{40}$/i.test(value.trim());
+}
+
+function firstValidAddress(...candidates: Array<string | undefined>): string | undefined {
+  for (const candidate of candidates) {
+    if (isHexAddress(candidate)) {
+      return candidate.trim();
+    }
+  }
+  return undefined;
+}
+
+function getRuntimeEnv(): Record<string, string | undefined> | undefined {
+  if (typeof process === 'undefined') {
+    return undefined;
+  }
+  return (process as any).env as Record<string, string | undefined>;
+}
+
 export class VocdoniSequencerService extends BaseService {
   constructor(baseURL: string) {
     super(baseURL);
@@ -112,6 +132,40 @@ export class VocdoniSequencerService extends BaseService {
     return this.request<InfoResponse>({
       method: 'GET',
       url: '/info',
+    }).then(info => {
+      const env = getRuntimeEnv();
+      if (!env) {
+        return info;
+      }
+
+      const processAddress = firstValidAddress(
+        info.contracts?.process,
+        env.PROCESS_REGISTRY,
+        env.DAVINCI_PROCESS_REGISTRY,
+        env.DAVINCI_WEB3_PROCESS
+      );
+      const stateTransitionVerifier = firstValidAddress(
+        info.contracts?.stateTransitionVerifier,
+        env.STATE_TRANSITION_VERIFIER,
+        env.STATE_VERIFIER
+      );
+      const resultsVerifier = firstValidAddress(
+        info.contracts?.resultsVerifier,
+        env.RESULTS_VERIFIER,
+        env.RESULTS_REGISTRY,
+        env.DAVINCI_WEB3_RESULTS
+      );
+
+      return {
+        ...info,
+        contracts: {
+          ...info.contracts,
+          process: processAddress ?? info.contracts?.process ?? '',
+          stateTransitionVerifier:
+            stateTransitionVerifier ?? info.contracts?.stateTransitionVerifier ?? '',
+          resultsVerifier: resultsVerifier ?? info.contracts?.resultsVerifier ?? '',
+        },
+      };
     });
   }
 

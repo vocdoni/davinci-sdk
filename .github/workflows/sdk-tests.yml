@@ -64,7 +64,7 @@ jobs:
         if: failure()
         run: |
           docker compose -f test/ci/docker-compose.yml ps
-          docker compose -f test/ci/docker-compose.yml logs --no-color --tail=400 anvil deployer sequencer
+          docker compose -f test/ci/docker-compose.yml logs --no-color --tail=400 anvil deployer sequencer census
 
       - name: Stop local stack
         if: always()

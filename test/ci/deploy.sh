@@ -180,7 +180,12 @@ cp "${BROADCAST_JSON}" "${OUTPUT_JSON}"
 PROCESS_REGISTRY=$(extract_address '^ProcessRegistry$')
 ORG_REGISTRY=$(extract_address '(OrgRegistry|OrganizationRegistry)')
 RESULTS_REGISTRY=$(extract_address '^ResultsRegistry$')
+RESULTS_VERIFIER=$(extract_address '^(ResultsVerifier|ResultsVerifierGroth16)$')
 STATE_TRANSITION_VERIFIER=$(extract_address '^(StateTransitionVerifier|StateTransitionVerifierGroth16|StateVerifier)$')
+
+if [[ -z "${RESULTS_VERIFIER}" && -n "${RESULTS_REGISTRY}" ]]; then
+  RESULTS_VERIFIER="${RESULTS_REGISTRY}"
+fi
 
 if [[ -z "${PROCESS_REGISTRY}" ]]; then
   echo "Could not extract ProcessRegistry address from ${OUTPUT_JSON}"
@@ -191,6 +196,7 @@ cat > "${OUTPUT_ENV}" <<EOF
 PROCESS_REGISTRY=${PROCESS_REGISTRY}
 ORG_REGISTRY=${ORG_REGISTRY}
 RESULTS_REGISTRY=${RESULTS_REGISTRY}
+RESULTS_VERIFIER=${RESULTS_VERIFIER}
 STATE_TRANSITION_VERIFIER=${STATE_TRANSITION_VERIFIER}
 EOF
 
