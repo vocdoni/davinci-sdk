@@ -6,6 +6,7 @@ CONTRACTS_REF=${CONTRACTS_REF:-main}
 RPC_URL=${RPC_URL:-http://anvil:8545}
 PRIVATE_KEY=${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
 CHAIN_ID=${CHAIN_ID:-1337}
+ACTIVATE_BLOBS=${ACTIVATE_BLOBS:-false}
 OUTPUT_JSON=/workspace/addresses.json
 OUTPUT_ENV=/workspace/addresses.env
 
@@ -13,6 +14,7 @@ OUTPUT_ENV=/workspace/addresses.env
 export SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL:-${RPC_URL}}
 export SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY:-${PRIVATE_KEY}}
 export CHAIN_ID
+export ACTIVATE_BLOBS
 
 wait_for_rpc() {
   local timeout_s=${1:-180}
