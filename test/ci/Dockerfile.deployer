@@ -1,0 +1,15 @@
+FROM ghcr.io/foundry-rs/foundry:stable
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash ca-certificates curl git jq python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /workspace
+COPY deploy.sh /workspace/deploy.sh
+RUN chmod +x /workspace/deploy.sh
+
+WORKDIR /workspace
+EXPOSE 8000
+
+ENTRYPOINT ["/bin/bash", "-lc", "/workspace/deploy.sh && python3 -m http.server 8000 --bind 0.0.0.0 --directory /workspace"]
