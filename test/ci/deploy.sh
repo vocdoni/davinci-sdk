@@ -133,8 +133,8 @@ cp "${BROADCAST_JSON}" "${OUTPUT_JSON}"
 
 PROCESS_REGISTRY=$(extract_address '^ProcessRegistry$')
 ORG_REGISTRY=$(extract_address '(OrgRegistry|OrganizationRegistry)')
-RESULTS_REGISTRY=$(extract_address '(ResultsVerifier|ResultsRegistry)')
-STATE_TRANSITION_VERIFIER=$(extract_address '(StateTransitionVerifier|StateVerifier)')
+RESULTS_REGISTRY=$(extract_address '^ResultsRegistry$')
+STATE_TRANSITION_VERIFIER=$(extract_address '^(StateTransitionVerifier|StateTransitionVerifierGroth16|StateVerifier)$')
 
 if [[ -z "${PROCESS_REGISTRY}" ]]; then
   echo "Could not extract ProcessRegistry address from ${OUTPUT_JSON}"
