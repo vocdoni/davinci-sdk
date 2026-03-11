@@ -42,8 +42,29 @@ deploy_contracts() {
     --slow \
     --optimize \
     --optimizer-runs 200 \
-    -- \
-    --vvvv
+    -vvvv
+}
+
+run_deploy() {
+  local candidates=(
+    "script/non-proxy/DeployAll.s.sol:TestDeployAllScript"
+    "script/DeployAll.s.sol:DeployAllScript"
+    "script/DeployAll.s.sol:TestDeployAllScript"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    local script_path=${candidate%%:*}
+    if [[ ! -f "${script_path}" ]]; then
+      continue
+    fi
+
+    echo "Trying deploy script: ${candidate}"
+    if deploy_contracts "${candidate}"; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 extract_address() {
@@ -64,12 +85,24 @@ forge clean
 forge build
 
 echo "Deploying contracts..."
-if ! deploy_contracts "script/non-proxy/DeployAll.s.sol:TestDeployAllScript"; then
-  echo "Fallback deploy script: script/DeployAll.s.sol:DeployAllScript"
-  deploy_contracts "script/DeployAll.s.sol:DeployAllScript"
+if ! run_deploy; then
+  echo "Failed to deploy contracts with all known script entry points"
+  exit 1
 fi
 
-cp broadcast/DeployAll.s.sol/1337/run-latest.json "${OUTPUT_JSON}"
+BROADCAST_JSON=$(
+  find broadcast -type f -name run-latest.json -printf '%T@ %p\n' \
+    | sort -nr \
+    | head -n 1 \
+    | cut -d' ' -f2-
+)
+
+if [[ -z "${BROADCAST_JSON}" || ! -f "${BROADCAST_JSON}" ]]; then
+  echo "Could not locate a forge broadcast run-latest.json output file"
+  exit 1
+fi
+
+cp "${BROADCAST_JSON}" "${OUTPUT_JSON}"
 
 PROCESS_REGISTRY=$(extract_address '^ProcessRegistry$')
 ORG_REGISTRY=$(extract_address '(OrgRegistry|OrganizationRegistry)')
