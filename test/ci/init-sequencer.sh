@@ -76,4 +76,17 @@ if [ -n "${ORG_REGISTRY:-}" ]; then
 fi
 
 echo "Starting sequencer with deployed contract addresses..."
-exec davinci-sequencer "$@"
+if [ -x /app/entrypoint.sh ]; then
+  exec /app/entrypoint.sh "$@"
+fi
+
+if [ -x /app/davinci-sequencer ]; then
+  exec /app/davinci-sequencer "$@"
+fi
+
+if command -v davinci-sequencer >/dev/null 2>&1; then
+  exec davinci-sequencer "$@"
+fi
+
+echo "Could not find sequencer executable (/app/entrypoint.sh, /app/davinci-sequencer, or davinci-sequencer in PATH)."
+exit 1
