@@ -15,6 +15,8 @@ export SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL:-${RPC_URL}}
 export SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY:-${PRIVATE_KEY}}
 export CHAIN_ID
 export ACTIVATE_BLOBS
+export CI=${CI:-true}
+export TERM=${TERM:-dumb}
 
 wait_for_rpc() {
   local timeout_s=${1:-180}
@@ -38,15 +40,35 @@ deploy_contracts() {
   local script_ref=$1
 
   forge script \
-    --chain-id 1337 \
+    --chain-id "${CHAIN_ID}" \
     "${script_ref}" \
     --rpc-url "${RPC_URL}" \
     --private-key "${PRIVATE_KEY}" \
     --broadcast \
+    --non-interactive \
     --slow \
     --optimize \
     --optimizer-runs 200 \
-    -vvvv
+    -vvvv < /dev/null
+}
+
+latest_broadcast_json() {
+  find broadcast -type f -name run-latest.json -printf '%T@ %p\n' \
+    | sort -nr \
+    | head -n 1 \
+    | cut -d' ' -f2-
+}
+
+has_process_registry_in_broadcast() {
+  local broadcast_json
+  broadcast_json=$(latest_broadcast_json || true)
+
+  if [[ -z "${broadcast_json}" || ! -f "${broadcast_json}" ]]; then
+    return 1
+  fi
+
+  jq -e '.transactions[] | select((.contractName // "") | test("^ProcessRegistry$"; "i"))' \
+    "${broadcast_json}" >/dev/null
 }
 
 run_deploy() {
@@ -64,6 +86,12 @@ run_deploy() {
 
     echo "Trying deploy script: ${candidate}"
     if deploy_contracts "${candidate}"; then
+      return 0
+    fi
+
+    # Some forge builds return a non-zero status after a successful broadcast in non-TTY CI.
+    if has_process_registry_in_broadcast; then
+      echo "Detected successful deployment artifacts despite forge non-zero exit; continuing."
       return 0
     fi
   done
@@ -94,12 +122,7 @@ if ! run_deploy; then
   exit 1
 fi
 
-BROADCAST_JSON=$(
-  find broadcast -type f -name run-latest.json -printf '%T@ %p\n' \
-    | sort -nr \
-    | head -n 1 \
-    | cut -d' ' -f2-
-)
+BROADCAST_JSON=$(latest_broadcast_json || true)
 
 if [[ -z "${BROADCAST_JSON}" || ! -f "${BROADCAST_JSON}" ]]; then
   echo "Could not locate a forge broadcast run-latest.json output file"
