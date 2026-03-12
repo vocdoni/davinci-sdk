@@ -1,0 +1,97 @@
+services:
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:stable
+    entrypoint:
+      - anvil
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8545"
+      - --chain-id
+      - "1337"
+      - --accounts
+      - "1"
+      - --block-time
+      - "2"
+      - --hardfork
+      - "cancun"
+      - --code-size-limit
+      - "50000"
+      - -vvvv
+    ports:
+      - "${ANVIL_PORT:-8545}:8545"
+    healthcheck:
+      test: ["CMD-SHELL", "cast block-number --rpc-url http://127.0.0.1:8545 >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 5s
+
+  deployer:
+    build:
+      context: .
+      dockerfile: Dockerfile.deployer
+    depends_on:
+      anvil:
+        condition: service_healthy
+    environment:
+      CONTRACTS_REPO: "${CONTRACTS_REPO:-https://github.com/vocdoni/davinci-contracts.git}"
+      CONTRACTS_REF: "${CONTRACTS_REF:-main}"
+      RPC_URL: http://anvil:8545
+      PRIVATE_KEY: "${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+      CHAIN_ID: "1337"
+      ACTIVATE_BLOBS: "${ACTIVATE_BLOBS:-false}"
+      SEPOLIA_RPC_URL: http://anvil:8545
+      SEPOLIA_PRIVATE_KEY: "${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+    ports:
+      - "${DEPLOYER_PORT:-8000}:8000"
+    volumes:
+      - run:/workspace
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/addresses.env >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  sequencer:
+    image: "ghcr.io/vocdoni/davinci-node:${DAVINCI_NODE_TAG:-main}"
+    depends_on:
+      anvil:
+        condition: service_healthy
+      deployer:
+        condition: service_healthy
+    environment:
+      DAVINCI_WEB3_PRIVKEY: "${PRIVATE_KEY:-ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+      DAVINCI_WEB3_NETWORK: test
+      DAVINCI_WEB3_RPC: http://anvil:8545
+      DAVINCI_API_HOST: 0.0.0.0
+      DAVINCI_API_PORT: "9090"
+      DAVINCI_BATCH_TIME: 20s
+      DAVINCI_LOG_LEVEL: debug
+      DAVINCI_DATADIR: /app/run
+    volumes:
+      - run:/app/run
+      - ./init-sequencer.sh:/init-sequencer.sh:ro
+    entrypoint: ["/bin/sh", "/init-sequencer.sh"]
+    ports:
+      - "${SEQUENCER_PORT:-9090}:9090"
+
+  census:
+    image: "ghcr.io/vocdoni/census3-bigquery:${CENSUS3_TAG:-latest}"
+    environment:
+      CENSUS3_LOCAL_ONLY: "true"
+      CENSUS3_API_PORT: "8080"
+      CENSUS3_DATA_DIR: /app/.bigcensus3
+      CENSUS3_LOG_LEVEL: info
+    ports:
+      - "${CENSUS_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  run: {}
