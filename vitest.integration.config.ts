@@ -11,6 +11,11 @@ export default defineConfig({
     setupFiles: ['test/setup/integration.setup.ts'],
     testTimeout: getIntegrationTimeoutMs(),
     hookTimeout: getIntegrationTimeoutMs(),
+    maxWorkers: 1,
+    maxConcurrency: 1,
     fileParallelism: false,
+    sequence: {
+      concurrent: false,
+    },
   },
 });
