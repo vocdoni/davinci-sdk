@@ -117,7 +117,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start local Anvil + Sequencer stack
-        run: docker compose -f test/ci/docker-compose.yml up -d --build --pull
+        run: docker compose -f test/ci/docker-compose.yml up -d --build --pull always
 
       - name: Wait for stack readiness
         run: bash test/ci/wait-for-stack.sh
