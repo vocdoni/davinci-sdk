@@ -12,7 +12,7 @@ It starts:
 From the repository root:
 
 ```bash
-docker compose -f test/ci/docker-compose.yml up -d --build
+docker compose -f test/ci/docker-compose.yml up -d --build --pull
 bash test/ci/wait-for-stack.sh
 bash test/ci/write-test-env.sh
 yarn test:integration
