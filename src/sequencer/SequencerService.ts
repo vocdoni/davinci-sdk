@@ -14,8 +14,8 @@ import {
 import { validateProcessId } from './api/helpers';
 import { ElectionMetadata } from '../core';
 
-function isHexString(str: string): boolean {
-  return /^0x[0-9a-f]{64}$/i.test(str);
+function isMetadataHash(str: string): boolean {
+  return /^0x[0-9a-f]{72}$/i.test(str);
 }
 
 export class VocdoniSequencerService extends BaseService {
@@ -143,7 +143,7 @@ export class VocdoniSequencerService extends BaseService {
     }
 
     // Treat as hash
-    if (!isHexString(hashOrUrl)) {
+    if (!isMetadataHash(hashOrUrl)) {
       throw new Error('Invalid metadata hash format');
     }
 
@@ -154,7 +154,7 @@ export class VocdoniSequencerService extends BaseService {
   }
 
   getMetadataUrl(hash: string): string {
-    if (!isHexString(hash)) throw new Error('Invalid metadata hash format');
+    if (!isMetadataHash(hash)) throw new Error('Invalid metadata hash format');
     return `${this.axios.defaults.baseURL}/metadata/${hash}`;
   }
 
