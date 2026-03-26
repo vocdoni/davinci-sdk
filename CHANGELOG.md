@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-26
+
+### Changed
+- Migrated SDK test commands and configuration from Jest to Vitest, including dedicated unit and integration configs.
+- Updated CSP proof signing so voter index is included in the signed message (`index + processId + address + weight`), and extended `cspVerify` to optionally verify with an explicit index.
+- Updated sequencer metadata hash validation to the 72-hex format returned by metadata endpoints.
+
+### Fixed
+- Forced integration tests to run sequentially under Vitest to avoid race conditions against shared infrastructure.
+- Updated test setup/mocking utilities for Vitest compatibility and more reliable mock cleanup between tests.
+
 ## [0.2.1] - 2026-03-10
 
 ### Changed
