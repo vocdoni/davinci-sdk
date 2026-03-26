@@ -85,4 +85,25 @@ describe('DavinciCSP', () => {
       )
     ).resolves.toBe(false);
   });
+
+  it('rejects proofs with wrong index', async () => {
+    const csp = new DavinciCSP();
+    await csp.init();
+
+    const privKey = Wallet.createRandom().privateKey;
+    const proof = await csp.cspSign(CensusOrigin.CSP, privKey, processId, address, weight);
+
+    await expect(
+      csp.cspVerify(
+        proof.censusOrigin,
+        proof.root,
+        proof.address,
+        proof.weight,
+        proof.processId,
+        proof.publicKey,
+        proof.signature,
+        proof.index + 1
+      )
+    ).resolves.toBe(false);
+  });
 });

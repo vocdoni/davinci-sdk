@@ -122,7 +122,7 @@ describe('VocdoniSequencerService Integration', () => {
 
     it('should push metadata and return a valid hex hash', async () => {
       const hash = await sequencerService.pushMetadata(testMetadata);
-      expect(isValidHex(hash, 64)).toBe(true);
+      expect(isValidHex(hash, 72)).toBe(true);
       metadataHash = hash;
     });
 

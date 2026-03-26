@@ -120,20 +120,28 @@ export class DavinciCSP {
     weight: string,
     processId: string,
     publicKey: string,
-    signature: string
+    signature: string,
+    index?: number
   ): Promise<boolean> {
     this.ensureInitialized();
     this.assertCSPOrigin(censusOrigin);
+
+    const weightValue = parsePositiveBigInt(weight, 'weight');
+    const processIdBytes = hexToBytes(processId);
+    const addressBytes = hexToBytes(address);
 
     const proof: InternalCensusProof = {
       censusOrigin,
       root,
       address,
-      weight: parsePositiveBigInt(weight, 'weight'),
+      weight: weightValue,
       processId,
       publicKey,
       signature,
-      index: 0n,
+      index:
+        index === undefined
+          ? this.indexFn(this.poseidon, processIdBytes, addressBytes, weightValue)
+          : parseIndexNumber(index),
     };
 
     try {
@@ -172,7 +180,8 @@ export class DavinciCSP {
       throw new Error('invalid weight');
     }
 
-    const message = signatureMessage(this.poseidon, processId, address, weight);
+    const voterIndex = this.indexFn(this.poseidon, processId, address, weight);
+    const message = signatureMessage(this.poseidon, voterIndex, processId, address, weight);
     const messageField = this.babyjub.F.e(message);
     const signature = this.eddsa.signPoseidon(privKey, messageField);
     const packedSignature = this.eddsa.packSignature(signature);
@@ -195,7 +204,7 @@ export class DavinciCSP {
       processId: bytesToHexPrefixed(processId),
       publicKey: bytesToHexPrefixed(encPublicKey),
       signature: bytesToHexPrefixed(encSignature),
-      index: this.indexFn(this.poseidon, processId, address, weight),
+      index: voterIndex,
     };
   }
 
@@ -211,7 +220,7 @@ export class DavinciCSP {
     const pubKey = publicKeyFromBytes(this.babyjub, proof.publicKey);
     const processId = hexToBytes(proof.processId);
     const address = hexToBytes(proof.address);
-    const message = signatureMessage(this.poseidon, processId, address, proof.weight);
+    const message = signatureMessage(this.poseidon, proof.index, processId, address, proof.weight);
     const messageField = this.babyjub.F.e(message);
 
     const signatureBytes = decodeBytes(hexToBytes(proof.signature));
@@ -257,13 +266,21 @@ export class DavinciCSP {
 
 function signatureMessage(
   poseidon: Poseidon,
+  voterIndex: bigint,
   processId: Uint8Array,
   address: Uint8Array,
   weight: bigint
 ): bigint {
   const processIdValue = bytesToBigInt(processId);
   const addressValue = bytesToBigInt(address);
-  return poseidonToBigInt(poseidon, [processIdValue, addressValue, weight]);
+  return poseidonToBigInt(poseidon, [voterIndex, processIdValue, addressValue, weight]);
+}
+
+function parseIndexNumber(value: number): bigint {
+  if (!Number.isInteger(value) || value < 0 || !Number.isSafeInteger(value)) {
+    throw new Error('invalid index');
+  }
+  return BigInt(value);
 }
 
 function publicKeyFromBytes(
