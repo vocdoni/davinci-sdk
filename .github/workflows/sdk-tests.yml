@@ -125,8 +125,8 @@ jobs:
       - name: Generate integration env file
         run: bash test/ci/write-test-env.sh
 
-      - name: Run integration tests
-        run: yarn test:integration
+      - name: Run CI smoke integration test
+        run: yarn test:integration:ci
 
       - name: Print stack logs on failure
         if: failure()

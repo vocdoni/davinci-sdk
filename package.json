@@ -28,6 +28,7 @@
     "test": "yarn test:unit && yarn test:integration",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:ci": "vitest run --config vitest.integration.config.ts test/ci/integration/CiWorkflow.test.ts",
     "test:contracts": "yarn test:contracts:unit && yarn test:contracts:integration",
     "test:contracts:unit": "vitest run --config vitest.unit.config.ts test/contracts/unit --passWithNoTests",
     "test:contracts:integration": "vitest run --config vitest.integration.config.ts test/contracts/integration",
