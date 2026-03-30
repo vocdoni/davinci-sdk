@@ -111,9 +111,54 @@ jobs:
 
       - name: Resolve stack refs
         run: |
-          echo "DAVINCI_NODE_TAG=${DAVINCI_NODE_TAG:-main}" >> "$GITHUB_ENV"
-          echo "DAVINCI_NODE_REF=${DAVINCI_NODE_REF:-${DAVINCI_NODE_TAG:-main}}" >> "$GITHUB_ENV"
-          echo "CONTRACTS_REF=${CONTRACTS_REF:-auto}" >> "$GITHUB_ENV"
+          NODE_TAG="${DAVINCI_NODE_TAG:-main}"
+          NODE_REF="${DAVINCI_NODE_REF:-${NODE_TAG}}"
+          INPUT_CONTRACTS_REF="${CONTRACTS_REF:-auto}"
+          RESOLVED_CONTRACTS_REF="${INPUT_CONTRACTS_REF}"
+
+          if [[ "${RESOLVED_CONTRACTS_REF}" == "auto" ]]; then
+            GO_MOD_URL="https://raw.githubusercontent.com/vocdoni/davinci-node/${NODE_REF}/go.mod"
+            if GO_MOD_CONTENT=$(curl -fsSL "${GO_MOD_URL}"); then
+              DETECTED_CONTRACTS_REF=$(printf '%s\n' "${GO_MOD_CONTENT}" | awk '
+                $1=="replace" && $2=="github.com/vocdoni/davinci-contracts" {
+                  for (i=1; i<=NF; i++) {
+                    if ($i=="=>") {
+                      if (i+2<=NF && $(i+1)=="github.com/vocdoni/davinci-contracts") { print $(i+2); exit }
+                      if (i+1<=NF && $(i+1) ~ /^v[0-9]/) { print $(i+1); exit }
+                    }
+                  }
+                }
+                $1=="require" && $2=="(" { in_require=1; next }
+                in_require && $1==")" { in_require=0; next }
+                in_require && $1=="github.com/vocdoni/davinci-contracts" { print $2; exit }
+                $1=="require" && $2=="github.com/vocdoni/davinci-contracts" { print $3; exit }
+              ')
+
+              if [[ -n "${DETECTED_CONTRACTS_REF}" ]]; then
+                if [[ "${DETECTED_CONTRACTS_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]{14}-([0-9a-f]{12})$ ]]; then
+                  DETECTED_CONTRACTS_REF="${BASH_REMATCH[1]}"
+                fi
+
+                if [[ "${DETECTED_CONTRACTS_REF}" != ./* && "${DETECTED_CONTRACTS_REF}" != ../* && "${DETECTED_CONTRACTS_REF}" != /* ]]; then
+                  RESOLVED_CONTRACTS_REF="${DETECTED_CONTRACTS_REF}"
+                else
+                  echo "Detected local-path contracts replace (${DETECTED_CONTRACTS_REF}); keeping CONTRACTS_REF=auto fallback."
+                fi
+              else
+                echo "Could not detect davinci-contracts ref from ${GO_MOD_URL}; keeping CONTRACTS_REF=auto fallback."
+              fi
+            else
+              echo "Could not download ${GO_MOD_URL}; keeping CONTRACTS_REF=auto fallback."
+            fi
+          fi
+
+          {
+            echo "DAVINCI_NODE_TAG=${NODE_TAG}"
+            echo "DAVINCI_NODE_REF=${NODE_REF}"
+            echo "CONTRACTS_REF=${RESOLVED_CONTRACTS_REF}"
+          } >> "$GITHUB_ENV"
+
+          echo "Resolved stack refs: DAVINCI_NODE_TAG=${NODE_TAG} DAVINCI_NODE_REF=${NODE_REF} CONTRACTS_REF=${RESOLVED_CONTRACTS_REF}"
 
       - name: Login to GHCR
         uses: docker/login-action@v3
