@@ -92,6 +92,8 @@ describe('CI Workflow Integration', () => {
       ]);
       const publishedCensus = await organizerSdk.api.census.publishCensus(censusId);
       const censusSize = await organizerSdk.api.census.getCensusSize(publishedCensus.root);
+      const publishedCensusUrl = new URL(publishedCensus.uri);
+      const sequencerCensusUri = `http://census:8080${publishedCensusUrl.pathname}${publishedCensusUrl.search}`;
 
       const processConfig: ProcessConfig = {
         title: `CI Smoke Process ${Date.now()}`,
@@ -100,7 +102,7 @@ describe('CI Workflow Integration', () => {
           type: CensusOrigin.OffchainStatic,
           root: publishedCensus.root,
           size: censusSize,
-          uri: publishedCensus.uri,
+          uri: sequencerCensusUri,
         },
         maxVoters: censusSize,
         ballot: {
