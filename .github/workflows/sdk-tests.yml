@@ -1,4 +1,4 @@
-name: SDK Full Election Cycle
+name: SDK E2E Election Cycle
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   packages: read
 
 jobs:
-  sdk-tests:
+  sdk-e2e-election-cycle:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: [self-hosted]
     timeout-minutes: 90
@@ -176,8 +176,8 @@ jobs:
       - name: Generate integration env file
         run: bash test/ci/write-test-env.sh
 
-      - name: Run CI smoke integration test
-        run: yarn test:integration:ci
+      - name: Run full election cycle integration test
+        run: yarn test:integration:e2e:ci
 
       - name: Print stack logs on failure
         if: failure()
