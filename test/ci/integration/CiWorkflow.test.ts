@@ -166,7 +166,7 @@ describe('CI Workflow Integration', () => {
         processId,
         submittedVote.voteId,
         VoteStatus.Settled,
-        300_000,
+        1300_000,
         5_000
       );
 
