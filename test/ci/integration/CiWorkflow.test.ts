@@ -12,6 +12,8 @@ const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
 const contractAddresses = getSdkContractAddresses();
+const TEST_TIMEOUT_MS = 600_000;
+const VOTE_SETTLE_TIMEOUT_MS = 300_000;
 
 function isHexAddress(value: string | undefined): value is string {
   return !!value && /^0x[0-9a-f]{40}$/i.test(value.trim());
@@ -202,7 +204,7 @@ describe('CI Workflow Integration', () => {
         processId,
         submittedVote.voteId,
         VoteStatus.Settled,
-        1300_000,
+        VOTE_SETTLE_TIMEOUT_MS,
         5_000
       );
 
@@ -216,6 +218,6 @@ describe('CI Workflow Integration', () => {
       expect(results.reduce((acc, value) => acc + BigInt(value), 0n)).toBe(1n);
       expect([1, 4]).toContain(finalProcess.status);
     },
-    600_000
+    TEST_TIMEOUT_MS
   );
 });
