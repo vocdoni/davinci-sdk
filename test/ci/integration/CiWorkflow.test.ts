@@ -6,10 +6,44 @@ import {
   createIntegrationWallet,
   getApiUrls,
 } from '../../helpers/integrationRuntime';
+import { getOptionalEnv } from '../../helpers/integrationEnv';
 
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
+const contractAddresses = getSdkContractAddresses();
+
+function isHexAddress(value: string | undefined): value is string {
+  return !!value && /^0x[0-9a-f]{40}$/i.test(value.trim());
+}
+
+function getSdkContractAddresses():
+  | {
+      processRegistry?: string;
+      stateTransitionVerifier?: string;
+      resultsVerifier?: string;
+    }
+  | undefined {
+  const processRegistry = getOptionalEnv('PROCESS_REGISTRY');
+  const stateTransitionVerifier = getOptionalEnv('STATE_TRANSITION_VERIFIER');
+  const resultsVerifier = getOptionalEnv('RESULTS_VERIFIER');
+
+  if (
+    !isHexAddress(processRegistry) &&
+    !isHexAddress(stateTransitionVerifier) &&
+    !isHexAddress(resultsVerifier)
+  ) {
+    return undefined;
+  }
+
+  return {
+    processRegistry: isHexAddress(processRegistry) ? processRegistry : undefined,
+    stateTransitionVerifier: isHexAddress(stateTransitionVerifier)
+      ? stateTransitionVerifier
+      : undefined,
+    resultsVerifier: isHexAddress(resultsVerifier) ? resultsVerifier : undefined,
+  };
+}
 
 function shouldUseInternalCensusUri(): boolean {
   const override = process.env.CI_USE_INTERNAL_CENSUS_URI;
@@ -86,6 +120,7 @@ describe('CI Workflow Integration', () => {
         signer: organizerWallet,
         sequencerUrl,
         censusUrl,
+        ...(contractAddresses ? { addresses: contractAddresses } : {}),
       });
       await organizerSdk.init();
 
@@ -94,6 +129,7 @@ describe('CI Workflow Integration', () => {
         signer: voterWallet,
         sequencerUrl,
         censusUrl,
+        ...(contractAddresses ? { addresses: contractAddresses } : {}),
       });
       await voterSdk.init();
 
