@@ -16,7 +16,7 @@ You can still override refs with `CONTRACTS_REF`, `DAVINCI_NODE_REF`, and `DAVIN
 From the repository root:
 
 ```bash
-docker compose -f test/ci/docker-compose.yml up -d --build --pull
+docker compose -f test/ci/docker-compose.yml up -d --build --pull always
 bash test/ci/wait-for-stack.sh
 bash test/ci/write-test-env.sh
 yarn test:integration:ci
