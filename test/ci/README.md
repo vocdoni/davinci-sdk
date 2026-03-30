@@ -7,6 +7,10 @@ It starts:
 - A deployer container that deploys `davinci-contracts` and serves `addresses.env`
 - A sequencer container wired to that local chain and deployed addresses
 
+By default, the deployer resolves `davinci-contracts` from the `davinci-node` `go.mod` (same node ref),
+so contract verifier hashes stay aligned with the sequencer image.
+You can still override refs with `CONTRACTS_REF`, `DAVINCI_NODE_REF`, and `DAVINCI_NODE_TAG`.
+
 ## Local usage
 
 From the repository root:
