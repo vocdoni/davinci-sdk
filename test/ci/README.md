@@ -15,7 +15,7 @@ From the repository root:
 docker compose -f test/ci/docker-compose.yml up -d --build --pull
 bash test/ci/wait-for-stack.sh
 bash test/ci/write-test-env.sh
-yarn test:integration
+yarn test:integration:ci
 ```
 
 Stop everything:
