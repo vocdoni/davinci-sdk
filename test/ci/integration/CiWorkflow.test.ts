@@ -11,6 +11,29 @@ const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
 
+function shouldUseInternalCensusUri(): boolean {
+  const override = process.env.CI_USE_INTERNAL_CENSUS_URI;
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+
+  const sequencerHost = new URL(sequencerUrl).hostname;
+  const censusHost = new URL(censusUrl).hostname;
+  const localHosts = new Set(['127.0.0.1', 'localhost']);
+
+  // Local Docker stack in CI exposes host-mapped URLs to SDK, while sequencer must
+  // consume the census service through the container network hostname.
+  return localHosts.has(sequencerHost) && localHosts.has(censusHost);
+}
+
+function processCensusUriFromPublished(publishedUri: string): string {
+  if (!shouldUseInternalCensusUri()) {
+    return publishedUri;
+  }
+
+  const publishedCensusUrl = new URL(publishedUri);
+  return `http://census:8080${publishedCensusUrl.pathname}${publishedCensusUrl.search}`;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -92,8 +115,7 @@ describe('CI Workflow Integration', () => {
       ]);
       const publishedCensus = await organizerSdk.api.census.publishCensus(censusId);
       const censusSize = await organizerSdk.api.census.getCensusSize(publishedCensus.root);
-      const publishedCensusUrl = new URL(publishedCensus.uri);
-      const sequencerCensusUri = `http://census:8080${publishedCensusUrl.pathname}${publishedCensusUrl.search}`;
+      const processCensusUri = processCensusUriFromPublished(publishedCensus.uri);
 
       const processConfig: ProcessConfig = {
         title: `CI Smoke Process ${Date.now()}`,
@@ -102,7 +124,7 @@ describe('CI Workflow Integration', () => {
           type: CensusOrigin.OffchainStatic,
           root: publishedCensus.root,
           size: censusSize,
-          uri: sequencerCensusUri,
+          uri: processCensusUri,
         },
         maxVoters: censusSize,
         ballot: {
