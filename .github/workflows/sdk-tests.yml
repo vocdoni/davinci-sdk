@@ -109,6 +109,12 @@ jobs:
       - name: Run unit tests
         run: yarn test:unit
 
+      - name: Resolve stack refs
+        run: |
+          echo "DAVINCI_NODE_TAG=${DAVINCI_NODE_TAG:-main}" >> "$GITHUB_ENV"
+          echo "DAVINCI_NODE_REF=${DAVINCI_NODE_REF:-${DAVINCI_NODE_TAG:-main}}" >> "$GITHUB_ENV"
+          echo "CONTRACTS_REF=${CONTRACTS_REF:-auto}" >> "$GITHUB_ENV"
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:

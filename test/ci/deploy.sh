@@ -2,7 +2,9 @@
 set -euo pipefail
 
 CONTRACTS_REPO=${CONTRACTS_REPO:-https://github.com/vocdoni/davinci-contracts.git}
-CONTRACTS_REF=${CONTRACTS_REF:-main}
+CONTRACTS_REF=${CONTRACTS_REF:-auto}
+DAVINCI_NODE_REPO=${DAVINCI_NODE_REPO:-https://github.com/vocdoni/davinci-node.git}
+DAVINCI_NODE_REF=${DAVINCI_NODE_REF:-main}
 RPC_URL=${RPC_URL:-http://anvil:8545}
 PRIVATE_KEY=${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
 CHAIN_ID=${CHAIN_ID:-1337}
@@ -17,6 +19,122 @@ export CHAIN_ID
 export ACTIVATE_BLOBS
 export CI=${CI:-true}
 export TERM=${TERM:-dumb}
+
+fetch_davinci_node_go_mod() {
+  local output_file=$1
+  local repo_no_git
+  local owner
+  local repo
+  local raw_url
+  local tmp_dir
+
+  repo_no_git="${DAVINCI_NODE_REPO%.git}"
+
+  if [[ "${repo_no_git}" =~ ^https://github.com/([^/]+)/([^/]+)$ ]]; then
+    owner="${BASH_REMATCH[1]}"
+    repo="${BASH_REMATCH[2]}"
+    raw_url="https://raw.githubusercontent.com/${owner}/${repo}/${DAVINCI_NODE_REF}/go.mod"
+    if curl -fsSL "${raw_url}" -o "${output_file}"; then
+      return 0
+    fi
+    echo "Warning: failed to download go.mod from ${raw_url}, falling back to git clone."
+  fi
+
+  tmp_dir=$(mktemp -d)
+  if git clone --depth 1 --branch "${DAVINCI_NODE_REF}" "${DAVINCI_NODE_REPO}" "${tmp_dir}" >/dev/null 2>&1; then
+    cp "${tmp_dir}/go.mod" "${output_file}"
+    rm -rf "${tmp_dir}"
+    return 0
+  fi
+  rm -rf "${tmp_dir}"
+  return 1
+}
+
+extract_contracts_ref_from_go_mod() {
+  local go_mod_file=$1
+  local replace_version
+  local require_version
+
+  # Prefer explicit replace directives that pin a published version.
+  replace_version=$(awk '
+    $1=="replace" && $2=="github.com/vocdoni/davinci-contracts" {
+      for (i=1; i<=NF; i++) {
+        if ($i=="=>") {
+          if (i+2<=NF && $(i+1)=="github.com/vocdoni/davinci-contracts") {
+            print $(i+2); exit
+          }
+          if (i+1<=NF && $(i+1) ~ /^v[0-9]/) {
+            print $(i+1); exit
+          }
+        }
+      }
+    }
+  ' "${go_mod_file}")
+  if [[ -n "${replace_version}" ]]; then
+    echo "${replace_version}"
+    return 0
+  fi
+
+  require_version=$(awk '
+    $1=="require" && $2=="(" { in_require=1; next }
+    in_require && $1==")" { in_require=0; next }
+    in_require && $1=="github.com/vocdoni/davinci-contracts" { print $2; exit }
+    $1=="require" && $2=="github.com/vocdoni/davinci-contracts" { print $3; exit }
+  ' "${go_mod_file}")
+
+  if [[ -n "${require_version}" ]]; then
+    echo "${require_version}"
+    return 0
+  fi
+
+  return 1
+}
+
+normalize_contracts_ref() {
+  local version=$1
+
+  # Go pseudo-version: vX.Y.Z-yyyymmddhhmmss-<commit12>
+  if [[ "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]{14}-([0-9a-f]{12})$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  echo "${version}"
+  return 0
+}
+
+resolve_contracts_ref() {
+  local go_mod_tmp
+  local detected_version
+  local normalized_ref
+
+  if [[ "${CONTRACTS_REF}" != "auto" ]]; then
+    echo "${CONTRACTS_REF}"
+    return 0
+  fi
+
+  go_mod_tmp=$(mktemp)
+  if ! fetch_davinci_node_go_mod "${go_mod_tmp}"; then
+    rm -f "${go_mod_tmp}"
+    echo "Failed to fetch davinci-node go.mod from ${DAVINCI_NODE_REPO}@${DAVINCI_NODE_REF}" >&2
+    return 1
+  fi
+
+  if ! detected_version=$(extract_contracts_ref_from_go_mod "${go_mod_tmp}"); then
+    rm -f "${go_mod_tmp}"
+    echo "Could not find github.com/vocdoni/davinci-contracts in davinci-node go.mod" >&2
+    return 1
+  fi
+  rm -f "${go_mod_tmp}"
+
+  if [[ "${detected_version}" == ./* || "${detected_version}" == ../* || "${detected_version}" == /* ]]; then
+    echo "davinci-node go.mod points davinci-contracts to a local path (${detected_version}). Set CONTRACTS_REF explicitly." >&2
+    return 1
+  fi
+
+  normalized_ref=$(normalize_contracts_ref "${detected_version}")
+  echo "${normalized_ref}"
+}
 
 wait_for_rpc() {
   local timeout_s=${1:-180}
@@ -153,6 +271,9 @@ extract_address() {
 }
 
 wait_for_rpc
+
+CONTRACTS_REF=$(resolve_contracts_ref)
+echo "Using contracts ref ${CONTRACTS_REF} (resolved from davinci-node ref ${DAVINCI_NODE_REF})"
 
 echo "Cloning contracts from ${CONTRACTS_REPO} (${CONTRACTS_REF})..."
 git clone --depth 1 --branch "${CONTRACTS_REF}" "${CONTRACTS_REPO}" /workspace/davinci-contracts

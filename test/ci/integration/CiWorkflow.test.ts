@@ -74,6 +74,15 @@ describe('CI Workflow Integration', () => {
       });
       await voterSdk.init();
 
+      await organizerSdk.api.sequencer.ping();
+      const organizerBalance = await provider.getBalance(organizerWallet.address);
+      if (organizerBalance === 0n) {
+        throw new Error(
+          `Organizer wallet ${organizerWallet.address} has zero balance. ` +
+            'Run `bash test/ci/write-test-env.sh` before running local CI integration tests.'
+        );
+      }
+
       const censusId = await organizerSdk.api.census.createCensus();
       await organizerSdk.api.census.addParticipants(censusId, [
         {
@@ -105,7 +114,7 @@ describe('CI Workflow Integration', () => {
           minValueSum: '0',
         },
         timing: {
-          startDate: Math.floor(Date.now() / 1000) + 15,
+          // Let SDK apply its default start time offset to avoid racey past-start reverts.
           duration: 600,
         },
         questions: [
