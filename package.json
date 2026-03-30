@@ -29,7 +29,7 @@
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:e2e:ci": "vitest run --config vitest.integration.config.ts test/ci/integration/CiWorkflow.test.ts",
-    "test:integration:ci": "vitest run --config vitest.integration.config.ts test/ci/integration/CiWorkflow.test.ts",
+    "test:integration:ci": "yarn test:integration:e2e:ci",
     "test:contracts": "yarn test:contracts:unit && yarn test:contracts:integration",
     "test:contracts:unit": "vitest run --config vitest.unit.config.ts test/contracts/unit --passWithNoTests",
     "test:contracts:integration": "vitest run --config vitest.integration.config.ts test/contracts/integration",

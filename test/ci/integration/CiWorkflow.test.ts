@@ -156,8 +156,8 @@ describe('CI Workflow Integration', () => {
       const processCensusUri = processCensusUriFromPublished(publishedCensus.uri);
 
       const processConfig: ProcessConfig = {
-        title: `CI Smoke Process ${Date.now()}`,
-        description: 'CI smoke test: create -> vote -> end -> validate result',
+        title: `CI E2E Process ${Date.now()}`,
+        description: 'CI e2e test: create -> vote -> end -> validate result',
         census: {
           type: CensusOrigin.OffchainStatic,
           root: publishedCensus.root,
