@@ -1,4 +1,4 @@
-name: SDK Tests
+name: SDK Full Election Cycle
 
 on:
   push:
