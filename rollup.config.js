@@ -46,7 +46,6 @@ const createOutput = (name, options) => [
     file: `dist/${name}.umd.js`,
     format: 'umd',
     globals: {
-      axios: 'axios',
       '@vocdoni/davinci-contracts': 'davinciContracts',
       ethers: 'ethers',
       snarkjs: 'snarkjs',

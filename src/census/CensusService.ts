@@ -25,7 +25,7 @@ export class VocdoniCensusService extends BaseService {
    * @returns The constructed URI for the census
    */
   getCensusUri(relativePath: string): string {
-    return `${this.axios.defaults.baseURL}${relativePath}`;
+    return this.resolveUrl(relativePath);
   }
 
   createCensus(): Promise<string> {
