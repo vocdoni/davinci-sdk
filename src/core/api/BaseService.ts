@@ -4,7 +4,6 @@ export interface ApiError {
 }
 
 type QueryParamValue = string | number | boolean | null | undefined;
-type QueryParamInput = QueryParamValue | QueryParamValue[];
 type ErrorCode = string | number;
 type ErrorWithCode = Error & { code?: ErrorCode };
 
@@ -12,7 +11,7 @@ export interface RequestConfig {
   method?: string;
   url: string;
   data?: unknown;
-  params?: Record<string, QueryParamInput>;
+  params?: object;
   headers?: Record<string, string>;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -123,17 +122,17 @@ export class BaseService {
     }
   }
 
-  private appendQueryParams(url: URL, params?: Record<string, QueryParamInput>): void {
+  private appendQueryParams(url: URL, params?: object): void {
     if (!params) return;
 
     for (const [key, value] of Object.entries(params)) {
       if (Array.isArray(value)) {
         for (const item of value) {
-          if (item !== undefined && item !== null) {
+          if (this.isQueryParamValue(item)) {
             url.searchParams.append(key, String(item));
           }
         }
-      } else if (value !== undefined && value !== null) {
+      } else if (this.isQueryParamValue(value)) {
         url.searchParams.append(key, String(value));
       }
     }
@@ -217,5 +216,9 @@ export class BaseService {
       return maybeCode;
     }
     return undefined;
+  }
+
+  private isQueryParamValue(value: unknown): value is Exclude<QueryParamValue, null | undefined> {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
   }
 }
