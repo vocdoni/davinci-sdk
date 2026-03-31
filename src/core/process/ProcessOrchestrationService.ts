@@ -223,7 +223,7 @@ export class ProcessOrchestrationService {
       // Onchain and CSP are ready immediately
       if (census.requiresPublishing && !census.isPublished) {
         // Check if census service has a valid base URL configured
-        const censusBaseURL = this.apiService.census?.['axios']?.defaults?.baseURL;
+        const censusBaseURL = this.apiService.census?.getBaseUrl();
         if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
           throw new Error(
             'Census API URL is required to publish Merkle censuses (OffchainCensus, OffchainDynamicCensus). ' +

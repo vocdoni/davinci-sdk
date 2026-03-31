@@ -155,7 +155,7 @@ export class VocdoniSequencerService extends BaseService {
 
   getMetadataUrl(hash: string): string {
     if (!isMetadataHash(hash)) throw new Error('Invalid metadata hash format');
-    return `${this.axios.defaults.baseURL}/metadata/${hash}`;
+    return this.resolveUrl(`/metadata/${hash}`);
   }
 
   getStats(): Promise<SequencerStats> {
