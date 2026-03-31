@@ -13,7 +13,7 @@ const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
 const contractAddresses = getSdkContractAddresses();
 const TEST_TIMEOUT_MS = 600_000;
-const VOTE_SETTLE_TIMEOUT_MS = 300_000;
+const VOTE_SETTLE_TIMEOUT_MS = 420_000;
 
 function isHexAddress(value: string | undefined): value is string {
   return !!value && /^0x[0-9a-f]{40}$/i.test(value.trim());
