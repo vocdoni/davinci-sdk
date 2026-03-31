@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-31
+
+### Changed
+- Replaced the internal HTTP client implementation with native `fetch` across SDK API services.
+- Preserved SDK error compatibility by keeping transport errors surfaced with a `.code` field.
+- Increased CI full-election-cycle vote settlement wait time to reduce transient failures on slower runners.
+
+### Removed
+- Removed `axios` from SDK runtime dependencies.
+
+### Fixed
+- Relaxed API query parameter typing to support typed objects (for example, `SnapshotsQueryParams`) without TypeScript errors.
+
 ## [0.2.2] - 2026-03-26
 
 ### Changed
