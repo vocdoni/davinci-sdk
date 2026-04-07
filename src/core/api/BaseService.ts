@@ -31,7 +31,15 @@ export class BaseService {
 
   constructor(baseURL: string, config?: BaseServiceConfig) {
     this.baseURL = baseURL;
-    this.fetchImpl = config?.fetchImpl ?? fetch;
+    if (config?.fetchImpl) {
+      this.fetchImpl = config.fetchImpl;
+    } else if (typeof globalThis.fetch === 'function') {
+      this.fetchImpl = globalThis.fetch.bind(globalThis);
+    } else {
+      throw new Error(
+        'Global fetch is not available. Provide a fetchImpl in BaseService configuration.'
+      );
+    }
     this.defaultHeaders = config?.headers ?? {};
     this.defaultTimeoutMs = config?.timeoutMs;
   }
