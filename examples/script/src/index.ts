@@ -174,18 +174,18 @@ async function step3_createProcess(
   step(3, `Create voting process${useWeights ? ' (with weighted voting)' : ''}`);
 
   // Calculate ballot limits based on whether weights are used
-  // maxValue = maxOption * maxWeight (if weighted), or just maxOption (if not weighted)
-  // maxValueSum = sum of all maxValues for all questions
-  const maxOption = 3; // Options are 0,1,2,3
-  const maxValue = useWeights ? maxOption * maxWeight : maxOption;
-  const maxValueSum = useWeights ? maxValue * 2 : maxOption * 2; // 2 questions
+  // One question with 4 options encoded as 4 ballot fields (one-hot)
+  // maxValue = max voter weight (if weighted), or 1 (if not weighted)
+  // maxValueSum = max total points assignable in the ballot (single choice => same as maxValue)
+  const maxValue = useWeights ? maxWeight : 1;
+  const maxValueSum = maxValue;
 
   const processConfig = {
     title: 'Simplified Test Election ' + Date.now(),
     description: 'A simplified test election created with DavinciSDK',
     census: census,
     ballot: {
-      numFields: 2, // Two questions
+      numFields: 4, // One question with 4 options (one field per option)
       maxValue: maxValue.toString(),
       minValue: '0',
       uniqueValues: false,
@@ -207,16 +207,6 @@ async function step3_createProcess(
           { title: 'Blue', value: 1 },
           { title: 'Green', value: 2 },
           { title: 'Yellow', value: 3 },
-        ],
-      },
-      {
-        title: 'What is your preferred transportation?',
-        description: 'Select your most used mode of transportation',
-        choices: [
-          { title: 'Car', value: 0 },
-          { title: 'Bike', value: 1 },
-          { title: 'Public Transport', value: 2 },
-          { title: 'Walking', value: 3 },
         ],
       },
     ],
@@ -344,32 +334,25 @@ async function step5_submitVotes(
       const globalIndex = batchStartIndex + indexInBatch;
       const weight = parseInt(participant.weight);
 
-      // Generate random choices for each question (0-3)
-      const choice1 = Math.floor(Math.random() * 4);
-      const choice2 = Math.floor(Math.random() * 4);
+      // Generate one random choice for the single question (0-3)
+      const choice = Math.floor(Math.random() * 4);
 
-      // Create arrays of 4 positions each
-      const question1Choices = Array(4).fill(0);
-      const question2Choices = Array(4).fill(0);
+      // Create one array of 4 positions (one-hot)
+      const choices = Array(4).fill(0);
 
       // If using weights, multiply by participant weight
       if (useWeights) {
-        question1Choices[choice1] = weight;
-        question2Choices[choice2] = weight;
+        choices[choice] = weight;
       } else {
-        question1Choices[choice1] = 1;
-        question2Choices[choice2] = 1;
+        choices[choice] = 1;
       }
 
-      const colorChoice = ['Red', 'Blue', 'Green', 'Yellow'][choice1];
-      const transportChoice = ['Car', 'Bike', 'Public Transport', 'Walking'][choice2];
+      const colorChoice = ['Red', 'Blue', 'Green', 'Yellow'][choice];
 
       info(
-        `[${globalIndex + 1}/${participants.length}] ${participant.address} (weight: ${weight}) voting: ${colorChoice}, ${transportChoice}`
+        `[${globalIndex + 1}/${participants.length}] ${participant.address} (weight: ${weight}) voting: ${colorChoice}`
       );
-      info(
-        `   Choice arrays: Q1=[${question1Choices.join(', ')}], Q2=[${question2Choices.join(', ')}]`
-      );
+      info(`   Choice array: [${choices.join(', ')}]`);
 
       try {
         const baseConfig = createSDKInstance(participant.privateKey, false);
@@ -389,7 +372,7 @@ async function step5_submitVotes(
 
         const voteResult = await voterSDK.submitVote({
           processId,
-          choices: [...question1Choices, ...question2Choices], // Array of 8 positions
+          choices, // Array of 4 positions
         });
 
         voteIds.push(voteResult.voteId);
@@ -586,12 +569,6 @@ async function step7_endProcessAndShowResults(
   console.log('Blue (1):             ', process.result[1].toString());
   console.log('Green (2):            ', process.result[2].toString());
   console.log('Yellow (3):           ', process.result[3].toString());
-
-  console.log(chalk.yellow('\nQuestion 2: What is your preferred transportation?'));
-  console.log('Car (0):              ', process.result[4].toString());
-  console.log('Bike (1):             ', process.result[5].toString());
-  console.log('Public Transport (2): ', process.result[6].toString());
-  console.log('Walking (3):          ', process.result[7].toString());
 
   success('Results displayed successfully');
 }
