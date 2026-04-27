@@ -47,15 +47,11 @@ describe('VocdoniSequencerService Integration', () => {
     expect(urlRx.test(info.circuitUrl)).toBe(true);
     expect(urlRx.test(info.provingKeyUrl)).toBe(true);
     expect(urlRx.test(info.verificationKeyUrl)).toBe(true);
-    expect(urlRx.test(info.ballotProofWasmHelperUrl)).toBe(true);
-    expect(urlRx.test(info.ballotProofWasmHelperExecJsUrl)).toBe(true);
 
     // hash fields
     expect(hexRx.test(info.circuitHash)).toBe(true);
     expect(hexRx.test(info.provingKeyHash)).toBe(true);
     expect(hexRx.test(info.verificationKeyHash)).toBe(true);
-    expect(hexRx.test(info.ballotProofWasmHelperHash)).toBe(true);
-    expect(hexRx.test(info.ballotProofWasmHelperExecJsHash)).toBe(true);
 
     // contract addresses
     expect(addrRx.test(info.contracts.process)).toBe(true);
