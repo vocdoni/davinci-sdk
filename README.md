@@ -493,7 +493,6 @@ const processResult = await sdk.createProcess({
     maxValue: "2",
     minValue: "0",
     uniqueValues: false,
-    costFromWeight: false,
     costExponent: 1,
     maxValueSum: "2",
     minValueSum: "0"
@@ -870,7 +869,6 @@ const process = await sdk.createProcess({
     maxValue: "5",          // Maximum choice value
     minValue: "0",          // Minimum choice value
     uniqueValues: true,     // Require unique choices
-    costFromWeight: false,  // Use weight for vote cost
     costExponent: 1,        // Cost calculation exponent
     maxValueSum: "10",      // Maximum sum of all choices
     minValueSum: "3"        // Minimum sum of all choices

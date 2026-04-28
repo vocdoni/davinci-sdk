@@ -57,7 +57,6 @@ export class BallotInputGenerator {
           maxValueSum: ballotMode.maxValueSum,
           minValueSum: ballotMode.minValueSum,
           costExponent: ballotMode.costExponent,
-          costFromWeight: ballotMode.costFromWeight,
         },
       },
       choices,

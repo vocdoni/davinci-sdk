@@ -40,7 +40,6 @@ describe('Crypto Integration: Poseidon + ElGamal', () => {
       maxValueSum: 1125,
       minValueSum: 5,
       costExponent: 2,
-      costFromWeight: 0,
     };
     const fields = [1, 2, 3, 4, 5];
     const { pubKey } = builder.elgamal.generateKeyPair();
@@ -69,7 +68,6 @@ describe('Crypto Integration: Poseidon + ElGamal', () => {
       maxValueSum: 20,
       minValueSum: 0,
       costExponent: 1,
-      costFromWeight: 0,
     };
     const fields = [1, 2];
     const { pubKey } = builder.elgamal.generateKeyPair();
@@ -97,7 +95,6 @@ describe('Crypto Integration: Poseidon + ElGamal', () => {
       maxValueSum: 5,
       minValueSum: 0,
       costExponent: 1,
-      costFromWeight: 0,
     };
     const fields = [3];
     const { pubKey } = builder.elgamal.generateKeyPair();
@@ -122,7 +119,6 @@ describe('Crypto Integration: Poseidon + ElGamal', () => {
       maxValueSum: 30,
       minValueSum: 0,
       costExponent: 1,
-      costFromWeight: 0,
     };
     const fields = [1, 2, 3];
     const { pubKey } = builder.elgamal.generateKeyPair();

@@ -75,7 +75,6 @@ export interface BallotConfig {
   maxValueSum: number;
   minValueSum: number;
   costExponent: number;
-  costFromWeight: number;
 }
 
 /**
@@ -96,7 +95,6 @@ export interface SequencerProcessData {
     maxValueSum: string;
     minValueSum: string;
     costExponent: number;
-    costFromWeight: boolean;
   };
 }
 
@@ -121,7 +119,6 @@ export function parseBallotMode(ballotMode: SequencerProcessData['ballotMode']):
     maxValueSum: parseInt(ballotMode.maxValueSum),
     minValueSum: parseInt(ballotMode.minValueSum),
     costExponent: ballotMode.costExponent,
-    costFromWeight: ballotMode.costFromWeight ? 1 : 0,
   };
 }
 
@@ -145,7 +142,6 @@ export interface BallotInputs {
   max_value_sum: number;
   min_value_sum: number;
   cost_exponent: number;
-  cost_from_weight: number;
 }
 
 export class BallotBuilder {
@@ -246,12 +242,11 @@ export class BallotBuilder {
     packed |= BigInt(config.numFields);
     packed |= BigInt(groupSize) << 8n;
     packed |= BigInt(config.uniqueValues) << 16n;
-    packed |= BigInt(config.costFromWeight) << 17n;
-    packed |= BigInt(config.costExponent) << 18n;
-    packed |= BigInt(config.maxValue) << 26n;
-    packed |= BigInt(config.minValue) << 74n;
-    packed |= BigInt(config.maxValueSum) << 122n;
-    packed |= BigInt(config.minValueSum) << 185n;
+    packed |= BigInt(config.costExponent) << 17n;
+    packed |= BigInt(config.maxValue) << 25n;
+    packed |= BigInt(config.minValue) << 73n;
+    packed |= BigInt(config.maxValueSum) << 121n;
+    packed |= BigInt(config.minValueSum) << 184n;
     return packed;
   }
 
@@ -352,7 +347,6 @@ export class BallotBuilder {
       max_value_sum: config.maxValueSum,
       min_value_sum: config.minValueSum,
       cost_exponent: config.costExponent,
-      cost_from_weight: config.costFromWeight,
     };
   }
 

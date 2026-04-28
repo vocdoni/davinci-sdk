@@ -38,7 +38,6 @@ type BallotCheckerInputs = {
   min_value_sum: string;
   cost_exponent: string;
   weight: string;
-  cost_from_weight: string;
 };
 
 /**
@@ -294,7 +293,6 @@ describe('BallotChecker emulation', () => {
         min_value_sum: String(tc.minTotalCost),
         cost_exponent: String(tc.costExp),
         weight: '0',
-        cost_from_weight: '0',
       };
 
       const passes = emulateBallotChecker(inputs);

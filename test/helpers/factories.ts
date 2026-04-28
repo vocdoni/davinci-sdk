@@ -28,7 +28,6 @@ export function createOffchainProcessConfig(overrides: Partial<ProcessConfig> = 
       maxValue: '1',
       minValue: '0',
       uniqueValues: false,
-      costFromWeight: false,
       costExponent: 1,
       maxValueSum: '1',
       minValueSum: '0',

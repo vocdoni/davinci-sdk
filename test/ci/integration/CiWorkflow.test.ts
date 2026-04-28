@@ -170,7 +170,6 @@ describe('CI Workflow Integration', () => {
           maxValue: '1',
           minValue: '0',
           uniqueValues: false,
-          costFromWeight: false,
           costExponent: 1,
           maxValueSum: '1',
           minValueSum: '0',

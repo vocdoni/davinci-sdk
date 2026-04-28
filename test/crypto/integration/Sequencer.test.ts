@@ -29,8 +29,7 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
       minValue: '0',
       maxValueSum: '6',
       minValueSum: '0',
-      costExponent: 0,
-      costFromWeight: false,
+      costExponent: 1,
     },
     censusRoot: '0x1e19f7dcef65ae548cd50d4abc068acb71e6b71e4f70149ebf02a95f7c907440',
     stateRoot: '0x23068329c92c67b356254dccb053af973af7c7883f3886cbe812d9399a924563',
@@ -88,7 +87,6 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
       maxValueSum: parseInt(sequencerData.ballotMode.maxValueSum),
       minValueSum: parseInt(sequencerData.ballotMode.minValueSum),
       costExponent: sequencerData.ballotMode.costExponent,
-      costFromWeight: sequencerData.ballotMode.costFromWeight ? 1 : 0,
     };
 
     // Sample vote values (must satisfy ballot mode constraints)
@@ -164,8 +162,7 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
       minValue: 0,
       maxValueSum: 6,
       minValueSum: 0,
-      costExponent: 0,
-      costFromWeight: 0,
+      costExponent: 1,
     };
 
     const fields = [1, 2];
@@ -190,7 +187,6 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
       max_value_sum: inputs.max_value_sum,
       min_value_sum: inputs.min_value_sum,
       cost_exponent: inputs.cost_exponent,
-      cost_from_weight: inputs.cost_from_weight,
       address: inputs.address,
       weight: inputs.weight,
       process_id: inputs.process_id,
@@ -224,8 +220,7 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
         minValue: '0',
         maxValueSum: '6',
         minValueSum: '0',
-        costExponent: 0,
-        costFromWeight: false,
+        costExponent: 1,
       },
     };
 
@@ -262,8 +257,7 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
       minValue: 0,
       maxValueSum: 6,
       minValueSum: 0,
-      costExponent: 0,
-      costFromWeight: 0,
+      costExponent: 1,
     };
 
     const inputs = builder.generateInputs([1, 2], 1, pubKey, processId, address, k, config);
