@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-28
+
+### Changed
+- Updated `@vocdoni/davinci-contracts` dependency to `0.0.45-rc1`.
+- Aligned sequencer info endpoint types with the current API response.
+- Simplified script examples to match the current process creation flow.
+
+### Removed
+- **BREAKING**: Removed `costFromWeight` from SDK ballot mode types, contract process creation, sequencer ballot input generation, crypto ballot inputs, examples, and documentation.
+- **BREAKING**: Updated packed ballot mode encoding to remove the `costFromWeight` bit and shift subsequent fields accordingly.
+
+### Added
+- Added unit coverage for ballot validation rules in `BallotChecker`.
+
 ## [0.2.4] - 2026-04-07
 
 ### Fixed
