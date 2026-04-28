@@ -23,6 +23,7 @@ function randomHex(bytes: number): string {
 
 describe('ProcessRegistryService Integration', () => {
   let procService: ProcessRegistryService;
+  let sequencerService: VocdoniSequencerService;
 
   let processId: string;
   let initDuration: number;
@@ -31,7 +32,7 @@ describe('ProcessRegistryService Integration', () => {
 
   beforeAll(async () => {
     // Fetch contract address from sequencer
-    const sequencerService = new VocdoniSequencerService(sequencerUrl);
+    sequencerService = new VocdoniSequencerService(sequencerUrl);
     const info = await sequencerService.getInfo();
     const PROC_REGISTRY_ADDR = info.contracts.process;
     procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);
@@ -59,15 +60,16 @@ describe('ProcessRegistryService Integration', () => {
       maxValue: '10',
       minValue: '0',
       uniqueValues: false,
-      costFromWeight: false,
-      costExponent: 0,
+      costExponent: 1,
       maxValueSum: '10',
       minValueSum: '0',
     };
 
+    const nextProcessId = await procService.getNextProcessId(wallet.address);
+    const processKeys = await sequencerService.getProcessKeys(nextProcessId);
     const encryptionKey: EncryptionKey = {
-      x: BigInt(randomHex(32)).toString(),
-      y: BigInt(randomHex(32)).toString(),
+      x: processKeys.encryptionPubKey[0],
+      y: processKeys.encryptionPubKey[1],
     };
 
     //
@@ -106,9 +108,9 @@ describe('ProcessRegistryService Integration', () => {
           expect(event.response).toEqual({ success: true });
           break;
         case 'reverted':
-          throw new Error('Transaction should not revert');
+          throw new Error(`Transaction should not revert: ${event.reason ?? 'unknown reason'}`);
         case 'failed':
-          throw new Error('Transaction should not fail');
+          throw event.error;
       }
     }
     await procCreated;
@@ -282,8 +284,7 @@ describe('ProcessRegistryService Integration', () => {
       maxValue: '10',
       minValue: '0',
       uniqueValues: false,
-      costFromWeight: false,
-      costExponent: 0,
+      costExponent: 1,
       maxValueSum: '10',
       minValueSum: '0',
     };

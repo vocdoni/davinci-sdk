@@ -284,7 +284,6 @@ export class DavinciSDK {
    *     maxValue: "3",
    *     minValue: "0",
    *     uniqueValues: false,
-   *     costFromWeight: false,
    *     costExponent: 10000,
    *     maxValueSum: "6",
    *     minValueSum: "0"
@@ -373,7 +372,6 @@ export class DavinciSDK {
    *     maxValue: "3",
    *     minValue: "0",
    *     uniqueValues: false,
-   *     costFromWeight: false,
    *     costExponent: 10000,
    *     maxValueSum: "6",
    *     minValueSum: "0"

@@ -1298,10 +1298,10 @@
     "@vitest/pretty-format" "4.0.18"
     tinyrainbow "^3.0.3"
 
-"@vocdoni/davinci-contracts@0.0.37":
-  version "0.0.37"
-  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.37.tgz#4dfb879f84db8c4cb4a03ebbb715d869056915ad"
-  integrity sha512-ettHT/x4H436lcCQRobAwlCLw+UwP9XxehBjFDjWzXdDpFrXzorCCKczztoz8/4fLs7Rks5r/Q56yjPOJ4P3+A==
+"@vocdoni/davinci-contracts@0.0.45-rc1":
+  version "0.0.45-rc1"
+  resolved "https://registry.yarnpkg.com/@vocdoni/davinci-contracts/-/davinci-contracts-0.0.45-rc1.tgz#a9dcfa34dbd9b455b2bc11e01d068b8cebf12525"
+  integrity sha512-8Iv/cXqRrrkYmklcO0ttSC33cm/5BrSOhc6afzZY+k3yWVb7ym+SSuVX76DnBFDrIb5aIQXEZ2zu6YZNzupD4g==
 
 acorn-jsx@^5.3.2:
   version "5.3.2"

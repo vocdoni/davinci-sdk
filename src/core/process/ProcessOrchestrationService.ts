@@ -303,7 +303,6 @@ export class ProcessOrchestrationService {
       maxValue: rawProcess.ballotMode.maxValue.toString(),
       minValue: rawProcess.ballotMode.minValue.toString(),
       uniqueValues: rawProcess.ballotMode.uniqueValues,
-      costFromWeight: rawProcess.ballotMode.costFromWeight,
       costExponent: Number(rawProcess.ballotMode.costExponent),
       maxValueSum: rawProcess.ballotMode.maxValueSum.toString(),
       minValueSum: rawProcess.ballotMode.minValueSum.toString(),

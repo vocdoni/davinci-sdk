@@ -189,7 +189,6 @@ async function step3_createProcess(
       maxValue: maxValue.toString(),
       minValue: '0',
       uniqueValues: false,
-      costFromWeight: false,
       costExponent: 1,
       maxValueSum: maxValueSum.toString(),
       minValueSum: '0',

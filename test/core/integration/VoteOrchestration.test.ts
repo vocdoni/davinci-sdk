@@ -75,7 +75,6 @@ describe('Vote Orchestration Integration', () => {
         maxValue: '2',
         minValue: '0',
         uniqueValues: false,
-        costFromWeight: false,
         costExponent: 1,
         maxValueSum: '4',
         minValueSum: '0',

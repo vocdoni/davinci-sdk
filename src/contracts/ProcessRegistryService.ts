@@ -109,7 +109,6 @@ export class ProcessRegistryService extends SmartContractService {
     encryptionKey: EncryptionKey
   ) {
     const contractBallotMode = {
-      costFromWeight: ballotMode.costFromWeight,
       uniqueValues: ballotMode.uniqueValues,
       numFields: ballotMode.numFields,
       groupSize: ballotMode.groupSize ?? ballotMode.numFields,
