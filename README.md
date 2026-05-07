@@ -413,9 +413,6 @@ interface DavinciSDKConfig {
   censusUrl?: string;                // Census API URL (optional, only needed for census creation)
   addresses?: {                      // Custom contract addresses (optional)
     processRegistry?: string;
-    stateTransitionVerifier?: string;
-    resultsVerifier?: string;
-    sequencerRegistry?: string;
   };
   censusProviders?: CensusProviders; // Custom census proof providers (optional)
   verifyCircuitFiles?: boolean;      // Verify downloaded circuit files (default: true)
@@ -826,9 +823,7 @@ const sdk = new DavinciSDK({
   sequencerUrl: 'https://your-custom-sequencer.com',
   censusUrl: 'https://your-custom-census.com',
   addresses: {
-    processRegistry: '0x...',
-    stateTransitionVerifier: '0x...',
-    resultsVerifier: '0x...'
+    processRegistry: '0x...'
   }
 });
 ```

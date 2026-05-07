@@ -1,9 +1,16 @@
 import { DavinciSDK, DavinciSDKConfig } from '../../../src/DavinciSDK';
 import { Wallet, JsonRpcProvider } from 'ethers';
 import { getApiUrls } from '../../helpers/integrationRuntime';
+import { InfoResponse } from '../../../src/sequencer/api/types';
 
 const { sequencerUrl, censusUrl } = getApiUrls();
 const CUSTOM_PROCESS_REGISTRY = '0x1111111111111111111111111111111111111111';
+
+function resolveProcessRegistryFromInfo(info: InfoResponse): string {
+  const firstNetwork = Object.values(info.networks)[0];
+  if (firstNetwork?.processRegistryContract) return firstNetwork.processRegistryContract;
+  throw new Error('Sequencer info does not include process registry contract address');
+}
 
 describe('DavinciSDK Integration Tests', () => {
   let mockSigner: Wallet;
@@ -184,10 +191,10 @@ describe('DavinciSDK Integration Tests', () => {
 
       // Get sequencer info to know what addresses should be set
       const sequencerInfo = await sdk.api.sequencer.getInfo();
+      const processRegistry = resolveProcessRegistryFromInfo(sequencerInfo);
 
       // Verify sequencer provides contract addresses
-      expect(sequencerInfo.contracts).toBeDefined();
-      expect(sequencerInfo.contracts).toHaveProperty('process');
+      expect(processRegistry).toBeDefined();
 
       // Initialize the SDK - this should fetch and apply sequencer addresses
       await sdk.init();
@@ -195,19 +202,7 @@ describe('DavinciSDK Integration Tests', () => {
       const finalConfig = sdk.getConfig();
 
       // Verify that the configuration now contains the sequencer addresses
-      expect(finalConfig.customAddresses.processRegistry).toBe(sequencerInfo.contracts.process);
-
-      // Verify other sequencer addresses are also set if available
-      if (sequencerInfo.contracts.stateTransitionVerifier) {
-        expect(finalConfig.customAddresses.stateTransitionVerifier).toBe(
-          sequencerInfo.contracts.stateTransitionVerifier
-        );
-      }
-      if (sequencerInfo.contracts.resultsVerifier) {
-        expect(finalConfig.customAddresses.resultsVerifier).toBe(
-          sequencerInfo.contracts.resultsVerifier
-        );
-      }
+      expect(finalConfig.customAddresses.processRegistry).toBe(processRegistry);
 
       expect(sdk.isInitialized()).toBe(true);
     }, 10000); // Increase timeout for network call

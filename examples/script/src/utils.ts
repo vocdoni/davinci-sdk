@@ -38,12 +38,22 @@ export interface UserConfig {
   numParticipants: number;
   censusType: CensusOrigin;
   useWeights: boolean;
+  prebuiltCensusRoot?: string;
+  prebuiltCensusUri?: string;
+  prebuiltCensusSize?: number;
 }
 
 export type TestParticipant = {
   address: string;
   weight: string;
   privateKey: string;
+};
+
+type Snapshot = {
+  snapshotDate: string;
+  censusRoot: string;
+  participantCount: number;
+  queryName: string;
 };
 
 // ────────────────────────────────────────────────────────────
@@ -69,34 +79,86 @@ export async function getUserConfiguration(): Promise<UserConfig> {
 
   console.log(chalk.bold.cyan('\n📋 Configuration Setup\n'));
 
-  // Ask for number of participants
-  const numParticipantsAnswer = await askQuestion(
-    rl,
-    chalk.yellow('How many participants do you want to create? (default: 5): ')
-  );
-  const numParticipants = numParticipantsAnswer ? parseInt(numParticipantsAnswer, 10) : 5;
-
-  if (isNaN(numParticipants) || numParticipants < 1) {
-    console.log(chalk.red('Invalid number of participants. Using default: 5'));
-  }
-
   // Ask for census type
   console.log(chalk.cyan('\nCensus Type Options:'));
   console.log('1. MerkleTree (default) - Traditional Merkle tree-based census');
   console.log('2. CSP - Credential Service Provider census');
+  console.log('3. Prebuilt (from census service) - Use an existing published census');
 
   const censusTypeAnswer = await askQuestion(
     rl,
-    chalk.yellow('Which census type do you want to use? (1 or 2, default: 1): ')
+    chalk.yellow('Which census type do you want to use? (1, 2, or 3, default: 1): ')
   );
 
   let censusType: CensusOrigin;
+  let prebuiltCensusRoot: string | undefined;
+  let prebuiltCensusUri: string | undefined;
+  let prebuiltCensusSize: number | undefined;
+  let numParticipants = 5;
   if (censusTypeAnswer === '2') {
     censusType = CensusOrigin.CSP;
     console.log(chalk.green('✓ Selected: CSP Census'));
+  } else if (censusTypeAnswer === '3') {
+    censusType = CensusOrigin.OffchainStatic;
+    console.log(chalk.green('✓ Selected: Prebuilt Census (Census Service)'));
+
+    const snapshotsResponse = await fetch(`${CENSUS_API_URL}/snapshots?page=1&pageSize=10`);
+    if (!snapshotsResponse.ok) {
+      rl.close();
+      throw new Error(`Unable to load snapshots from census service: HTTP ${snapshotsResponse.status}`);
+    }
+    const snapshotsPayload = await snapshotsResponse.json();
+    const snapshots = (snapshotsPayload.snapshots || []) as Snapshot[];
+
+    if (snapshots.length === 0) {
+      rl.close();
+      throw new Error('No prebuilt census snapshots found in census service');
+    }
+
+    console.log(chalk.cyan('\nAvailable prebuilt censuses:'));
+    snapshots.forEach((snapshot, index) => {
+      console.log(
+        `${index + 1}. ${snapshot.queryName} | participants: ${snapshot.participantCount} | root: ${snapshot.censusRoot.slice(0, 18)}...`
+      );
+    });
+
+    const selectionAnswer = await askQuestion(
+      rl,
+      chalk.yellow(`Select a prebuilt census (1-${snapshots.length}, default: 1): `)
+    );
+    const selection = selectionAnswer ? parseInt(selectionAnswer, 10) : 1;
+    const selected = snapshots[selection - 1];
+
+    if (!selected) {
+      rl.close();
+      throw new Error(`Invalid prebuilt census selection: ${selectionAnswer}`);
+    }
+
+    if (!selected.censusRoot) {
+      rl.close();
+      throw new Error('Selected prebuilt census does not include a root');
+    }
+
+    prebuiltCensusRoot = selected.censusRoot;
+    prebuiltCensusUri = `${CENSUS_API_URL}/censuses/${selected.censusRoot}`;
+    prebuiltCensusSize = selected.participantCount;
+    console.log(chalk.green(`✓ Selected prebuilt census: ${selected.queryName}`));
   } else {
     censusType = CensusOrigin.OffchainStatic;
     console.log(chalk.green('✓ Selected: MerkleTree Census'));
+  }
+
+  // Ask for number of participants only for non-prebuilt census types
+  if (!prebuiltCensusRoot) {
+    const numParticipantsAnswer = await askQuestion(
+      rl,
+      chalk.yellow('How many participants do you want to create? (default: 5): ')
+    );
+    numParticipants = numParticipantsAnswer ? parseInt(numParticipantsAnswer, 10) : 5;
+
+    if (isNaN(numParticipants) || numParticipants < 1) {
+      console.log(chalk.red('Invalid number of participants. Using default: 5'));
+    }
   }
 
   // Ask about weight usage
@@ -121,6 +183,9 @@ export async function getUserConfiguration(): Promise<UserConfig> {
     numParticipants: Math.max(1, numParticipants || 5),
     censusType,
     useWeights,
+    prebuiltCensusRoot,
+    prebuiltCensusUri,
+    prebuiltCensusSize,
   };
 }
 

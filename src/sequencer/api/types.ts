@@ -80,14 +80,14 @@ export interface InfoResponse {
   provingKeyHash: string;
   verificationKeyUrl: string;
   verificationKeyHash: string;
-  contracts: {
-    process: string;
-    stateTransitionVerifier: string;
-    resultsVerifier: string;
-  };
-  network: {
-    [key: string]: number;
-  };
+  networks: Record<
+    string,
+    {
+      chainID: number;
+      shortName: string;
+      processRegistryContract: string;
+    }
+  >;
   sequencerAddress: string;
 }
 

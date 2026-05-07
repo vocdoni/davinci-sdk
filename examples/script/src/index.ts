@@ -9,6 +9,7 @@ import {
   TxStatus,
   OffchainCensus,
   CspCensus,
+  PublishedCensus,
   Census,
   CensusProviders,
   CSPCensusProofProvider,
@@ -113,21 +114,27 @@ async function step1_initializeSDK(): Promise<DavinciSDK> {
 async function step2_createCensus(
   sdk: DavinciSDK,
   numParticipants: number,
-  censusType: CensusOrigin
+  censusType: CensusOrigin,
+  prebuilt?: {
+    root?: string;
+    uri?: string;
+    size?: number;
+  }
 ): Promise<{
   census: Census;
   participants: TestParticipant[];
+  maxVoters?: number;
 }> {
   step(
     2,
     censusType === CensusOrigin.CSP ? 'Create CSP census' : 'Create weighted census'
   );
 
-  // Generate test participants
-  const participants = generateTestParticipants(numParticipants);
-  info(`Generated ${participants.length} test participants`);
-
   if (censusType === CensusOrigin.CSP) {
+    // Generate test participants
+    const participants = generateTestParticipants(numParticipants);
+    info(`Generated ${participants.length} test participants`);
+
     // Create CSP census object
     const csp = await sdk.getCSP();
     const censusRoot = await csp.cspCensusRoot(
@@ -143,7 +150,33 @@ async function step2_createCensus(
     success(`   Ready for ${numParticipants} participants`);
 
     return { census, participants };
+  } else if (prebuilt?.root && prebuilt?.uri) {
+    const creator = new Wallet(PRIVATE_KEY);
+    const participants: TestParticipant[] = [
+      {
+        address: creator.address,
+        privateKey: PRIVATE_KEY,
+        weight: '1',
+      },
+    ];
+    const census = new PublishedCensus(CensusOrigin.OffchainStatic, prebuilt.root, prebuilt.uri);
+
+    success(`Using prebuilt census root: ${prebuilt.root}`);
+    success(`   Census URI: ${prebuilt.uri}`);
+    success(`   Census size: ${prebuilt.size ?? 'unknown'}`);
+    info(`Creator wallet for voting attempt: ${creator.address}`);
+    info('Skipping random wallet generation for prebuilt census mode');
+
+    return {
+      census,
+      participants,
+      maxVoters: prebuilt.size,
+    };
   } else {
+    // Generate test participants
+    const participants = generateTestParticipants(numParticipants);
+    info(`Generated ${participants.length} test participants`);
+
     // Create OffchainCensus object
     const census = new OffchainCensus();
 
@@ -169,7 +202,8 @@ async function step3_createProcess(
   census: Census,
   useWeights: boolean,
   maxWeight: number,
-  numParticipants: number
+  numParticipants: number,
+  maxVotersOverride?: number
 ): Promise<string> {
   step(3, `Create voting process${useWeights ? ' (with weighted voting)' : ''}`);
 
@@ -213,8 +247,11 @@ async function step3_createProcess(
 
   // For CSP census, maxVoters is required
   // For OffchainCensus, maxVoters is optional (auto-calculated from published census)
-  if (census instanceof CspCensus) {
+  if (census instanceof CspCensus || maxVotersOverride !== undefined) {
     processConfig.maxVoters = numParticipants;
+    if (maxVotersOverride !== undefined) {
+      processConfig.maxVoters = maxVotersOverride;
+    }
   }
 
   const stream = sdk.createProcessStream(processConfig);
@@ -305,8 +342,42 @@ async function step5_submitVotes(
   processId: string,
   participants: TestParticipant[],
   censusType: CensusOrigin,
-  useWeights: boolean
-): Promise<string[]> {
+  useWeights: boolean,
+  prebuilt?: {
+    root?: string;
+    uri?: string;
+    size?: number;
+  }
+): Promise<{
+  voteIds: string[];
+  creatorNotInCensus: boolean;
+}> {
+  if (prebuilt?.root && prebuilt?.uri) {
+    step(5, 'Submit vote with creator wallet (prebuilt census mode)');
+
+    const creator = participants[0];
+    const choices = [1, 0, 0, 0];
+    info(`Trying vote with creator address: ${creator.address}`);
+    info(`Prebuilt census root: ${prebuilt.root}`);
+    info(`Prebuilt census uri: ${prebuilt.uri}`);
+    info(`Prebuilt census size: ${prebuilt.size ?? 'unknown'}`);
+
+    const canVote = await sdk.isAddressAbleToVote(processId, creator.address);
+    if (!canVote) {
+      info('Creator address is not part of the selected prebuilt census.');
+      return { voteIds: [], creatorNotInCensus: true };
+    }
+
+    const voterSDK = new DavinciSDK(createSDKInstance(creator.privateKey, false));
+    await voterSDK.init();
+    const voteResult = await voterSDK.submitVote({
+      processId,
+      choices,
+    });
+    success(`Creator vote submitted: ${voteResult.voteId}`);
+    return { voteIds: [voteResult.voteId], creatorNotInCensus: false };
+  }
+
   step(5, `Submit votes for all participants${useWeights ? ' (with weights)' : ''}`);
 
   const BATCH_SIZE = 5; // Number of votes to send concurrently in each batch
@@ -416,7 +487,7 @@ async function step5_submitVotes(
   }
 
   success(`\n✅ All ${voteIds.length} votes submitted successfully`);
-  return voteIds;
+  return { voteIds, creatorNotInCensus: false };
 }
 
 /**
@@ -582,7 +653,11 @@ async function run() {
     // Get user configuration
     const userConfig = await getUserConfiguration();
     const censusTypeName =
-      userConfig.censusType === CensusOrigin.CSP ? 'CSP' : 'MerkleTree';
+      userConfig.prebuiltCensusRoot
+        ? 'Prebuilt (Census Service)'
+        : userConfig.censusType === CensusOrigin.CSP
+          ? 'CSP'
+          : 'MerkleTree';
     console.log(
       chalk.green(
         `\n✓ Configuration: ${userConfig.numParticipants} participants, ${censusTypeName} census\n`
@@ -593,29 +668,59 @@ async function run() {
     const sdk = await step1_initializeSDK();
 
     // Step 2: Create census
-    const { census, participants } = await step2_createCensus(
+    const { census, participants, maxVoters } = await step2_createCensus(
       sdk,
       userConfig.numParticipants,
-      userConfig.censusType
+      userConfig.censusType,
+      {
+        root: userConfig.prebuiltCensusRoot,
+        uri: userConfig.prebuiltCensusUri,
+        size: userConfig.prebuiltCensusSize,
+      }
     );
 
     // Calculate maximum weight from participants
     const maxWeight = Math.max(...participants.map(p => parseInt(p.weight)));
 
     // Step 3: Create process
-    const processId = await step3_createProcess(sdk, census, userConfig.useWeights, maxWeight, participants.length);
+    const processId = await step3_createProcess(
+      sdk,
+      census,
+      userConfig.useWeights,
+      maxWeight,
+      participants.length,
+      maxVoters
+    );
 
     // Step 4: Wait for process to be ready
     await step4_waitForProcessReady(sdk, processId);
 
     // Step 5: Submit votes
-    const voteIds = await step5_submitVotes(
+    const { voteIds, creatorNotInCensus } = await step5_submitVotes(
       sdk,
       processId,
       participants,
       userConfig.censusType,
-      userConfig.useWeights
+      userConfig.useWeights,
+      {
+        root: userConfig.prebuiltCensusRoot,
+        uri: userConfig.prebuiltCensusUri,
+        size: userConfig.prebuiltCensusSize,
+      }
     );
+
+    if (creatorNotInCensus) {
+      console.log(chalk.yellow('\n⚠️ Creator address is not in the selected prebuilt census.'));
+      console.log(chalk.cyan(`📊 Process ID: ${processId}`));
+      console.log(chalk.cyan(`👤 Creator address: ${participants[0]?.address}`));
+      console.log(chalk.cyan(`🌳 Census root: ${userConfig.prebuiltCensusRoot}`));
+      console.log(chalk.cyan(`🔗 Census URI: ${userConfig.prebuiltCensusUri}`));
+      console.log(chalk.cyan(`👥 Census size: ${userConfig.prebuiltCensusSize ?? 'unknown'}`));
+      console.log(
+        chalk.cyan('ℹ️ Process was created successfully. No vote was submitted in prebuilt mode.')
+      );
+      process.exit(0);
+    }
 
     // Step 6: Wait for votes to be processed
     await step6_waitForVotesProcessed(sdk, processId, voteIds);
