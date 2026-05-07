@@ -10,7 +10,7 @@ import {
   ProcessInfo,
 } from './core/process';
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
-import { VoteStatus } from './sequencer/api/types';
+import { VoteStatus, InfoResponse } from './sequencer/api/types';
 import { CensusProviders } from './census/types';
 
 /**
@@ -33,9 +33,6 @@ export interface DavinciSDKConfig {
   /** Custom contract addresses (optional, fetched from sequencer if not provided) */
   addresses?: {
     processRegistry?: string;
-    stateTransitionVerifier?: string;
-    resultsVerifier?: string;
-    sequencerRegistry?: string;
   };
 
   /** Custom census proof providers (optional) */
@@ -57,9 +54,6 @@ interface InternalDavinciSDKConfig {
   censusUrl?: string;
   customAddresses: {
     processRegistry?: string;
-    stateTransitionVerifier?: string;
-    resultsVerifier?: string;
-    sequencerRegistry?: string;
   };
   fetchAddressesFromSequencer: boolean;
   verifyCircuitFiles: boolean;
@@ -1046,20 +1040,15 @@ export class DavinciSDK {
     contractName: keyof NonNullable<DavinciSDKConfig['addresses']>
   ): string {
     // Check if custom address is provided by user
-    const customAddress = this.config.customAddresses[contractName];
-    if (customAddress) {
-      return customAddress;
-    }
-
-    // If no custom address and we didn't fetch from sequencer, throw error
-    if (!this.config.customAddresses[contractName]) {
+    const resolvedAddress = this.config.customAddresses[contractName];
+    if (!resolvedAddress) {
       throw new Error(
         `Contract address for '${contractName}' not found. ` +
           `Make sure SDK is initialized with sdk.init() or provide custom addresses in config.`
       );
     }
 
-    return this.config.customAddresses[contractName]!;
+    return resolvedAddress;
   }
 
   /**
@@ -1069,29 +1058,58 @@ export class DavinciSDK {
   private async fetchContractAddressesFromSequencer(): Promise<void> {
     try {
       const info = await this.apiService.sequencer.getInfo();
-      const contracts = info.contracts;
+      const contracts = await this.resolveSequencerContracts(info);
 
       // Store addresses from sequencer
       if (contracts.process) {
         this.config.customAddresses.processRegistry = contracts.process;
         this._processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
       }
-
-      if (contracts.stateTransitionVerifier) {
-        this.config.customAddresses.stateTransitionVerifier = contracts.stateTransitionVerifier;
-      }
-
-      if (contracts.resultsVerifier) {
-        this.config.customAddresses.resultsVerifier = contracts.resultsVerifier;
-      }
-
-      // Note: sequencerRegistry is not provided by the sequencer info endpoint
     } catch (error) {
       throw new Error(
         `Failed to fetch contract addresses from sequencer: ${error instanceof Error ? error.message : String(error)}. ` +
           `You can provide custom addresses in the SDK config to avoid this error.`
       );
     }
+  }
+
+  /**
+   * Resolve contract addresses from sequencer info.
+   * Priority:
+   * 1) info.networks[signerChainId].processRegistryContract
+   * 2) Fallback: first network processRegistryContract
+   */
+  private async resolveSequencerContracts(
+    info: InfoResponse
+  ): Promise<{
+    process: string;
+  }> {
+    if (!info.networks || Object.keys(info.networks).length === 0) {
+      throw new Error('Sequencer info does not include networks with contract addresses.');
+    }
+
+    let processRegistryContract: string | undefined;
+
+    if (this.config.signer.provider) {
+      try {
+        const network = await this.config.signer.provider.getNetwork();
+        const chainId = network.chainId.toString();
+        processRegistryContract = info.networks[chainId]?.processRegistryContract;
+      } catch {
+        // Ignore provider lookup issues and fallback to first runtime
+      }
+    }
+
+    if (!processRegistryContract) {
+      const firstNetwork = Object.values(info.networks)[0];
+      processRegistryContract = firstNetwork?.processRegistryContract;
+    }
+
+    if (processRegistryContract) {
+      return { process: processRegistryContract };
+    }
+
+    throw new Error('Sequencer info does not include a valid process registry contract address.');
   }
 
   /**

@@ -1,6 +1,7 @@
 import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
 import { VocdoniCensusService, CensusOrigin } from '../../../src/census';
 import { createProcessSignatureMessage, signProcessCreation } from '../../../src/sequencer/api';
+import { InfoResponse } from '../../../src/sequencer/api/types';
 import {
   mockProvider,
   mockWallet,
@@ -19,6 +20,12 @@ let censusId: string;
 
 // Generate test participants
 const testParticipants = generateMockCensusParticipants(5);
+
+function resolveProcessRegistryFromInfo(info: InfoResponse): string {
+  const firstNetwork = Object.values(info.networks)[0];
+  if (firstNetwork?.processRegistryContract) return firstNetwork.processRegistryContract;
+  throw new Error('Sequencer info does not include process registry contract address');
+}
 
 describe('VocdoniSequencerService Integration', () => {
   beforeAll(async () => {
@@ -54,17 +61,11 @@ describe('VocdoniSequencerService Integration', () => {
     expect(hexRx.test(info.verificationKeyHash)).toBe(true);
 
     // contract addresses
-    expect(addrRx.test(info.contracts.process)).toBe(true);
-    expect(addrRx.test(info.contracts.stateTransitionVerifier)).toBe(true);
-    expect(addrRx.test(info.contracts.resultsVerifier)).toBe(true);
+    const processRegistryContract = resolveProcessRegistryFromInfo(info);
+    expect(addrRx.test(processRegistryContract)).toBe(true);
 
-    // network property
-    expect(info).toHaveProperty('network');
-    expect(typeof info.network).toBe('object');
-    // Check that network values are numbers
-    Object.values(info.network).forEach(value => {
-      expect(typeof value).toBe('number');
-    });
+    // networks properties
+    expect(info.networks).toBeDefined();
   });
 
   it('should list all processes', async () => {

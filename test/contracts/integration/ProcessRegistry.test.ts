@@ -8,6 +8,7 @@ import {
 import { BallotMode, CensusData, EncryptionKey } from '../../../src/core';
 import { CensusOrigin } from '../../../src/census';
 import { VocdoniSequencerService } from '../../../src/sequencer';
+import { InfoResponse } from '../../../src/sequencer/api/types';
 import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
 const { sequencerUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
@@ -19,6 +20,12 @@ function randomHex(bytes: number): string {
     hex += Math.floor(Math.random() * 16).toString(16);
   }
   return '0x' + hex;
+}
+
+function resolveProcessRegistryAddress(info: InfoResponse): string {
+  const firstNetwork = Object.values(info.networks)[0];
+  if (firstNetwork?.processRegistryContract) return firstNetwork.processRegistryContract;
+  throw new Error('Sequencer info does not include process registry address');
 }
 
 describe('ProcessRegistryService Integration', () => {
@@ -34,7 +41,7 @@ describe('ProcessRegistryService Integration', () => {
     // Fetch contract address from sequencer
     sequencerService = new VocdoniSequencerService(sequencerUrl);
     const info = await sequencerService.getInfo();
-    const PROC_REGISTRY_ADDR = info.contracts.process;
+    const PROC_REGISTRY_ADDR = resolveProcessRegistryAddress(info);
     procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);
   });
 
