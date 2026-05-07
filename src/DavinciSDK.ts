@@ -10,7 +10,7 @@ import {
   ProcessInfo,
 } from './core/process';
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
-import { VoteStatus, InfoResponse } from './sequencer/api/types';
+import { VoteStatus } from './sequencer/api/types';
 import { CensusProviders } from './census/types';
 
 /**
@@ -68,6 +68,8 @@ export class DavinciSDK {
   private apiService: VocdoniApiService;
   private _processRegistry?: ProcessRegistryService;
   private _processOrchestrator?: ProcessOrchestrationService;
+  private processRegistryByChainId = new Map<string, ProcessRegistryService>();
+  private processOrchestratorByChainId = new Map<string, ProcessOrchestrationService>();
   private _voteOrchestrator?: VoteOrchestrationService;
   private davinciCSP?: DavinciCSP;
   private ballotInputGenerator?: BallotInputGenerator;
@@ -75,16 +77,13 @@ export class DavinciSDK {
   private censusProviders: CensusProviders;
 
   constructor(config: DavinciSDKConfig) {
-    // Determine if custom addresses are provided
     const hasCustomAddresses = !!config.addresses && Object.keys(config.addresses).length > 0;
-
-    // Set configuration
     this.config = {
       signer: config.signer,
       sequencerUrl: config.sequencerUrl,
       censusUrl: config.censusUrl,
       customAddresses: config.addresses || {},
-      fetchAddressesFromSequencer: !hasCustomAddresses, // Automatic: fetch if no custom addresses
+      fetchAddressesFromSequencer: !hasCustomAddresses,
       verifyCircuitFiles: config.verifyCircuitFiles ?? true, // Default to true for security
       verifyProof: config.verifyProof ?? true, // Default to true for security
     };
@@ -107,11 +106,6 @@ export class DavinciSDK {
    */
   async init(): Promise<void> {
     if (this.initialized) return;
-
-    // Fetch contract addresses from sequencer if needed
-    if (this.config.fetchAddressesFromSequencer) {
-      await this.fetchContractAddressesFromSequencer();
-    }
 
     // Validate census URL if needed
     if (!this.config.censusUrl) {
@@ -137,9 +131,14 @@ export class DavinciSDK {
   get processes(): ProcessRegistryService {
     this.ensureProvider();
     if (!this._processRegistry) {
-      const processRegistryAddress = this.resolveContractAddress('processRegistry');
+      if (!this.config.customAddresses.processRegistry) {
+        throw new Error(
+          "Contract address for 'processRegistry' not found. " +
+            'Use an on-chain SDK method (which resolves by signer chain), or provide addresses.processRegistry explicitly.'
+        );
+      }
       this._processRegistry = new ProcessRegistryService(
-        processRegistryAddress,
+        this.config.customAddresses.processRegistry,
         this.config.signer
       );
     }
@@ -180,11 +179,8 @@ export class DavinciSDK {
   get processOrchestrator(): ProcessOrchestrationService {
     this.ensureProvider();
     if (!this._processOrchestrator) {
-      this._processOrchestrator = new ProcessOrchestrationService(
-        this.processes,
-        this.apiService,
-        this.config.signer
-      );
+      const processRegistry = this.processes;
+      this._processOrchestrator = new ProcessOrchestrationService(processRegistry, this.apiService, this.config.signer);
     }
     return this._processOrchestrator;
   }
@@ -247,8 +243,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before getting processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.getProcess(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.getProcess(processId);
   }
 
   /**
@@ -322,12 +318,18 @@ export class DavinciSDK {
    * ```
    */
   createProcessStream(config: ProcessConfig) {
+    return this.createProcessStreamInternal(config);
+  }
+
+  private async *createProcessStreamInternal(
+    config: ProcessConfig
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before creating processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.createProcessStream(config);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.createProcessStream(config);
   }
 
   /**
@@ -400,8 +402,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before creating processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.createProcess(config);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.createProcess(config);
   }
 
   /**
@@ -714,12 +716,18 @@ export class DavinciSDK {
    * ```
    */
   endProcessStream(processId: string) {
+    return this.endProcessStreamInternal(processId);
+  }
+
+  private async *endProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.endProcessStream(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.endProcessStream(processId);
   }
 
   /**
@@ -745,8 +753,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.endProcess(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.endProcess(processId);
   }
 
   /**
@@ -783,12 +791,18 @@ export class DavinciSDK {
    * ```
    */
   pauseProcessStream(processId: string) {
+    return this.pauseProcessStreamInternal(processId);
+  }
+
+  private async *pauseProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.pauseProcessStream(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.pauseProcessStream(processId);
   }
 
   /**
@@ -814,8 +828,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.pauseProcess(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.pauseProcess(processId);
   }
 
   /**
@@ -852,12 +866,18 @@ export class DavinciSDK {
    * ```
    */
   cancelProcessStream(processId: string) {
+    return this.cancelProcessStreamInternal(processId);
+  }
+
+  private async *cancelProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.cancelProcessStream(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.cancelProcessStream(processId);
   }
 
   /**
@@ -883,8 +903,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.cancelProcess(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.cancelProcess(processId);
   }
 
   /**
@@ -920,12 +940,18 @@ export class DavinciSDK {
    * ```
    */
   resumeProcessStream(processId: string) {
+    return this.resumeProcessStreamInternal(processId);
+  }
+
+  private async *resumeProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.resumeProcessStream(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.resumeProcessStream(processId);
   }
 
   /**
@@ -952,8 +978,8 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.resumeProcess(processId);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.resumeProcess(processId);
   }
 
   /**
@@ -991,14 +1017,21 @@ export class DavinciSDK {
    * ```
    */
   setProcessMaxVotersStream(processId: string, maxVoters: number) {
+    return this.setProcessMaxVotersStreamInternal(processId, maxVoters);
+  }
+
+  private async *setProcessMaxVotersStreamInternal(
+    processId: string,
+    maxVoters: number
+  ): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error(
         'SDK must be initialized before setting process maxVoters. Call sdk.init() first.'
       );
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    yield* processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
   }
 
   /**
@@ -1027,89 +1060,103 @@ export class DavinciSDK {
       );
     }
     this.ensureProvider();
-
-    return this.processOrchestrator.setProcessMaxVoters(processId, maxVoters);
+    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    return processOrchestrator.setProcessMaxVoters(processId, maxVoters);
   }
 
   /**
-   * Resolve contract address based on configuration priority:
-   * 1. Custom addresses from user config (if provided)
-   * 2. Addresses from sequencer (fetched during init if no custom addresses provided)
+   * List process IDs from sequencer. In multichain mode, chainId is required unless signer has a provider.
    */
-  private resolveContractAddress(
-    contractName: keyof NonNullable<DavinciSDKConfig['addresses']>
-  ): string {
-    // Check if custom address is provided by user
-    const resolvedAddress = this.config.customAddresses[contractName];
-    if (!resolvedAddress) {
+  async listProcesses(chainId?: number): Promise<string[]> {
+    if (!this.initialized) {
+      throw new Error('SDK must be initialized before listing processes. Call sdk.init() first.');
+    }
+
+    let resolvedChainId = chainId;
+    if (resolvedChainId === undefined) {
+      if (!this.config.signer.provider) {
+        throw new Error(
+          'chainId is required for listProcesses when signer has no provider.'
+        );
+      }
+      const network = await this.config.signer.provider.getNetwork();
+      resolvedChainId = Number(network.chainId);
+    }
+
+    return this.apiService.sequencer.listProcesses(resolvedChainId);
+  }
+
+  /**
+   * Resolve the process registry for current signer chain.
+   */
+  private async getProcessRegistryForCurrentChain(): Promise<ProcessRegistryService> {
+    if (this.config.customAddresses.processRegistry) {
+      if (!this._processRegistry) {
+        this._processRegistry = new ProcessRegistryService(
+          this.config.customAddresses.processRegistry,
+          this.config.signer
+        );
+      }
+      return this._processRegistry;
+    }
+
+    this.ensureProvider();
+    const provider = this.config.signer.provider;
+    if (!provider) {
+      throw new Error('Provider required for blockchain operations (process management).');
+    }
+    const network = await provider.getNetwork();
+    const chainId = network.chainId.toString();
+
+    const cached = this.processRegistryByChainId.get(chainId);
+    if (cached) return cached;
+
+    const info = await this.apiService.sequencer.getInfo();
+    const processRegistryAddress = info.networks[chainId]?.processRegistryContract;
+    if (!processRegistryAddress) {
+      const availableChainIds = Object.keys(info.networks).join(',');
       throw new Error(
-        `Contract address for '${contractName}' not found. ` +
-          `Make sure SDK is initialized with sdk.init() or provide custom addresses in config.`
+        `Signer chainId ${chainId} is not supported by sequencer. Available chainIds: ${availableChainIds}`
       );
     }
 
-    return resolvedAddress;
+    const processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
+    this.processRegistryByChainId.set(chainId, processRegistry);
+    return processRegistry;
   }
 
   /**
-   * Fetch contract addresses from sequencer info
-   * This is called during init() if custom addresses are not provided
+   * Resolve process orchestrator for current signer chain.
    */
-  private async fetchContractAddressesFromSequencer(): Promise<void> {
-    try {
-      const info = await this.apiService.sequencer.getInfo();
-      const contracts = await this.resolveSequencerContracts(info);
-
-      // Store addresses from sequencer
-      if (contracts.process) {
-        this.config.customAddresses.processRegistry = contracts.process;
-        this._processRegistry = new ProcessRegistryService(contracts.process, this.config.signer);
+  private async getProcessOrchestratorForCurrentChain(): Promise<ProcessOrchestrationService> {
+    const processRegistry = await this.getProcessRegistryForCurrentChain();
+    if (this.config.customAddresses.processRegistry) {
+      if (!this._processOrchestrator) {
+        this._processOrchestrator = new ProcessOrchestrationService(
+          processRegistry,
+          this.apiService,
+          this.config.signer
+        );
       }
-    } catch (error) {
-      throw new Error(
-        `Failed to fetch contract addresses from sequencer: ${error instanceof Error ? error.message : String(error)}. ` +
-          `You can provide custom addresses in the SDK config to avoid this error.`
-      );
-    }
-  }
-
-  /**
-   * Resolve contract addresses from sequencer info.
-   * Priority:
-   * 1) info.networks[signerChainId].processRegistryContract
-   * 2) Fallback: first network processRegistryContract
-   */
-  private async resolveSequencerContracts(
-    info: InfoResponse
-  ): Promise<{
-    process: string;
-  }> {
-    if (!info.networks || Object.keys(info.networks).length === 0) {
-      throw new Error('Sequencer info does not include networks with contract addresses.');
+      return this._processOrchestrator;
     }
 
-    let processRegistryContract: string | undefined;
-
-    if (this.config.signer.provider) {
-      try {
-        const network = await this.config.signer.provider.getNetwork();
-        const chainId = network.chainId.toString();
-        processRegistryContract = info.networks[chainId]?.processRegistryContract;
-      } catch {
-        // Ignore provider lookup issues and fallback to first runtime
-      }
+    const provider = this.config.signer.provider;
+    if (!provider) {
+      throw new Error('Provider required for blockchain operations (process management).');
     }
+    const network = await provider.getNetwork();
+    const chainId = network.chainId.toString();
+    const cached = this.processOrchestratorByChainId.get(chainId);
+    if (cached) return cached;
 
-    if (!processRegistryContract) {
-      const firstNetwork = Object.values(info.networks)[0];
-      processRegistryContract = firstNetwork?.processRegistryContract;
-    }
-
-    if (processRegistryContract) {
-      return { process: processRegistryContract };
-    }
-
-    throw new Error('Sequencer info does not include a valid process registry contract address.');
+    const processOrchestrator = new ProcessOrchestrationService(
+      processRegistry,
+      this.apiService,
+      this.config.signer
+    );
+    this.processOrchestratorByChainId.set(chainId, processOrchestrator);
+    return processOrchestrator;
   }
 
   /**
