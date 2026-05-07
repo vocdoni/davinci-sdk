@@ -46,10 +46,11 @@ export class VocdoniSequencerService extends BaseService {
     });
   }
 
-  listProcesses(): Promise<string[]> {
+  listProcesses(chainId?: number): Promise<string[]> {
     return this.request<ListProcessesResponse>({
       method: 'GET',
       url: '/processes',
+      params: chainId !== undefined ? { chainId } : undefined,
     }).then(res => res.processes);
   }
 
