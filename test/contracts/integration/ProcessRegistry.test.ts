@@ -22,10 +22,12 @@ function randomHex(bytes: number): string {
   return '0x' + hex;
 }
 
-function resolveProcessRegistryAddress(info: InfoResponse): string {
-  const firstNetwork = Object.values(info.networks)[0];
-  if (firstNetwork?.processRegistryContract) return firstNetwork.processRegistryContract;
-  throw new Error('Sequencer info does not include process registry address');
+function resolveProcessRegistryAddress(info: InfoResponse, chainId: bigint): string {
+  const network = info.networks[chainId.toString()];
+  if (network?.processRegistryContract) return network.processRegistryContract;
+  throw new Error(
+    `Sequencer info does not include process registry address for chainId ${chainId.toString()}`
+  );
 }
 
 describe('ProcessRegistryService Integration', () => {
@@ -41,12 +43,15 @@ describe('ProcessRegistryService Integration', () => {
     // Fetch contract address from sequencer
     sequencerService = new VocdoniSequencerService(sequencerUrl);
     const info = await sequencerService.getInfo();
-    const PROC_REGISTRY_ADDR = resolveProcessRegistryAddress(info);
+    const network = await provider.getNetwork();
+    const PROC_REGISTRY_ADDR = resolveProcessRegistryAddress(info, network.chainId);
     procService = new ProcessRegistryService(PROC_REGISTRY_ADDR, wallet);
   });
 
   afterAll(() => {
-    procService.removeAllListeners();
+    if (procService) {
+      procService.removeAllListeners();
+    }
   });
 
   it('should run full process lifecycle and emit events', async () => {

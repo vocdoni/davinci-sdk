@@ -12,9 +12,6 @@ ACTIVATE_BLOBS=${ACTIVATE_BLOBS:-false}
 OUTPUT_JSON=/workspace/addresses.json
 OUTPUT_ENV=/workspace/addresses.env
 
-# Keep compatibility with contracts scripts that read Sepolia-style env names.
-export SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL:-${RPC_URL}}
-export SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY:-${PRIVATE_KEY}}
 export CHAIN_ID
 export ACTIVATE_BLOBS
 export CI=${CI:-true}

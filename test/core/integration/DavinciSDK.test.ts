@@ -1,6 +1,6 @@
 import { DavinciSDK, DavinciSDKConfig } from '../../../src/DavinciSDK';
 import { Wallet, JsonRpcProvider } from 'ethers';
-import { getApiUrls } from '../../helpers/integrationRuntime';
+import { createIntegrationProvider, getApiUrls } from '../../helpers/integrationRuntime';
 import { InfoResponse } from '../../../src/sequencer/api/types';
 
 const { sequencerUrl, censusUrl } = getApiUrls();
@@ -16,9 +16,7 @@ describe('DavinciSDK Integration Tests', () => {
   let mockSigner: Wallet;
 
   beforeEach(() => {
-    // Create a provider with a dummy URL that won't be used for actual network calls
-    // This satisfies ethers.js requirements without making real network connections
-    const provider = new JsonRpcProvider('http://localhost:8545');
+    const provider = createIntegrationProvider();
     mockSigner = new Wallet(
       '0x1234567890123456789012345678901234567890123456789012345678901234',
       provider
@@ -118,6 +116,9 @@ describe('DavinciSDK Integration Tests', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
         sequencerUrl: sequencerUrl,
+        addresses: {
+          processRegistry: CUSTOM_PROCESS_REGISTRY,
+        },
       });
 
       // Check that API service is available before init
@@ -137,6 +138,9 @@ describe('DavinciSDK Integration Tests', () => {
       const sdk = new DavinciSDK({
         signer: mockSigner,
         sequencerUrl: sequencerUrl,
+        addresses: {
+          processRegistry: CUSTOM_PROCESS_REGISTRY,
+        },
       });
 
       // Should not be initialized initially
@@ -176,9 +180,10 @@ describe('DavinciSDK Integration Tests', () => {
     });
 
     it('should fetch sequencer addresses when no custom addresses', async () => {
+      const bareWallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234');
       // Create SDK without custom addresses
       const sdk = new DavinciSDK({
-        signer: mockSigner,
+        signer: bareWallet,
         sequencerUrl: sequencerUrl,
       });
 
@@ -200,11 +205,11 @@ describe('DavinciSDK Integration Tests', () => {
       await sdk.init();
 
       const finalConfig = sdk.getConfig();
-
-      // Verify that the configuration now contains the sequencer addresses
-      expect(finalConfig.customAddresses.processRegistry).toBe(processRegistry);
-
+      expect(finalConfig.customAddresses.processRegistry).toBeUndefined();
       expect(sdk.isInitialized()).toBe(true);
+      expect(() => sdk.processes).toThrow(
+        'Provider required for blockchain operations (process management)'
+      );
     }, 10000); // Increase timeout for network call
   });
 
@@ -406,7 +411,8 @@ describe('DavinciSDK Integration Tests', () => {
         ],
       };
 
-      expect(() => sdk.createProcessStream(processConfig as any)).toThrow(
+      const stream = sdk.createProcessStream(processConfig as any);
+      await expect(stream.next()).rejects.toThrow(
         'Provider required for blockchain operations (process management)'
       );
     });
@@ -432,7 +438,7 @@ describe('DavinciSDK Integration Tests', () => {
     let connectedWallet: Wallet;
 
     beforeEach(() => {
-      const provider = new JsonRpcProvider('http://localhost:8545');
+      const provider = createIntegrationProvider();
       connectedWallet = new Wallet(
         '0x1234567890123456789012345678901234567890123456789012345678901234',
         provider
@@ -452,6 +458,9 @@ describe('DavinciSDK Integration Tests', () => {
       const sdk = new DavinciSDK({
         signer: connectedWallet,
         sequencerUrl: sequencerUrl,
+        addresses: {
+          processRegistry: CUSTOM_PROCESS_REGISTRY,
+        },
       });
 
       // API and vote services are available before init
@@ -498,7 +507,7 @@ describe('DavinciSDK Integration Tests', () => {
       const bareWallet = new Wallet(
         '0x1234567890123456789012345678901234567890123456789012345678901234'
       );
-      const provider = new JsonRpcProvider('http://localhost:8545');
+      const provider = createIntegrationProvider();
       const connectedWallet = bareWallet.connect(provider);
 
       // Verify bare wallet has no provider

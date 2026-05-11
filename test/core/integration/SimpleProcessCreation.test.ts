@@ -873,11 +873,12 @@ describe('Simple Process Creation Integration', () => {
       sequencerUrl: sequencerUrl,
     });
 
-    expect(() =>
-      uninitializedSdk.endProcessStream(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      )
-    ).toThrow('SDK must be initialized before ending processes. Call sdk.init() first.');
+    const stream = uninitializedSdk.endProcessStream(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    );
+    await expect(stream.next()).rejects.toThrow(
+      'SDK must be initialized before ending processes. Call sdk.init() first.'
+    );
   });
 
   it('should pause a process using async generator stream and yield transaction status events', async () => {
@@ -1041,11 +1042,12 @@ describe('Simple Process Creation Integration', () => {
       sequencerUrl: sequencerUrl,
     });
 
-    expect(() =>
-      uninitializedSdk.pauseProcessStream(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      )
-    ).toThrow('SDK must be initialized before pausing processes. Call sdk.init() first.');
+    const stream = uninitializedSdk.pauseProcessStream(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    );
+    await expect(stream.next()).rejects.toThrow(
+      'SDK must be initialized before pausing processes. Call sdk.init() first.'
+    );
   });
 
   it('should cancel a process using async generator stream and yield transaction status events', async () => {
@@ -1209,11 +1211,12 @@ describe('Simple Process Creation Integration', () => {
       sequencerUrl: sequencerUrl,
     });
 
-    expect(() =>
-      uninitializedSdk.cancelProcessStream(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      )
-    ).toThrow('SDK must be initialized before canceling processes. Call sdk.init() first.');
+    const stream = uninitializedSdk.cancelProcessStream(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    );
+    await expect(stream.next()).rejects.toThrow(
+      'SDK must be initialized before canceling processes. Call sdk.init() first.'
+    );
   });
 
   it('should resume a paused process using async generator stream and yield transaction status events', async () => {
@@ -1391,11 +1394,12 @@ describe('Simple Process Creation Integration', () => {
       sequencerUrl: sequencerUrl,
     });
 
-    expect(() =>
-      uninitializedSdk.resumeProcessStream(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      )
-    ).toThrow('SDK must be initialized before resuming processes. Call sdk.init() first.');
+    const stream = uninitializedSdk.resumeProcessStream(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    );
+    await expect(stream.next()).rejects.toThrow(
+      'SDK must be initialized before resuming processes. Call sdk.init() first.'
+    );
   });
 
   // ==================== NEW: Census Object Tests ====================

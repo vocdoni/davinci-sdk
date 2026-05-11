@@ -86,6 +86,7 @@ export interface InfoResponse {
       chainID: number;
       shortName: string;
       processRegistryContract: string;
+      processIDVersion: string;
     }
   >;
   sequencerAddress: string;

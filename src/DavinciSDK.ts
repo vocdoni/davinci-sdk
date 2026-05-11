@@ -70,6 +70,8 @@ export class DavinciSDK {
   private _processOrchestrator?: ProcessOrchestrationService;
   private processRegistryByChainId = new Map<string, ProcessRegistryService>();
   private processOrchestratorByChainId = new Map<string, ProcessOrchestrationService>();
+  private processRegistryByVersion = new Map<string, ProcessRegistryService>();
+  private processOrchestratorByVersion = new Map<string, ProcessOrchestrationService>();
   private _voteOrchestrator?: VoteOrchestrationService;
   private davinciCSP?: DavinciCSP;
   private ballotInputGenerator?: BallotInputGenerator;
@@ -106,6 +108,23 @@ export class DavinciSDK {
    */
   async init(): Promise<void> {
     if (this.initialized) return;
+
+    // Pre-resolve process registry for current signer chain when possible.
+    // This keeps `sdk.processes` and `sdk.processOrchestrator` usable after init()
+    // without requiring explicit addresses.processRegistry.
+    if (this.config.fetchAddressesFromSequencer && this.config.signer.provider) {
+      try {
+        const processRegistry = await this.getProcessRegistryForCurrentChain();
+        if (!this._processRegistry) {
+          this._processRegistry = processRegistry;
+        }
+      } catch (error) {
+        throw new Error(
+          `Failed to fetch contract addresses from sequencer: ${error instanceof Error ? error.message : String(error)}. ` +
+            `You can provide custom addresses in the SDK config to avoid this error.`
+        );
+      }
+    }
 
     // Validate census URL if needed
     if (!this.config.censusUrl) {
@@ -243,7 +262,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before getting processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.getProcess(processId);
   }
 
@@ -726,7 +745,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     yield* processOrchestrator.endProcessStream(processId);
   }
 
@@ -753,7 +772,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.endProcess(processId);
   }
 
@@ -801,7 +820,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     yield* processOrchestrator.pauseProcessStream(processId);
   }
 
@@ -828,7 +847,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.pauseProcess(processId);
   }
 
@@ -876,7 +895,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     yield* processOrchestrator.cancelProcessStream(processId);
   }
 
@@ -903,7 +922,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.cancelProcess(processId);
   }
 
@@ -950,7 +969,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     yield* processOrchestrator.resumeProcessStream(processId);
   }
 
@@ -978,7 +997,7 @@ export class DavinciSDK {
       throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.resumeProcess(processId);
   }
 
@@ -1030,7 +1049,7 @@ export class DavinciSDK {
       );
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     yield* processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
   }
 
@@ -1060,7 +1079,7 @@ export class DavinciSDK {
       );
     }
     this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
     return processOrchestrator.setProcessMaxVoters(processId, maxVoters);
   }
 
@@ -1109,7 +1128,12 @@ export class DavinciSDK {
     const chainId = network.chainId.toString();
 
     const cached = this.processRegistryByChainId.get(chainId);
-    if (cached) return cached;
+    if (cached) {
+      if (!this._processRegistry) {
+        this._processRegistry = cached;
+      }
+      return cached;
+    }
 
     const info = await this.apiService.sequencer.getInfo();
     const processRegistryAddress = info.networks[chainId]?.processRegistryContract;
@@ -1122,6 +1146,9 @@ export class DavinciSDK {
 
     const processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
     this.processRegistryByChainId.set(chainId, processRegistry);
+    if (!this._processRegistry) {
+      this._processRegistry = processRegistry;
+    }
     return processRegistry;
   }
 
@@ -1148,7 +1175,12 @@ export class DavinciSDK {
     const network = await provider.getNetwork();
     const chainId = network.chainId.toString();
     const cached = this.processOrchestratorByChainId.get(chainId);
-    if (cached) return cached;
+    if (cached) {
+      if (!this._processOrchestrator) {
+        this._processOrchestrator = cached;
+      }
+      return cached;
+    }
 
     const processOrchestrator = new ProcessOrchestrationService(
       processRegistry,
@@ -1156,6 +1188,84 @@ export class DavinciSDK {
       this.config.signer
     );
     this.processOrchestratorByChainId.set(chainId, processOrchestrator);
+    if (!this._processOrchestrator) {
+      this._processOrchestrator = processOrchestrator;
+    }
+    return processOrchestrator;
+  }
+
+  /**
+   * Extract process version (4 bytes) from a 31-byte process ID.
+   * Format: [20-byte address][4-byte version][7-byte nonce]
+   */
+  private extractProcessIdVersion(processIdHex: string): string {
+    const hex = processIdHex.startsWith('0x') ? processIdHex.slice(2) : processIdHex;
+    if (hex.length !== 62) {
+      throw new Error(`Invalid process ID hex length ${hex.length}, expected 62`);
+    }
+    if (!/^[0-9a-fA-F]+$/.test(hex)) {
+      throw new Error('Invalid process ID hex string');
+    }
+    return `0x${hex.slice(40, 48).toLowerCase()}`;
+  }
+
+  /**
+   * Resolve process registry from processId version against sequencer /info networks.
+   */
+  private async getProcessRegistryForProcessId(processId: string): Promise<ProcessRegistryService> {
+    if (this.config.customAddresses.processRegistry) {
+      if (!this._processRegistry) {
+        this._processRegistry = new ProcessRegistryService(
+          this.config.customAddresses.processRegistry,
+          this.config.signer
+        );
+      }
+      return this._processRegistry;
+    }
+
+    const processVersion = this.extractProcessIdVersion(processId);
+    const cached = this.processRegistryByVersion.get(processVersion);
+    if (cached) return cached;
+
+    const info = await this.apiService.sequencer.getInfo();
+    const networkEntry = Object.values(info.networks).find(
+      network => network.processIDVersion.toLowerCase() === processVersion
+    );
+
+    if (!networkEntry?.processRegistryContract) {
+      const availableVersions = Object.values(info.networks)
+        .map(network => network.processIDVersion.toLowerCase())
+        .join(',');
+      throw new Error(
+        `Process ID version ${processVersion} is not supported by sequencer. Available versions: ${availableVersions}`
+      );
+    }
+
+    const processRegistry = new ProcessRegistryService(
+      networkEntry.processRegistryContract,
+      this.config.signer
+    );
+    this.processRegistryByVersion.set(processVersion, processRegistry);
+    return processRegistry;
+  }
+
+  /**
+   * Resolve process orchestrator from processId version.
+   */
+  private async getProcessOrchestratorForProcessId(
+    processId: string
+  ): Promise<ProcessOrchestrationService> {
+    const processVersion = this.extractProcessIdVersion(processId);
+    const cached = this.processOrchestratorByVersion.get(processVersion);
+    if (cached) return cached;
+
+    const processRegistry = await this.getProcessRegistryForProcessId(processId);
+    const processOrchestrator = new ProcessOrchestrationService(
+      processRegistry,
+      this.apiService,
+      this.config.signer
+    );
+    this.processOrchestratorByVersion.set(processVersion, processOrchestrator);
     return processOrchestrator;
   }
 

@@ -51,7 +51,7 @@ export class VocdoniSequencerService extends BaseService {
       method: 'GET',
       url: '/processes',
       params: chainId !== undefined ? { chainId } : undefined,
-    }).then(res => res.processes);
+    }).then(res => res.processes ?? []);
   }
 
   async submitVote(vote: VoteRequest): Promise<void> {
