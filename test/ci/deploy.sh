@@ -16,8 +16,6 @@ export CHAIN_ID
 export ACTIVATE_BLOBS
 export CI=${CI:-true}
 export TERM=${TERM:-dumb}
-# Compatibility alias for external deploy scripts in davinci-contracts.
-export SEPOLIA_PRIVATE_KEY=${SEPOLIA_PRIVATE_KEY:-${PRIVATE_KEY}}
 
 fetch_davinci_node_go_mod() {
   local output_file=$1
