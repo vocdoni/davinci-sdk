@@ -22,14 +22,6 @@ export function loadIntegrationEnv(): void {
 
   config({ path: ENV_PATH });
 
-  if (!process.env.RPC_URL && process.env.SEPOLIA_RPC) {
-    process.env.RPC_URL = process.env.SEPOLIA_RPC;
-  }
-
-  if (!process.env.SEPOLIA_RPC && process.env.RPC_URL) {
-    process.env.SEPOLIA_RPC = process.env.RPC_URL;
-  }
-
   if (!process.env.TIME_OUT && process.env.TIMEOUT) {
     process.env.TIME_OUT = process.env.TIMEOUT;
   }
