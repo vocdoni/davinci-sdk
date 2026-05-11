@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ANVIL_RPC_URL=${ANVIL_RPC_URL:-http://127.0.0.1:8545}
+DEPLOYER_URL=${DEPLOYER_URL:-http://127.0.0.1:8000/addresses.env}
 SEQUENCER_INFO_URL=${SEQUENCER_INFO_URL:-http://127.0.0.1:9090/info}
 CENSUS_HEALTH_URL=${CENSUS_HEALTH_URL:-http://127.0.0.1:8080/health}
 TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-900}
@@ -65,6 +66,9 @@ wait_for_http() {
 
 echo "Waiting for Anvil RPC..."
 wait_for_rpc "${ANVIL_RPC_URL}" "${TIMEOUT_SECONDS}"
+
+echo "Waiting for deployer addresses..."
+wait_for_http "${DEPLOYER_URL}" "${TIMEOUT_SECONDS}" "deployer"
 
 echo "Waiting for sequencer info endpoint..."
 wait_for_http "${SEQUENCER_INFO_URL}" "${TIMEOUT_SECONDS}" "sequencer"
