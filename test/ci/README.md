@@ -4,12 +4,8 @@ This folder contains the local stack used by GitHub Actions to run SDK integrati
 
 It starts:
 - Anvil (local chain on `:8545`)
-- A deployer container that deploys `davinci-contracts` and serves `addresses.env`
-- A sequencer container wired to that local chain and deployed addresses
-
-By default, the deployer resolves `davinci-contracts` from the `davinci-node` `go.mod` (same node ref),
-so contract verifier hashes stay aligned with the sequencer image.
-You can still override refs with `CONTRACTS_REF`, `DAVINCI_NODE_REF`, and `DAVINCI_NODE_TAG`.
+- A sequencer container wired directly to that local chain
+- Census3 API container
 
 ## Local usage
 

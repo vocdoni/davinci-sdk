@@ -68,7 +68,7 @@ jobs:
           }
 
           (async () => {
-            const names = ['ANVIL_PORT', 'DEPLOYER_PORT', 'SEQUENCER_PORT', 'CENSUS_PORT'];
+            const names = ['ANVIL_PORT', 'SEQUENCER_PORT', 'CENSUS_PORT'];
             const reserved = {};
             for (const name of names) {
               reserved[name] = await reserveRandomPort();
@@ -76,13 +76,10 @@ jobs:
 
             const envLines = [
               `ANVIL_PORT=${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_PORT=${reserved.DEPLOYER_PORT.port}`,
               `SEQUENCER_PORT=${reserved.SEQUENCER_PORT.port}`,
               `CENSUS_PORT=${reserved.CENSUS_PORT.port}`,
               `ANVIL_RPC_URL=http://127.0.0.1:${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_URL=http://127.0.0.1:${reserved.DEPLOYER_PORT.port}/addresses.env`,
               `RPC_URL=http://127.0.0.1:${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_ADDRESSES_URL=http://127.0.0.1:${reserved.DEPLOYER_PORT.port}/addresses.env`,
               `SEQUENCER_INFO_URL=http://127.0.0.1:${reserved.SEQUENCER_PORT.port}/info`,
               `CENSUS_HEALTH_URL=http://127.0.0.1:${reserved.CENSUS_PORT.port}/health`,
               `SEQUENCER_API_URL=http://127.0.0.1:${reserved.SEQUENCER_PORT.port}`,
@@ -96,7 +93,7 @@ jobs:
             }
 
             console.log(
-              `Selected ports: anvil=${reserved.ANVIL_PORT.port} deployer=${reserved.DEPLOYER_PORT.port} sequencer=${reserved.SEQUENCER_PORT.port} census=${reserved.CENSUS_PORT.port}`
+              `Selected ports: anvil=${reserved.ANVIL_PORT.port} sequencer=${reserved.SEQUENCER_PORT.port} census=${reserved.CENSUS_PORT.port}`
             );
           })().catch((error) => {
             console.error(error);
@@ -147,7 +144,7 @@ jobs:
         if: failure()
         run: |
           docker compose -f test/ci/docker-compose.yml ps
-          docker compose -f test/ci/docker-compose.yml logs --no-color --tail=400 anvil deployer sequencer census
+          docker compose -f test/ci/docker-compose.yml logs --no-color --tail=400 anvil sequencer census
 
       - name: Stop local stack
         if: always()
