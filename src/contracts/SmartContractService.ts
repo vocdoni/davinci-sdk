@@ -231,30 +231,17 @@ export abstract class SmartContractService {
             this.setupPollingListener(contract, eventFilter, callback);
             return;
           }
-          // Other error, try normal approach
-        }
-      }
-
-      // Default: try to use contract.on()
-      // Set up an error handler to catch async errors
-      const errorHandler = (error: any) => {
-        if (this.isUnsupportedMethodError(error)) {
-          // Remove the failing listener
-          contract.off(eventFilter as ContractEventName, normalizedCallback);
-          contract.off('error', errorHandler);
-
+          // Any other probe error: use polling to avoid runtime listener crashes
           console.warn(
-            'RPC does not support eth_newFilter, falling back to polling for events. ' +
+            'Could not verify RPC filter support, falling back to polling for events. ' +
               'This may result in delayed event notifications.'
           );
           this.setupPollingListener(contract, eventFilter, callback);
+          return;
         }
-      };
+      }
 
-      // Listen for errors
-      contract.once('error', errorHandler);
-
-      // Set up the listener
+      // Default: set up contract listener directly
       contract.on(eventFilter as ContractEventName, normalizedCallback);
     } catch (error: any) {
       // Fallback to polling on any setup error
