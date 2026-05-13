@@ -65,11 +65,7 @@ if [ -z "${PROCESS_REGISTRY:-}" ]; then
   exit 1
 fi
 
-export DAVINCI_WEB3_PROCESS="${PROCESS_REGISTRY}"
-
-if [ -n "${ORG_REGISTRY:-}" ]; then
-  export DAVINCI_WEB3_ORGS="${ORG_REGISTRY}"
-fi
+export DAVINCI_WEB3_PROCESSREGISTRYCONTRACT="${PROCESS_REGISTRY}"
 
 echo "Starting sequencer with deployed contract addresses..."
 if [ -x /app/entrypoint.sh ]; then
