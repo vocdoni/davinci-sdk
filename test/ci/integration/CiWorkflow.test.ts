@@ -180,7 +180,7 @@ describe('CI Workflow Integration', () => {
       const created = await organizerSdk.createProcess(processConfig);
       const processId = created.processId;
 
-      await waitForProcessAcceptingVotes(organizerSdk, processId);
+      await waitForProcessAcceptingVotes(organizerSdk, processId, 600_000);
 
       const submittedVote = await voterSdk.submitVote({
         processId,
