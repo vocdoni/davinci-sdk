@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-14
+
+### Changed
+- Updated SDK network handling to support multi-network sequencer info flows.
+- Bound on-chain operations to the active signer chain to improve cross-network safety.
+- Expanded multichain integration and unit test coverage.
+
+### Fixed
+- Fixed contract error event handling to avoid ethers "unknown fragment" listener failures.
+- Stabilized CI integration timing for sequencer bootstrap and process lifecycle waits.
+
+### Removed
+- **BREAKING**: Removed legacy single-network assumptions in network/process orchestration paths; integrations relying on previous implicit network resolution must migrate to the updated multi-network flow.
+
 ## [0.3.0] - 2026-04-28
 
 ### Changed
