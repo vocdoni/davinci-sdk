@@ -18,6 +18,17 @@ function isMetadataHash(str: string): boolean {
   return /^0x[0-9a-f]{72}$/i.test(str);
 }
 
+/**
+ * Low-level client for the Vocdoni DaVinci sequencer HTTP API.
+ *
+ * Exposes process, vote, and worker endpoints used during the voting
+ * lifecycle (process creation, vote submission, status polling).
+ *
+ * For most applications, prefer the high-level {@link DavinciSDK} facade,
+ * which composes this service with the on-chain `ProcessRegistryService`
+ * and the census layer. Use this class directly only when you need
+ * sequencer endpoints that are not surfaced through `DavinciSDK`.
+ */
 export class VocdoniSequencerService extends BaseService {
   constructor(baseURL: string) {
     super(baseURL);
