@@ -32,6 +32,25 @@ export enum ProcessStatus {
   RESULTS = 4,
 }
 
+/**
+ * On-chain client for the Vocdoni DaVinci process registry contract.
+ *
+ * Wraps the `ProcessRegistry` solidity contract (see
+ * `@vocdoni/davinci-contracts`) and provides typed methods for creating
+ * a voting process, transitioning its status (end, pause, cancel,
+ * resume), updating the census, adjusting the participant cap, and
+ * setting results. Also exposes typed event subscriptions for each of
+ * those lifecycle changes.
+ *
+ * Bound to a single contract address per instance and to whichever
+ * `ContractRunner` (provider or signer) is passed at construction.
+ * Write operations require a signer; read operations work with either.
+ *
+ * For most applications, prefer the high-level {@link DavinciSDK}
+ * facade, which composes this service with the sequencer and census
+ * layers. Use this class directly when you need on-chain operations
+ * that are not surfaced through `DavinciSDK`.
+ */
 export class ProcessRegistryService extends SmartContractService {
   private contract: ProcessRegistry;
 
