@@ -72,6 +72,10 @@
     "url": "https://vocdoni.io"
   },
   "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
   "homepage": "https://github.com/vocdoni/davinci-sdk#readme",
   "repository": {
     "type": "git",
