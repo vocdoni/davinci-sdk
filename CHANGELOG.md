@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-02
+
+### Changed
+- Upgraded `@vocdoni/davinci-contracts` from `0.0.45-rc1` to `^0.0.49`.
+- Declared minimum supported Node.js version as `>=18` via the `engines` field.
+- Marked the package as side-effect free (`"sideEffects": false`) to enable tree-shaking in downstream bundlers.
+- Tightened several `any` types to `unknown` in `src/core/types/metadata.ts` and `src/census/types.ts` type guards.
+  Consumers passing strongly-typed values are unaffected; callers relying on implicit `any` widening may need an explicit cast.
+- Updated `SECURITY.md` supported-versions table to `1.0.x`.
+- Updated `CONTRIBUTING.md`: corrected the license reference (now correctly AGPL-3.0), refreshed the test-tooling references from Jest to Vitest, and bumped the documented Node minimum to 18.
+
+### Added
+- Class-level JSDoc on `VocdoniSequencerService`, `VocdoniCensusService`, and `ProcessRegistryService`.
+- Unit tests for `ElGamal` primitives (`test/crypto/unit/ElGamal.test.ts`).
+- Unit tests for `BallotBuilder` RTE/TE coordinate transforms (`test/crypto/unit/BallotBuilder.test.ts`).
+
+### Removed
+- Removed the always-skipped working-census participants integration test; the underlying sequencer endpoint was never implemented.
+
+### Migrating from 0.4.x
+- **Node.js minimum is now 18.** Node 16 will refuse to install due to the new `engines` field.
+- **Type tightening.** Callers that relied on passing `any` to `isMerkleCensusProof`, `isCSPCensusProof`, or to the `meta` map on `ElectionMetadata` should now pass `unknown` (or the proper typed value). The runtime behavior is unchanged.
+
 ## [0.4.0] - 2026-05-14
 
 ### Changed
