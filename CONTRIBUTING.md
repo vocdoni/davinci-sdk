@@ -33,7 +33,7 @@ This project and everyone participating in it is governed by our Code of Conduct
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js** (version 16 or higher)
+- **Node.js** (version 18 or higher)
 - **Yarn** (recommended) or npm
 - **Git**
 - A code editor (VS Code recommended)
@@ -74,7 +74,7 @@ davinci-sdk/
 │   ├── <domain>/unit/     # Unit tests
 │   ├── <domain>/integration/ # Integration tests
 │   ├── helpers/           # Shared test utilities
-│   └── setup/             # Jest setup files
+│   └── setup/             # Vitest setup files
 ├── examples/              # Usage examples
 ├── docs/                  # Documentation
 └── dist/                  # Built files (generated)
@@ -450,7 +450,7 @@ Contributors will be recognized in the following ways:
 
 ## 📄 License
 
-By contributing to this project, you agree that your contributions will be licensed under the same [MIT License](LICENSE) that covers the project.
+By contributing to this project, you agree that your contributions will be licensed under the same [AGPL-3.0 License](LICENSE) that covers the project.
 
 ---
 
