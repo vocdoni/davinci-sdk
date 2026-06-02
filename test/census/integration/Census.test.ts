@@ -29,26 +29,6 @@ describe('VocdoniCensusService Integration', () => {
       ).resolves.toBeUndefined();
     });
 
-    it.skip('should retrieve the census participants from working census', async () => {
-      // Skip: This endpoint is not yet implemented for working censuses
-      const participants = await censusService.getParticipants(workingCensusId);
-
-      expect(Array.isArray(participants)).toBe(true);
-      expect(participants.length).toBe(testParticipants.length);
-
-      // Create a lookup map from the response
-      const responseMap = new Map(
-        participants.map((p: CensusParticipant) => [p.key.toLowerCase(), p.weight])
-      );
-
-      // Assert each expected participant exists with the correct weight
-      for (const expected of testParticipants) {
-        const actualWeight = responseMap.get(expected.key.toLowerCase());
-        expect(actualWeight).toBeDefined();
-        expect(actualWeight).toBe(expected.weight);
-      }
-    });
-
     it('should fetch the census root from working census', async () => {
       const root = await censusService.getCensusRoot(workingCensusId);
       expect(typeof root).toBe('string');
