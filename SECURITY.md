@@ -6,8 +6,7 @@ We actively support the following versions of the Vocdoni DaVinci SDK with secur
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| 0.1.x   | :x:                |
+| 1.0.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
@@ -166,7 +165,6 @@ We recognize security researchers who help improve the security of the Vocdoni D
 
 - [Vocdoni Security Documentation](https://docs.vocdoni.io/security)
 - [DaVinci Protocol Whitepaper](https://whitepaper.vocdoni.io)
-- [Smart Contract Audits](https://github.com/vocdoni/davinci-contracts/tree/main/audits)
 
 ---
 
