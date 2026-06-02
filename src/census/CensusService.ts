@@ -14,6 +14,20 @@ function isUUId(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+/**
+ * Low-level client for the Vocdoni DaVinci census HTTP API.
+ *
+ * Manages off-chain census lifecycles: creation, participant batching,
+ * publication, snapshot retrieval, and proof generation. Census IDs are
+ * UUIDs while published-census roots are 32-byte hex strings; the
+ * service distinguishes between the two automatically where applicable.
+ *
+ * For most applications, prefer the high-level {@link DavinciSDK} facade
+ * together with the {@link OffchainCensus} / {@link OffchainDynamicCensus}
+ * builders. Use this class directly when you need census endpoints that
+ * are not surfaced through `DavinciSDK` or when integrating against an
+ * existing census service.
+ */
 export class VocdoniCensusService extends BaseService {
   constructor(baseURL: string) {
     super(baseURL);
