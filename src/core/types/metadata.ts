@@ -111,7 +111,7 @@ export interface ElectionMetadata {
     logo: string;
   };
   meta?: {
-    [key: string]: any;
+    [key: string]: unknown;
   };
   questions: Array<IQuestion>;
   type: ElectionResultsType;

@@ -83,7 +83,7 @@ export interface CensusProviders {
 /**
  * Type guard to check if an object is a valid BaseCensusProof
  */
-function isBaseCensusProof(proof: any): proof is BaseCensusProof {
+function isBaseCensusProof(proof: unknown): proof is BaseCensusProof {
   return (
     !!proof &&
     typeof proof.root === 'string' &&
@@ -96,7 +96,7 @@ function isBaseCensusProof(proof: any): proof is BaseCensusProof {
 /**
  * Type guard to check if an object is a valid MerkleCensusProof
  */
-export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
+export function isMerkleCensusProof(proof: unknown): proof is MerkleCensusProof {
   return (
     isBaseCensusProof(proof) &&
     (proof.censusOrigin === CensusOrigin.OffchainStatic ||
@@ -111,7 +111,7 @@ export function isMerkleCensusProof(proof: any): proof is MerkleCensusProof {
 /**
  * Type guard to check if an object is a valid CSPCensusProof
  */
-export function isCSPCensusProof(proof: any): proof is CSPCensusProof {
+export function isCSPCensusProof(proof: unknown): proof is CSPCensusProof {
   return (
     isBaseCensusProof(proof) &&
     proof.censusOrigin === CensusOrigin.CSP &&
@@ -183,7 +183,7 @@ export interface Snapshot {
   /** Query execution period (optional). */
   period?: string;
   /** Query parameters (optional). */
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
   /** Weight configuration (optional). */
   weightConfig?: {
     strategy: string;
