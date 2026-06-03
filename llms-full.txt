@@ -1,0 +1,1967 @@
+# Vocdoni DaVinci SDK — full AI documentation bundle
+
+This file is the concatenated bundle of `docs/ai/SKILL.md`, `docs/ai/references/*.md`,
+and `docs/ai/recipes/*.ts` from the davinci-sdk repository. It covers the SDK at
+v1.0.0. Mirrored from https://github.com/vocdoni/skills (AGPL-3.0-or-later).
+The SDK itself is at https://github.com/vocdoni/davinci-sdk.
+
+For the lean index, see https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms.txt.
+
+================================================================
+# Section: Entry point (SKILL.md)
+================================================================
+
+
+# Davinci SDK (`@vocdoni/davinci-sdk`)
+
+The TypeScript SDK for **Davinci**, Vocdoni's zk-based voting protocol. It runs private, verifiable elections where ballots are **homomorphically encrypted** (ElGamal) and accompanied by **zk-SNARK validity proofs**, collected and aggregated off-chain by a **sequencer**, with canonical state and results anchored in **Ethereum smart contracts**.
+
+The SDK ships a single high-level facade, **`DavinciSDK`**, that orchestrates all of this. Almost every task goes through it. Lower-level services (`ProcessRegistryService`, the sequencer/census REST clients, the crypto primitives) exist and are reachable, but you reach for them only when the facade doesn't cover a case.
+
+This is the entry point. Read the section matching the task, load the matching `references/` file for the exhaustive API, and lift a `recipes/` file when you need a complete working flow.
+
+## How to use this guide
+
+1. **Find the area** in the task → reference table below.
+2. **Read only the references you need** — most tasks need 1–3.
+3. **Start from a recipe** when one fits; adapt rather than reinvent the boilerplate.
+4. **Respect the exact shapes.** The facade hides most cryptography, but the public shapes still have sharp edges: a single root import (no subpaths), a `choices: number[]` ballot model whose length must equal `ballot.numFields`, two *different* status enums (`TxStatus` for on-chain transactions, `VoteStatus` for vote processing), and `bigint` results. The references spell these out.
+
+## Task → reference
+
+| Goal                                                              | Read                                                  | Recipe                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------- |
+| Install, construct & `init()` the SDK, signer vs provider, env    | `references/setup.md`                                 | `recipes/bootstrap.ts`       |
+| Create a process/election; lifecycle (end/pause/cancel/resume)    | `references/process.md`                               | `recipes/create-process.ts`  |
+| Choose & build a census (Merkle, dynamic, CSP, on-chain, prebuilt)| `references/census.md`                                | `recipes/create-process.ts`  |
+| Cast an encrypted vote; check/await status; eligibility           | `references/voting.md`                                | `recipes/cast-vote.ts`       |
+| Configure a voting system (approval/ranked/quadratic/budget…)     | `references/ballot-modes.md`                          | —                            |
+| Token-holder / on-chain (ERC20/721) census                        | `references/census.md`                                | `recipes/token-census.ts`    |
+| Read results / tally; vote & voter counts                         | `references/process.md`                               | `recipes/read-results.ts`    |
+| Talk to the sequencer REST API directly (`sdk.api.sequencer`)     | `references/sequencer.md`                             | —                            |
+| Drop to the raw contract service (`sdk.processes`)                | `references/contracts.md`                             | —                            |
+| Debug a runtime error / revert / proof / "not accepting votes"    | `references/errors.md`                                | —                            |
+| Understand the protocol itself (crypto, lifecycle, why)           | `references/protocol.md`                              | —                            |
+| Run the whole thing end to end                                    | —                                                     | `recipes/full-election.ts`   |
+
+## Package shape
+
+`@vocdoni/davinci-sdk` is published with a **single root export** — there are *no* `/sequencer`, `/contracts`, or `/core` subpaths. Import everything from the root:
+
+```ts
+import {
+  DavinciSDK,            // the facade you'll use 95% of the time
+  OffchainCensus,        // + OffchainDynamicCensus, CspCensus, OnchainCensus, PublishedCensus
+  CensusOrigin,          // enum: OffchainStatic=1, OffchainDynamic=2, Onchain=3, CSP=4
+  VoteStatus,            // pending | verified | aggregated | processed | settled | error
+  TxStatus,              // pending | completed | reverted | failed
+} from "@vocdoni/davinci-sdk";
+```
+
+It depends on **ethers v6**, `@noble/curves`, `@noble/hashes`, `circomlibjs`, and `snarkjs`. Node ≥ 18 (global `fetch`) or a browser.
+
+> ⚠️ If you see code importing `@vocdoni/davinci-sdk/sequencer`, `OrganizationRegistryService`, `VocdoniContracts`, or `deployedAddresses`, it is **wrong / from an older imagined API**. None of those exist. There is no "organization" object in this SDK — the process creator is simply the signer's Ethereum address.
+
+## Mental model
+
+- **One facade, three actors.** The `DavinciSDK` instance acts as whoever its `signer` is. The *organizer* (a signer with a provider) calls `createProcess` and the lifecycle methods. A *voter* (a signer, no provider needed) calls `submitVote`. The *sequencer* is a remote service you talk to via REST — you never run it. To act as a different person, construct a second `DavinciSDK` with that wallet.
+- **Two transports, hidden behind the facade.** Canonical state lives in Ethereum contracts (ethers v6); the heavy off-chain work (proof verification, aggregation) is done by the sequencer (REST). `createProcess` coordinates both; you don't.
+- **`init()` is mandatory.** Every facade method throws until you `await sdk.init()`. `init()` resolves contract addresses from the sequencer's `/info` and wires the services.
+- **Signer with provider ⇒ on-chain ops; signer alone ⇒ voting only.** `createProcess`, `getProcess`, and lifecycle methods need `signer.provider`. `submitVote`, `getVoteStatus`, `hasAddressVoted` do not — a bare `new Wallet(pk)` is fine for voting.
+- **The encrypted vote is two-phase, and the SDK does the crypto for you.** `submitVote({ processId, choices })` builds the ballot, ElGamal-encrypts it against the process key, generates the zk-SNARK proof with `snarkjs` (downloading circuits from the sequencer once, then caching), signs, and submits. It returns a `voteId` with an initial `VoteStatus`. The vote only *counts* after the sequencer drives it to `settled` — always `waitForVoteStatus`.
+- **`choices` is `number[]`, length === `ballot.numFields`.** Each entry is the value for one ballot field. A single-choice question with N options is encoded as N one-hot fields (`[0,1,0,0]`). Multi-question elections concatenate the fields. See `references/ballot-modes.md`.
+- **Two status enums, don't mix them.** On-chain transactions (process create/end/pause/…) report `TxStatus` (`pending|completed|reverted|failed`). Vote processing reports `VoteStatus` (`pending|verified|aggregated|processed|settled|error`).
+- **Numbers: `choices`/`maxVoters`/`numFields`/`costExponent` are `number`; ballot bounds (`maxValue`/`minValue`/`maxValueSum`/`minValueSum`) are decimal **strings**; on-chain results/weights come back as `bigint` (or numeric strings from the sequencer).**
+
+## The SDK in ~25 lines (single yes/no question)
+
+```ts
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, OffchainCensus, VoteStatus } from "@vocdoni/davinci-sdk";
+
+// 1. Organizer SDK — signer WITH a provider (on-chain ops need it).
+const organizer = new Wallet(process.env.PRIVATE_KEY!, new JsonRpcProvider(process.env.RPC_URL));
+const sdk = new DavinciSDK({
+  signer: organizer,
+  sequencerUrl: process.env.SEQUENCER_API_URL!,   // e.g. https://sequencer-dev.davinci.vote
+  censusUrl: process.env.CENSUS_API_URL!,         // needed to publish a Merkle census
+});
+await sdk.init();
+
+// 2. Census of eligible voters (auto-published during createProcess).
+const census = new OffchainCensus();
+census.add(["0xVoterA…", "0xVoterB…"]);            // weight defaults to 1
+
+// 3. Create the process. One question, two options → 2 one-hot ballot fields.
+const { processId } = await sdk.createProcess({
+  title: "Is the sky blue?",
+  census,                                          // maxVoters auto = participant count
+  ballot: { numFields: 2, minValue: "0", maxValue: "1",
+            uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: "1" },
+  timing: { duration: 3600 },                      // startDate defaults to now+60s
+  questions: [{ title: "Pick one",
+                choices: [{ title: "Yes", value: 0 }, { title: "No", value: 1 }] }],
+});
+
+// 4. Vote AS a voter — a fresh SDK with the voter's wallet (no provider needed).
+const voterSdk = new DavinciSDK({ signer: new Wallet(VOTER_PK),
+  sequencerUrl: process.env.SEQUENCER_API_URL!, censusUrl: process.env.CENSUS_API_URL! });
+await voterSdk.init();
+const { voteId } = await voterSdk.submitVote({ processId, choices: [1, 0] }); // votes "Yes"
+await voterSdk.waitForVoteStatus(processId, voteId, VoteStatus.Settled);
+
+// 5. Read results (bigint per ballot field).
+const info = await sdk.getProcess(processId);
+console.log(info.result); // e.g. [ 1n, 0n ] → 1 vote on field 0 ("Yes")
+```
+
+The full, runnable version with real-time status streaming is `recipes/full-election.ts`. Don't hand-roll the encrypt/prove step — the facade owns it; you only ever supply `choices`.
+
+## Safe reading order when the task is open-ended
+
+1. `references/setup.md` — construct & `init()`, signer-vs-provider rule, env vars.
+2. `references/process.md` — `createProcess` config, lifecycle, `getProcess` / results.
+3. `references/census.md` — pick a census class; the `maxVoters` rule per type.
+4. `references/voting.md` — `submitVote`, the `choices` model, status polling.
+5. `references/ballot-modes.md` — only when the user wants a specific voting system.
+6. A `recipes/*.ts` for the closest scenario.
+
+`references/sequencer.md` and `references/contracts.md` are escape hatches for when the facade isn't enough; `references/errors.md` is the gotcha catalogue; `references/protocol.md` explains the cryptography and the *why*.
+
+---
+
+Sourced from [`vocdoni/skills`](https://github.com/vocdoni/skills/tree/main/plugins/davinci-sdk/skills/davinci-sdk) — AGPL-3.0-or-later.
+
+
+================================================================
+# Section: Setup
+================================================================
+
+# `references/setup.md` — Install, construct, `init()`, environment
+
+Companion to the [[davinci-sdk]] skill. Read this first when starting a Davinci project.
+
+## Install
+
+```sh
+npm install @vocdoni/davinci-sdk ethers
+# bundled runtime deps: @noble/curves, @noble/hashes, circomlibjs, snarkjs
+```
+
+Node ≥ 18 (for global `fetch`) or a modern browser. `ethers` v6 is a peer you import yourself.
+
+## Single root import — there are no subpaths
+
+```ts
+import {
+  DavinciSDK,
+  OffchainCensus, OffchainDynamicCensus, CspCensus, OnchainCensus, PublishedCensus,
+  CensusOrigin, VoteStatus, TxStatus,
+} from "@vocdoni/davinci-sdk";
+```
+
+`@vocdoni/davinci-sdk` exports **only** the package root (its `package.json` `exports` map has a single `"."` entry). Do **not** write `@vocdoni/davinci-sdk/sequencer`, `/contracts`, or `/core` — those paths do not exist.
+
+## Construct the facade
+
+```ts
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK } from "@vocdoni/davinci-sdk";
+
+const sdk = new DavinciSDK({
+  signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
+  sequencerUrl: SEQUENCER_API_URL,   // required
+  censusUrl: CENSUS_API_URL,         // optional — only to publish Merkle censuses
+});
+await sdk.init();                    // REQUIRED before any other method
+```
+
+### `DavinciSDKConfig`
+
+```ts
+interface DavinciSDKConfig {
+  signer: Signer;                    // ethers v6 Signer (required)
+  sequencerUrl: string;              // sequencer REST base URL (required)
+  censusUrl?: string;                // census service base URL (optional)
+  addresses?: { processRegistry?: string };  // override; else fetched from sequencer /info
+  censusProviders?: CensusProviders; // custom proof providers (CSP voting needs one)
+  verifyCircuitFiles?: boolean;      // verify downloaded circuit hashes (default: true)
+  verifyProof?: boolean;             // verify generated proof before submit (default: true)
+}
+```
+
+- **`censusUrl`** is needed only when you build and publish a Merkle census (`OffchainCensus` / `OffchainDynamicCensus`) — i.e. on the *organizer* who calls `createProcess`, and on a *voter* who needs the sequencer to fetch its census proof. It is **not** needed for an organizer using a pre-published / on-chain / CSP census, and you can omit it for voting if you supply a custom `censusProviders`.
+- **Contract addresses are auto-resolved.** Leave `addresses` unset and `init()` reads `processRegistry` for the signer's chain from the sequencer's `/info`. Only set `addresses.processRegistry` to pin a custom deployment.
+- **Keep `verifyCircuitFiles` / `verifyProof` on** (the defaults) unless you have a measured reason: they protect against tampered circuit downloads and malformed proofs.
+
+## The signer-vs-provider rule (the #1 setup gotcha)
+
+| Operation                                                | Needs `signer.provider`? |
+| -------------------------------------------------------- | ------------------------ |
+| `createProcess`, `createProcessStream`                   | **Yes** (on-chain tx)    |
+| `getProcess` (rich `ProcessInfo` from the contract)      | **Yes**                  |
+| `endProcess`/`pauseProcess`/`cancelProcess`/`resumeProcess`/`setProcessMaxVoters` | **Yes** |
+| `submitVote`                                             | No — bare `Wallet` is fine |
+| `getVoteStatus`/`watchVoteStatus`/`waitForVoteStatus`    | No                       |
+| `hasAddressVoted`/`isAddressAbleToVote`/`getAddressWeight`| No                       |
+| `sdk.api.sequencer.getProcess` (lightweight, REST)       | No                       |
+
+So an **organizer** wallet must be `new Wallet(pk, provider)`; a **voter** wallet can be `new Wallet(pk)`. Calling an on-chain method without a provider throws: *"Provider required for blockchain operations…"*. To act as two different people in one script, build two `DavinciSDK` instances.
+
+```ts
+// organizer (on-chain) — provider required
+const organizer = new DavinciSDK({ signer: new Wallet(pk, provider), sequencerUrl, censusUrl });
+// voter (voting only) — no provider
+const voter = new DavinciSDK({ signer: new Wallet(voterPk), sequencerUrl, censusUrl });
+await organizer.init(); await voter.init();
+```
+
+## Environment variables (from the SDK's example `.env`)
+
+```
+SEQUENCER_API_URL=https://sequencer-dev.davinci.vote   # sequencer REST base URL
+CENSUS_API_URL=https://c3-dev.davinci.vote             # census service base URL
+RPC_URL=https://...                                     # ethers JsonRpcProvider endpoint
+PRIVATE_KEY=...                                         # organizer/voter EOA key (no 0x ok)
+```
+
+Known endpoints (verify against current docs / the sequencer's `/info`):
+
+| Env      | Sequencer                              | Census                       |
+| -------- | -------------------------------------- | ---------------------------- |
+| Dev      | `https://sequencer-dev.davinci.vote`   | `https://c3-dev.davinci.vote`|
+| Staging  | `https://sequencer1.davinci.vote`      | (per docs)                   |
+
+The **chain is determined by the sequencer**, not by you — the RPC must point at the chain the sequencer expects. The voter/organizer needs testnet gas on that chain to create/end processes (voting itself is gasless for the voter — it goes to the sequencer, not on-chain).
+
+## ethers v6 (this SDK is v6, not v5)
+
+| v5 (legacy `@vocdoni/sdk`)                  | v6 (Davinci SDK)                          |
+| ------------------------------------------- | ----------------------------------------- |
+| `new ethers.providers.JsonRpcProvider(url)` | `new ethers.JsonRpcProvider(url)`         |
+| `ethers.utils.parseUnits(...)`              | `ethers.parseUnits(...)`                  |
+| `BigNumber`                                 | native `bigint`                           |
+| `provider.getNetwork()` → `{chainId: number}` | → `{chainId: bigint}` (use `Number(...)`)|
+
+## Sanity check after `init()`
+
+```ts
+const info = await sdk.api.sequencer.getInfo();   // reachable? which chains/circuits?
+const net  = await provider.getNetwork();
+const supported = Object.values(info.networks).some(n => n.chainID === Number(net.chainId));
+console.assert(supported, "RPC chain not supported by this sequencer");
+```
+
+A chain mismatch here is the root cause of most later "process not found" / proof-verification failures.
+
+## Cross-references
+
+- `references/process.md` — `createProcess` and lifecycle.
+- `references/census.md` — which census class, and the `maxVoters` rule.
+- `references/voting.md` — the encrypted-vote flow.
+- `recipes/bootstrap.ts` — this wiring as a runnable file.
+
+
+================================================================
+# Section: Process lifecycle
+================================================================
+
+# `references/process.md` — Creating & managing a process, reading results
+
+Companion to the [[davinci-sdk]] skill. A **process** is one election. This file covers `createProcess`, its config shape, the lifecycle methods, and `getProcess` / result reading — all on the `DavinciSDK` facade. All of these require a **signer with a provider** (see `references/setup.md`).
+
+## Create a process
+
+```ts
+const result = await sdk.createProcess(config);  // Promise<ProcessCreationResult>
+// result = { processId: string, transactionHash: string }
+```
+
+The facade does everything: validates timing, computes the next `processId`, auto-publishes the census if needed, uploads metadata, fetches the per-process encryption key from the sequencer, and sends the on-chain create transaction.
+
+### `ProcessConfig`
+
+```ts
+interface ProcessConfig {
+  // Census: a Census object (recommended) OR manual { type, root, size, uri }.
+  census: Census | { type: CensusOrigin; root: string; size: number; uri: string };
+
+  ballot: BallotMode;                 // the voting rules — see references/ballot-modes.md
+
+  timing: {
+    startDate?: Date | string | number;  // default: now + 60s
+    duration?: number;                    // seconds — use this OR endDate, not both
+    endDate?: Date | string | number;     // alternative to duration
+  };
+
+  maxVoters?: number;                 // see "the maxVoters rule" below
+
+  // EITHER inline metadata (uploaded for you) …
+  title?: string;
+  description?: string;
+  questions?: [ProcessQuestion, ...ProcessQuestion[]];   // ≥1 required in this form
+  // … OR a pre-uploaded metadata URI:
+  metadataUri?: string;
+}
+
+type ProcessQuestion = {
+  title: string;
+  description?: string;
+  choices: Array<{ title: string; value: number }>;
+};
+```
+
+`ProcessConfig` is a union: provide **either** `title`+`questions` (the SDK builds & uploads `ElectionMetadata` for you) **or** a `metadataUri` you uploaded yourself. You cannot mix `duration` and `endDate`.
+
+### `BallotMode` (the `ballot` field)
+
+```ts
+interface BallotMode {
+  numFields: number;        // number of ballot fields; choices.length must equal this
+  groupSize?: number;       // optional grouping (advanced)
+  minValue: string;         // min value per field (decimal STRING)
+  maxValue: string;         // max value per field (decimal STRING)
+  uniqueValues: boolean;    // all field values must differ (ranking)
+  costExponent: number;     // exponent in the cost sum (2 = quadratic)
+  minValueSum: string;      // floor on Σ value^costExponent (decimal STRING)
+  maxValueSum: string;      // ceiling on Σ value^costExponent (decimal STRING)
+}
+```
+
+> Bounds are **decimal strings**, not numbers — bigint-safe JSON. `numFields`/`costExponent` are plain `number`. How to set these for approval/ranked/quadratic/budget/single/multiple choice is in `references/ballot-modes.md`.
+
+### The `maxVoters` rule
+
+`maxVoters` caps how many voters the process accepts. When you can omit it vs must supply it:
+
+| Census you pass                              | `maxVoters` |
+| -------------------------------------------- | ----------- |
+| Published `OffchainCensus`/`OffchainDynamicCensus` (Merkle) | **Optional** — defaults to the participant count |
+| `OnchainCensus` (token / on-chain)           | **Required** |
+| `CspCensus`                                  | **Required** |
+| `PublishedCensus`                            | **Required** |
+| Manual `{ type, root, size, uri }`           | **Required** |
+
+Omitting it when required throws: *"maxVoters is required…"*. See `references/census.md`.
+
+### Timing notes
+
+- `startDate` defaults to **now + 60 seconds**; a start date more than 30s in the past throws.
+- Accepts `Date`, ISO string, or Unix timestamp (seconds; values > 1e10 are treated as ms and divided).
+- Give `duration` (seconds) **or** `endDate`, never both. `endDate` must be after `startDate`.
+
+### Minimal example
+
+```ts
+import { OffchainCensus } from "@vocdoni/davinci-sdk";
+
+const census = new OffchainCensus();
+census.add(["0xAaa…", "0xBbb…", "0xCcc…"]);
+
+const { processId, transactionHash } = await sdk.createProcess({
+  title: "Community Decision",
+  description: "What should we build next?",
+  census,                                            // auto-published; maxVoters auto
+  ballot: {
+    numFields: 3, minValue: "0", maxValue: "1",
+    uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: "1",
+  },
+  timing: { startDate: new Date(Date.now() + 60_000), duration: 3600 * 24 },
+  questions: [{
+    title: "Which initiative?",
+    choices: [
+      { title: "Garden",   value: 0 },
+      { title: "Workshop", value: 1 },
+      { title: "Gallery",  value: 2 },
+    ],
+  }],
+});
+```
+
+## Real-time creation: `createProcessStream`
+
+For UIs that show transaction progress, use the streaming variant. It yields `TxStatusEvent`s:
+
+```ts
+import { TxStatus } from "@vocdoni/davinci-sdk";
+
+let processId = "";
+for await (const event of sdk.createProcessStream(config)) {
+  switch (event.status) {
+    case TxStatus.Pending:   console.log("submitted:", event.hash); break;
+    case TxStatus.Completed: processId = event.response.processId;   // + event.response.transactionHash
+                             break;
+    case TxStatus.Failed:    throw event.error;
+    case TxStatus.Reverted:  throw new Error(`reverted: ${event.reason}`);
+  }
+}
+```
+
+`createProcess(config)` is exactly this loop consumed for you, returning `{ processId, transactionHash }`. Use the plain method for scripts; the stream for progress UX.
+
+## Lifecycle
+
+Every lifecycle method has a plain (`Promise<void>`) form and a `…Stream` form yielding `TxStatusEvent`s. All require a signer with a provider, and revert if you're not the process organizer or the transition is invalid.
+
+```ts
+await sdk.endProcess(processId);        // → status ENDED (stops accepting votes; triggers tally)
+await sdk.pauseProcess(processId);      // → status PAUSED
+await sdk.resumeProcess(processId);     // PAUSED → READY (resume a paused process)
+await sdk.cancelProcess(processId);     // → status CANCELED (abandon; no results)
+await sdk.setProcessMaxVoters(processId, 750);   // change the voter cap
+
+// streaming equivalents: endProcessStream, pauseProcessStream, resumeProcessStream,
+// cancelProcessStream, setProcessMaxVotersStream — same TxStatusEvent shape as above.
+```
+
+`ProcessStatus` (contract enum — note the values):
+
+```ts
+enum ProcessStatus { READY = 0, ENDED = 1, CANCELED = 2, PAUSED = 3, RESULTS = 4 }
+```
+
+A process becomes accepting-votes once it is `READY` **and** its `startDate` has passed; check `sdk.api.sequencer.getProcess(id).isAcceptingVotes` (see `references/sequencer.md`). After `endProcess`, the sequencer computes the final tally and the contract moves to `RESULTS`.
+
+## Read a process & results: `getProcess`
+
+```ts
+const info = await sdk.getProcess(processId);   // Promise<ProcessInfo>
+```
+
+```ts
+interface ProcessInfo {
+  processId: string;
+  title: string;
+  description?: string;
+  census: { type: CensusOrigin; root: string; uri: string };
+  ballot: BallotMode;
+  questions: ProcessQuestion[];
+
+  status: ProcessStatus;          // READY/ENDED/CANCELED/PAUSED/RESULTS
+  creator: string;                // the organizer's address
+  startDate: Date;
+  endDate: Date;
+  duration: number;               // seconds
+  timeRemaining: number;          // seconds (0 if ended, negative if not started)
+  maxVoters: number;
+
+  result: bigint[];               // tally — one entry per ballot field
+  votersCount: number;            // votes cast
+  overwrittenVotesCount: number;  // overwrites (last-vote-wins)
+  metadataURI: string;
+  raw?: any;                      // raw contract struct, for advanced use
+}
+```
+
+`getProcess` reads the contract and fetches metadata, so it needs a provider. For a lightweight, provider-free read (status, `isAcceptingVotes`, `votersCount`, encryption key), use `sdk.api.sequencer.getProcess(processId)` — see `references/sequencer.md`.
+
+### Reading the tally
+
+`result` is a `bigint[]`, **one entry per ballot field** (not per question, not per choice — though for one-hot single-choice questions each field *is* a choice). Each entry is the weighted sum of that field's values across all voters.
+
+```ts
+const info = await sdk.getProcess(processId);
+// e.g. one question "favourite colour" encoded as 4 one-hot fields:
+info.questions[0].choices.forEach((c, i) => {
+  console.log(`${c.title}: ${info.result[i].toString()}`);
+});
+```
+
+Results are meaningful only once the process is `ENDED`/`RESULTS` and the sequencer has settled all votes and set results on-chain. To be notified the instant results land, subscribe to the contract event (escape hatch, needs `sdk.processes`):
+
+```ts
+sdk.processes.onProcessResultsSet((id, sender, result /* bigint[] */) => {
+  if (id.toLowerCase() === processId.toLowerCase()) console.log("results:", result);
+});
+```
+
+See `recipes/read-results.ts` for the full "wait for all votes counted → end → await results" pattern.
+
+## Listing processes
+
+```ts
+const ids: string[] = await sdk.listProcesses();          // uses signer's chain
+const ids2 = await sdk.listProcesses(chainId /* number */); // explicit chain
+```
+
+## Cross-references
+
+- `references/census.md` — building the `census` you pass in.
+- `references/ballot-modes.md` — configuring `ballot` for a voting system.
+- `references/voting.md` — casting votes once the process is live.
+- `references/contracts.md` — the raw `ProcessRegistryService` behind these methods.
+- `recipes/create-process.ts`, `recipes/read-results.ts`, `recipes/full-election.ts`.
+
+
+================================================================
+# Section: Census
+================================================================
+
+# `references/census.md` — Censuses (who may vote)
+
+Companion to the [[davinci-sdk]] skill. A **census** defines the eligible voters and their weights. You pick a census *class*, hand it to `createProcess`, and the facade publishes/normalizes it. This file covers the five census classes, the `CensusOrigin` enum, the all-important `maxVoters` rule, the low-level census REST service, and CSP voting.
+
+## `CensusOrigin`
+
+```ts
+enum CensusOrigin {
+  OffchainStatic  = 1,   // fixed off-chain Merkle tree
+  OffchainDynamic = 2,   // off-chain Merkle tree you can append to during voting
+  Onchain         = 3,   // on-chain contract (ERC20/721 token holders, etc.)
+  CSP             = 4,   // credential service provider (blind-signature style)
+}
+```
+
+## The five census classes
+
+All extend an abstract `Census`. Merkle-based ones (`OffchainCensus`, `OffchainDynamicCensus`) collect participants locally and must be **published**; the rest reference an already-existing source and are ready on construction.
+
+### `OffchainCensus` — static Merkle tree (the common case)
+
+```ts
+import { OffchainCensus } from "@vocdoni/davinci-sdk";
+
+const census = new OffchainCensus();
+census.add("0xAbc…");                                  // single address, weight = 1
+census.add(["0xAaa…", "0xBbb…"]);                       // many addresses, weight = 1
+census.add({ key: "0xCcc…", weight: 5 });               // weighted (string | number | bigint)
+census.add([{ key: "0xDdd…", weight: "100" }, { key: "0xEee…", weight: 10n }]);
+```
+
+Read/inspect:
+
+```ts
+census.remove("0xAbc…");
+census.getWeight("0xCcc…");   // "5" | undefined
+census.addresses;             // string[]
+census.participants;          // { key: string; weight: string }[]
+census.isPublished;           // false until createProcess publishes it
+census.censusRoot;            // null until published
+census.censusURI;             // null until published
+```
+
+`createProcess` auto-publishes it (requires `censusUrl` on the SDK). After creation, `census.isPublished === true` and `censusRoot`/`censusURI` are populated. `maxVoters` defaults to the participant count.
+
+### `OffchainDynamicCensus` — appendable Merkle tree
+
+Same API as `OffchainCensus`, but the census may grow during the voting period (new roots get published; never remove voters or change weights — that would enable double voting). Use when eligibility is still being added after the process starts.
+
+### `CspCensus` — credential service provider
+
+```ts
+import { CspCensus } from "@vocdoni/davinci-sdk";
+const census = new CspCensus(cspPublicKey /* = censusRoot */, "https://csp-server.example");
+```
+
+Voter eligibility is certified by a CSP signature instead of a Merkle proof. No local participant list, no publishing. **`maxVoters` is required** at process creation, and **voting requires a CSP proof provider** (see "CSP voting" below).
+
+### `OnchainCensus` — token holders / on-chain source
+
+```ts
+import { OnchainCensus } from "@vocdoni/davinci-sdk";
+const census = new OnchainCensus(
+  "0xTokenOrCensusContract…",                 // contract address (ERC20/721/custom)
+  "graphql://indexer.example/137/0xToken…/graphql"  // indexer/subgraph URI to read holders
+);
+census.contractAddress;   // getter
+```
+
+Uses existing on-chain data; nothing to publish. `censusRoot` is set to the 32-byte zero value and the contract address is passed through to the chain. **`maxVoters` is required.** The sequencer imports voter weights from the indexer after creation — expect a short delay before voters appear (poll `sdk.api.sequencer.getAddressWeight`). See `recipes/token-census.ts`.
+
+### `PublishedCensus` — reuse an already-published census
+
+```ts
+import { PublishedCensus, CensusOrigin } from "@vocdoni/davinci-sdk";
+const census = new PublishedCensus(CensusOrigin.OffchainStatic, "0xroot…", "https://…/census");
+```
+
+Wraps a census published in a prior session. Read-only; **`maxVoters` is required**.
+
+## `maxVoters` requirement summary
+
+| Class                    | Publishing | `maxVoters` at `createProcess` |
+| ------------------------ | ---------- | ------------------------------ |
+| `OffchainCensus`         | auto       | optional (defaults to count)   |
+| `OffchainDynamicCensus`  | auto       | optional (defaults to count)   |
+| `OnchainCensus`          | none       | **required**                   |
+| `CspCensus`              | none       | **required**                   |
+| `PublishedCensus`        | none       | **required**                   |
+| manual `{type,root,size,uri}` | none  | **required**                   |
+
+## Manual census config (advanced)
+
+Skip the classes entirely:
+
+```ts
+await sdk.createProcess({
+  census: { type: CensusOrigin.OffchainStatic, root: "0xroot…", size: 100, uri: "https://…" },
+  maxVoters: 100,
+  // …
+});
+```
+
+## Low-level census service: `sdk.api.census`
+
+For building/inspecting censuses outside `createProcess`'s auto-publish. This is `VocdoniCensusService` (needs `censusUrl`). Key methods:
+
+```ts
+sdk.api.census.createCensus(): Promise<string>                       // → working censusId
+sdk.api.census.addParticipants(censusId, participants): Promise<void> // [{ key, weight }]
+sdk.api.census.publishCensus(censusId): Promise<PublishCensusResponse> // { root, uri, size, … }
+sdk.api.census.getCensusRoot(censusId): Promise<string>
+sdk.api.census.getCensusSize(censusIdOrRoot): Promise<number>         // auto-detects id vs root
+sdk.api.census.getCensusProof(censusRoot, key): Promise<CensusProof>  // membership proof
+sdk.api.census.deleteCensus(censusId): Promise<void>
+```
+
+```ts
+// Build, publish, then create a process against the published root:
+const censusId = await sdk.api.census.createCensus();
+await sdk.api.census.addParticipants(censusId, [{ key: addr, weight: "1" }]);
+const { root, uri, size } = await sdk.api.census.publishCensus(censusId);
+await sdk.createProcess({ census: { type: CensusOrigin.OffchainStatic, root, size, uri },
+                          maxVoters: size, /* … */ });
+```
+
+## How voting fetches the census proof
+
+You usually don't touch this — `submitVote` does it. For reference:
+
+- **Merkle censuses** (Offchain*/Onchain): the SDK fetches just the voter's **weight** from the sequencer (`getAddressWeight`); the full Merkle proof isn't needed in the vote payload.
+- **CSP census**: the SDK calls your **CSP proof provider** (there is no default), which must return a `CSPCensusProof`.
+
+### CSP voting (`censusProviders.csp`)
+
+A voter on a CSP census must supply a `csp` provider in the SDK config:
+
+```ts
+import { DavinciSDK, CensusOrigin } from "@vocdoni/davinci-sdk";
+
+const voter = new DavinciSDK({
+  signer: new Wallet(voterPk),
+  sequencerUrl,
+  censusProviders: {
+    csp: async ({ processId, address }) => {
+      // Obtain a CSP credential. The bundled DavinciCSP helper can sign for testing:
+      const csp = await sdk.getCSP();                  // any initialised SDK instance
+      const out = await csp.cspSign(CensusOrigin.CSP, CSP_PRIVATE_KEY, processId, address, weight);
+      return {
+        censusOrigin: CensusOrigin.CSP,
+        root: out.root, address: out.address, weight,
+        processId: out.processId, publicKey: out.publicKey,
+        signature: out.signature, voterIndex: out.index,
+      };
+    },
+  },
+});
+await voter.init();
+await voter.submitVote({ processId, choices });
+```
+
+`CSPCensusProof` shape: `{ root, address, weight, censusOrigin: CSP, processId, publicKey, signature, voterIndex? }`. In production the provider would call your real CSP server rather than signing locally. `sdk.getCSP()` returns a `DavinciCSP` helper with `cspSign(...)` and `cspCensusRoot(censusOrigin, privKey)` (used to derive the root you pass to `new CspCensus(root, uri)`).
+
+## Cross-references
+
+- `references/process.md` — passing the census to `createProcess` and the `maxVoters` rule.
+- `references/voting.md` — the vote flow that consumes census proofs.
+- `recipes/token-census.ts` — full `OnchainCensus` flow.
+
+
+================================================================
+# Section: Voting
+================================================================
+
+# `references/voting.md` — Casting an encrypted vote
+
+Companion to the [[davinci-sdk]] skill. Casting a vote is the part most likely to confuse, but the `DavinciSDK` facade hides all the cryptography: you supply `choices`, it builds the ballot, ElGamal-encrypts it, generates the zk-SNARK proof, signs, and submits. None of `submitVote`'s methods need a provider — a bare `Wallet` is enough.
+
+## Act as the voter
+
+The SDK votes **as its `signer`**. To cast a voter's ballot, construct a `DavinciSDK` with that voter's wallet:
+
+```ts
+import { DavinciSDK, VoteStatus } from "@vocdoni/davinci-sdk";
+import { Wallet } from "ethers";
+
+const voter = new DavinciSDK({
+  signer: new Wallet(VOTER_PRIVATE_KEY),    // no provider needed for voting
+  sequencerUrl: SEQUENCER_API_URL,
+  censusUrl: CENSUS_API_URL,                // needed so the SDK can fetch the census proof
+});
+await voter.init();
+```
+
+(`censusUrl` is required for voting on Merkle censuses unless you pass a custom `censusProviders`. CSP censuses need a `censusProviders.csp` — see `references/census.md`.)
+
+## Submit
+
+```ts
+const result = await voter.submitVote({
+  processId,
+  choices: [1, 0],          // length MUST equal the process's ballot.numFields
+  // randomness?: string    // optional; auto-generated if omitted
+});
+```
+
+### `VoteConfig` / `VoteResult`
+
+```ts
+interface VoteConfig {
+  processId: string;
+  choices: number[];        // one integer per ballot field
+  randomness?: string;      // optional hex/decimal entropy for encryption (the "k")
+}
+
+interface VoteResult {
+  voteId: string;           // track this
+  signature: string;
+  voterAddress: string;
+  processId: string;
+  status: VoteStatus;       // initial status, usually "pending"
+}
+```
+
+### The `choices` model (read this before guessing)
+
+`choices` is a flat array of integers, **one per ballot field**, and `choices.length` must equal `ballot.numFields`. Each integer must lie in `[ballot.minValue, ballot.maxValue]` (the SDK validates this and throws "Choice X is out of range" otherwise).
+
+- **Single-choice question, N options** → encoded one-hot as N fields. To pick option *j*, send an array of N zeros with a 1 at index *j*: `[0,0,1,0]` picks option 2.
+- **Weighted voting** → put the voter's weight at the chosen index instead of 1: `[0, 5, 0, 0]`.
+- **Multiple questions** → concatenate each question's fields: two 4-option questions → `numFields: 8`, `choices: [...q1(4), ...q2(4)]`.
+- **Approval / ranked / quadratic / budget** → the field meaning changes per ballot mode; see `references/ballot-modes.md`.
+
+`submitVote` internally fetches the live process (must be `isAcceptingVotes` or it throws *"Process is not currently accepting votes"*), gets the voter's census weight/proof, encrypts, proves, and submits.
+
+## The two-phase status flow
+
+`submitVote` returns as soon as the sequencer accepts the payload — the vote is **not yet counted**. It progresses through `VoteStatus`:
+
+```ts
+enum VoteStatus {
+  Pending    = "pending",     // received by sequencer
+  Verified   = "verified",    // proof + signature checked
+  Aggregated = "aggregated",  // included in a batch
+  Processed  = "processed",   // state transition applied
+  Settled    = "settled",     // finalized on-chain — it counts
+  Error      = "error",       // rejected
+}
+```
+
+Always wait for it to settle:
+
+```ts
+const final = await voter.waitForVoteStatus(
+  processId, result.voteId,
+  VoteStatus.Settled,   // target (default: Settled)
+  300_000,              // timeout ms (default 300_000 = 5 min) — settlement can take minutes
+  5_000,                // poll interval ms (default 5_000)
+);
+// final: VoteStatusInfo { voteId, status, processId }
+```
+
+> Settlement depends on the sequencer batching and submitting a state transition; under light load it can take several minutes. For many votes, bump the timeout (the SDK's own demo uses ~800_000ms per vote).
+
+### Stream status changes (for UI)
+
+```ts
+for await (const s of voter.watchVoteStatus(processId, voteId, {
+  targetStatus: VoteStatus.Settled, timeoutMs: 800_000, pollIntervalMs: 5_000,
+})) {
+  console.log(s.status);                       // yields only on change
+  if (s.status === VoteStatus.Error) throw new Error("vote rejected");
+}
+```
+
+`waitForVoteStatus` is `watchVoteStatus` consumed for you, returning the final status. A one-off poll: `await voter.getVoteStatus(processId, voteId)` → `{ voteId, status, processId }`.
+
+## Eligibility & dedup checks (no provider needed)
+
+```ts
+await sdk.isAddressAbleToVote(processId, address);  // boolean — in the census?
+await sdk.hasAddressVoted(processId, address);      // boolean — already voted?
+await sdk.getAddressWeight(processId, address);     // string — voting weight ("0" if none)
+```
+
+Use `isAddressAbleToVote` before submitting to give a clean "not eligible" message instead of a thrown error. Voters may **overwrite** their vote during the voting period (last-vote-wins) — `hasAddressVoted` true doesn't prevent re-voting.
+
+## Custom randomness
+
+`randomness` seeds the ElGamal encryption nonce (`k`) and the vote-id derivation. Omit it (recommended) to let the SDK sample fresh entropy. Supply it only for reproducible tests; reusing the same `k` across votes is unsafe.
+
+## Verification toggles (from SDK config)
+
+`verifyCircuitFiles` (default true) checks the SHA-256 of downloaded circuit artifacts against the hashes in the sequencer's `/info`; `verifyProof` (default true) verifies the generated proof locally before submitting. Leave both on unless profiling shows a need.
+
+## Cross-references
+
+- `references/ballot-modes.md` — what `choices` means under each voting system.
+- `references/census.md` — CSP voting providers; how the census proof is fetched.
+- `references/sequencer.md` — the REST calls underneath (`submitVote`, `getVoteStatus`, `getProcess`).
+- `references/errors.md` — "not accepting votes", out-of-range, proof failures.
+- `recipes/cast-vote.ts`.
+
+
+================================================================
+# Section: Ballot modes
+================================================================
+
+# `references/ballot-modes.md` — Configuring voting systems via the ballot mode
+
+Companion to the [[davinci-sdk]] skill. Davinci uses **one parametric ballot circuit** for every voting system. A ballot is a fixed-length array of integers (`choices`), and a small set of parameters — the **ballot mode** — constrains what's valid. Approval, ranking, quadratic, multiple-choice, budget, and plain single-choice are all special cases of the same parameters. This file maps each voting system to a concrete `BallotMode`.
+
+## The parameters (recap from `references/process.md`)
+
+```ts
+interface BallotMode {
+  numFields: number;     // number of fields in the ballot (= choices.length)
+  minValue: string;      // min value any field may take
+  maxValue: string;      // max value any field may take
+  uniqueValues: boolean; // if true, all field values must be distinct
+  costExponent: number;  // exponent e in the cost sum below
+  minValueSum: string;   // floor on Σ vᵢ^e
+  maxValueSum: string;   // ceiling on Σ vᵢ^e
+  groupSize?: number;    // optional; advanced grouping
+}
+```
+
+A ballot `v = [v₁ … v_numFields]` is **valid** iff:
+
+- `minValue ≤ vᵢ ≤ maxValue` for every field, and
+- if `uniqueValues`, all `vᵢ` are distinct, and
+- `minValueSum ≤ Σ vᵢ^costExponent ≤ maxValueSum`.
+
+Invalid ballots are rejected by the circuit and never reach the tally. Results are accumulated field-by-field: `result[i]` is the weighted sum of `vᵢ` across all voters. (Bounds are strings; remember `choices` are `number`s within `[minValue, maxValue]`.)
+
+## Encoding questions as fields
+
+There are two idioms:
+
+1. **One-hot options** (single/multiple/approval): one field per *option*; the value marks selection (`1`) or magnitude (weight / credits). Tally `result[i]` = total received by option *i*. This is what the SDK's examples use.
+2. **Positional** (ranking): one field per *rank slot* or per *option*, the value is the rank.
+
+For multi-question elections, concatenate the fields of each question and set `numFields` to the total.
+
+## Recipes per voting system
+
+### Single-choice, N options (one-hot)
+
+Exactly one option gets `1`, the rest `0`.
+
+```ts
+ballot = { numFields: N, minValue: "0", maxValue: "1",
+           uniqueValues: false, costExponent: 1, minValueSum: "1", maxValueSum: "1" };
+// pick option j:  choices = one-hot(N, j)   e.g. N=4, j=2 → [0,0,1,0]
+```
+
+`maxValueSum: "1"` forces exactly one selection. Use `minValueSum:"0"` to allow abstaining (all zeros).
+
+### Approval voting (pick any subset of N)
+
+Each option is binary; approve as many as you like.
+
+```ts
+ballot = { numFields: N, minValue: "0", maxValue: "1",
+           uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: String(N) };
+// approve options 0 and 2 of 4:  choices = [1,0,1,0]
+```
+
+Cap approvals with a smaller `maxValueSum` (e.g. "pick up to 3" → `maxValueSum: "3"`).
+
+### Multiple-choice (pick between min and max of N)
+
+```ts
+ballot = { numFields: N, minValue: "0", maxValue: "1", uniqueValues: false,
+           costExponent: 1, minValueSum: String(min), maxValueSum: String(max) };
+```
+
+### Ranked voting (rank N options 1..N)
+
+Fields hold a permutation of `1..N`; `uniqueValues` forbids ties.
+
+```ts
+ballot = { numFields: N, minValue: "1", maxValue: String(N), uniqueValues: true,
+           costExponent: 1, minValueSum: String(N*(N+1)/2), maxValueSum: String(N*(N+1)/2) };
+// rank: option0=2nd, option1=1st, option2=3rd → choices = [2,1,3]
+```
+
+The sum of `1..N` is fixed (`N(N+1)/2`), so pinning `min/maxValueSum` to it rejects partial rankings.
+
+### Quadratic voting (allocate credits, quadratic cost)
+
+`costExponent: 2` makes a field of value `v` cost `v²`; `maxValueSum` is the credit budget.
+
+```ts
+ballot = { numFields: N, minValue: "0", maxValue: String(maxCreditsPerOption),
+           uniqueValues: false, costExponent: 2, minValueSum: "0", maxValueSum: String(budget) };
+// spend on options: choices = [2,0,1,0] costs 2²+0+1²+0 = 5 credits
+```
+
+### Budget voting (allocate a budget linearly)
+
+Like quadratic but `costExponent: 1` — the budget is the sum of allocations.
+
+```ts
+ballot = { numFields: N, minValue: "0", maxValue: String(maxPerOption),
+           uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: String(budget) };
+```
+
+## Weighted voting
+
+When the census assigns per-voter weights, the voter's weight scales their contribution. The SDK examples model this by putting the **weight** (not `1`) into the chosen one-hot field, and sizing the bounds accordingly:
+
+```ts
+const maxValue = String(maxOption * maxWeight);   // headroom for weight-scaled values
+ballot = { numFields: N, minValue: "0", maxValue, uniqueValues: false,
+           costExponent: 1, minValueSum: "0", maxValueSum: maxValue };
+// a weight-5 voter picking option 1:  choices = [0,5,0,0]
+```
+
+The census provides the weight (`sdk.getAddressWeight`); the ballot/verifier circuits enforce that the value used matches the voter's authenticated weight. Size `maxValue`/`maxValueSum` to the largest weight you expect or the circuit will reject high-weight ballots.
+
+## Practical defaults
+
+- Start from single-choice or approval; reach for quadratic/ranked only when the user explicitly asks.
+- `numFields` must equal `choices.length` at vote time — keep them in lockstep.
+- Bounds are **strings**; `costExponent`/`numFields` are **numbers**.
+- The tally `result[i]` is per **field**. For one-hot encodings that's per option; map back to your `questions[].choices` by index.
+
+## Cross-references
+
+- `references/process.md` — where `ballot` lives in `ProcessConfig`; reading `result`.
+- `references/voting.md` — the `choices` array and range validation.
+- `references/protocol.md` — the formal ballot-protocol definition this is drawn from.
+
+
+================================================================
+# Section: Sequencer
+================================================================
+
+# `references/sequencer.md` — The sequencer REST client (`sdk.api.sequencer`)
+
+Companion to the [[davinci-sdk]] skill. The sequencer is the off-chain service that collects encrypted ballots, verifies their zk proofs, aggregates them, and drives the on-chain state. Its REST client is `VocdoniSequencerService`, reachable as **`sdk.api.sequencer`** (and `sdk.api.census` for the census service — see `references/census.md`). The `DavinciSDK` facade calls these for you; reach here when you need a lightweight, provider-free read or a call the facade doesn't wrap.
+
+```ts
+const seq = sdk.api.sequencer;   // VocdoniSequencerService, base URL = config.sequencerUrl
+```
+
+## Methods (exact signatures)
+
+```ts
+// Health / discovery
+seq.ping(): Promise<void>
+seq.getInfo(): Promise<InfoResponse>          // circuit URLs+hashes, networks, sequencer addr
+
+// Processes (lightweight, no provider needed)
+seq.getProcess(processId: string): Promise<GetProcessResponse>
+seq.getProcessKeys(processId: string): Promise<{ encryptionPubKey: [string, string] }>
+seq.listProcesses(chainId?: number): Promise<string[]>
+
+// Votes
+seq.submitVote(vote: VoteRequest): Promise<void>            // facade builds the VoteRequest
+seq.getVoteStatus(processId, voteId): Promise<{ status: VoteStatus }>
+seq.hasAddressVoted(processId, address): Promise<boolean>
+seq.isAddressAbleToVote(processId, address): Promise<boolean>
+seq.getAddressWeight(processId, address): Promise<string>   // "0" if not in census
+
+// Metadata (used by createProcess)
+seq.pushMetadata(metadata: ElectionMetadata): Promise<string>   // → content hash
+seq.getMetadata(hashOrUrl: string): Promise<ElectionMetadata>
+seq.getMetadataUrl(hash: string): string
+
+// Stats
+seq.getStats(): Promise<SequencerStats>
+seq.getWorkers(): Promise<WorkersResponse>
+```
+
+No network call on construction. The base URL comes from the SDK config.
+
+## `getInfo` — the source of circuit artifacts & chains
+
+```ts
+interface InfoResponse {
+  circuitUrl: string;        circuitHash: string;          // ballot-proof WASM
+  provingKeyUrl: string;     provingKeyHash: string;        // zkey
+  verificationKeyUrl: string; verificationKeyHash: string;  // vkey (JSON)
+  networks: Record<string /* chainId */, {
+    chainID: number;
+    shortName: string;
+    processRegistryContract: string;   // contract address per chain
+    processIDVersion: string;          // 4-byte version embedded in process IDs
+  }>;
+  sequencerAddress: string;
+}
+```
+
+`init()` uses `networks[chainId].processRegistryContract` to wire the contract service. The vote flow downloads `circuitUrl`/`provingKeyUrl`/`verificationKeyUrl` (multi-MB; the SDK caches them in memory) and verifies their SHA-256 against the `*Hash` fields when `verifyCircuitFiles` is on.
+
+## `getProcess` (REST) vs `sdk.getProcess` (contract)
+
+`seq.getProcess` is the **lightweight, provider-free** view straight from the sequencer; `sdk.getProcess` reads the contract + metadata and returns the richer `ProcessInfo` (and needs a provider). Use the REST one for status/readiness polling.
+
+```ts
+interface GetProcessResponse {
+  id: string;
+  status: number;                       // ProcessStatus as a number
+  organizationId: string;               // creator address
+  encryptionKey: { x: string; y: string };
+  stateRoot: string;
+  result: string[] | null;              // decimal strings once tallied
+  startTime: string;
+  duration: number;
+  metadataURI: string;
+  ballotMode: BallotMode;               // string-bounded shape
+  census: { censusOrigin: number; censusRoot: string; censusURI: string; /* … */ };
+  votersCount: string;
+  maxVoters: string;
+  overwrittenVotesCount: string;
+  isAcceptingVotes: boolean;            // ← poll this for readiness
+  sequencerStats: { /* per-process processing counters */ };
+}
+```
+
+The canonical readiness check before voting:
+
+```ts
+const p = await sdk.api.sequencer.getProcess(processId);
+if (p.isAcceptingVotes) { /* safe to submitVote */ }
+```
+
+## `VoteRequest` (the wire payload — the facade builds it)
+
+You normally never construct this; `sdk.submitVote` does. Shown for debugging:
+
+```ts
+interface VoteRequest {
+  processId: string;
+  censusProof?: CensusProof;   // only for CSP; omitted for Merkle
+  ballot: { curveType: string; ciphertexts: { c1: [string,string]; c2: [string,string] }[] };
+  ballotProof: { pi_a; pi_b; pi_c; protocol };   // groth16
+  ballotInputsHash: string;
+  address: string;
+  signature: string;           // EdDSA over the 32-byte voteId
+  voteId: string;
+}
+```
+
+`submitVote` returns `void`; the sequencer assigns/echoes the `voteId` you computed. Track the `voteId` from `sdk.submitVote`'s `VoteResult` and poll `getVoteStatus`.
+
+## Errors
+
+REST errors throw with a numeric `code` you can switch on. Common ones:
+
+- **`40007`** — process not found / not yet indexed (right after `createProcess`; retry with backoff).
+- **`40001`** — address not in census (surfaces from `hasAddressVoted`/`isAddressAbleToVote`).
+
+```ts
+try { await sdk.api.sequencer.getProcess(id); }
+catch (e: any) { if (e.code === 40007) { /* not indexed yet, wait & retry */ } else throw e; }
+```
+
+See `references/errors.md` for the full catalogue.
+
+## Gotchas
+
+- **Decimal strings, not numbers.** `votersCount`, `maxValue`, weights, results are strings over the wire — `BigInt(...)` / `Number(...)` before arithmetic.
+- **Encryption-key points are `[string,string]` / `{x,y}` decimal coordinate pairs** (BabyJubJub), not hex.
+- **The sequencer doesn't bundle circuits** — `getInfo()` gives URLs you download at proof time.
+- **`isAcceptingVotes` can be false right after creation** until the start time passes and the sequencer indexes the process.
+
+## Cross-references
+
+- `references/voting.md` — how these calls compose into the vote flow.
+- `references/census.md` — `sdk.api.census` (the other REST service).
+- `references/contracts.md` — the on-chain side (`sdk.processes`).
+
+
+================================================================
+# Section: Contracts
+================================================================
+
+# `references/contracts.md` — The raw contract service (`sdk.processes`)
+
+Companion to the [[davinci-sdk]] skill. This is an **escape hatch**. The `DavinciSDK` facade (`createProcess`, `endProcess`, `getProcess`, …) wraps the on-chain `ProcessRegistryService` and is what you should use. Drop here only when you need an event subscription, a raw read, or a method the facade doesn't expose.
+
+> There is **no** `OrganizationRegistryService`, `deployedAddresses`, `getAddresses`, or `AbiRegistry` in this SDK. The process creator is simply the signer's address (`ProcessInfo.creator` / `organizationId`). The `contracts` module exports exactly: `SmartContractService`, `ProcessRegistryService`, the contract types/enums, and the error classes.
+
+## Getting the service
+
+```ts
+const registry = sdk.processes;     // ProcessRegistryService, wired to your signer's chain
+```
+
+`sdk.processes` requires a signer **with a provider** and that the registry address is resolved (it is, after `init()` against a sequencer that knows your chain). Constructing one by hand:
+
+```ts
+import { ProcessRegistryService } from "@vocdoni/davinci-sdk";
+const registry = new ProcessRegistryService(contractAddress, signerOrProvider /* ContractRunner */);
+```
+
+## Transactions are async generators of `TxStatusEvent`
+
+Every write method returns `AsyncGenerator<TxStatusEvent<T>>`, not a receipt. Consume it, or unwrap with the static helper.
+
+```ts
+enum TxStatus { Pending = "pending", Completed = "completed", Reverted = "reverted", Failed = "failed" }
+type TxStatusEvent<T> =
+  | { status: TxStatus.Pending;   hash: string }
+  | { status: TxStatus.Completed; response: T }
+  | { status: TxStatus.Reverted;  reason?: string }
+  | { status: TxStatus.Failed;    error: Error };
+```
+
+```ts
+import { SmartContractService } from "@vocdoni/davinci-sdk";
+// unwrap a stream to a promise of the final response:
+await SmartContractService.executeTx(registry.setProcessStatus(processId, ProcessStatus.ENDED));
+```
+
+The facade's lifecycle methods are thin wrappers around exactly these streams.
+
+## `ProcessRegistryService` — methods
+
+### Writes (all → `AsyncGenerator<TxStatusEvent<{ success: true }>>`)
+
+```ts
+registry.newProcess(
+  status: ProcessStatus, startTime: number, duration: number, maxVoters: number,
+  ballotMode: BallotMode, census: CensusData, metadata: string, encryptionKey: EncryptionKey
+)
+registry.setProcessStatus(processID: string, newStatus: ProcessStatus)
+registry.setProcessCensus(processID: string, census: CensusData)
+registry.setProcessDuration(processID: string, duration: number)
+registry.setProcessMaxVoters(processID: string, maxVoters: number)
+// sequencer-only in practice (your app never calls these):
+registry.submitStateTransition(processID: string, proof: string, input: string)
+registry.setProcessResults(processID: string, proof: string, input: string)
+```
+
+> `newProcess` here takes **positional args** and the contract-shaped structs below. This is *not* the friendly `ProcessConfig` — use `sdk.createProcess` for that. The facade computes `startTime`/`duration`, fetches the `encryptionKey` from the sequencer, builds `CensusData`, uploads metadata, and calls this for you.
+
+### Reads
+
+```ts
+registry.getProcess(processID: string)                  // raw contract struct
+registry.getProcessCount(): Promise<number>
+registry.getChainID(): Promise<string>
+registry.getNextProcessId(organizationId: string): Promise<string>   // precompute the id
+registry.getProcessEndTime(processID: string): Promise<bigint>
+registry.getProcessNonce(address: string): Promise<bigint>
+registry.getRVerifier(): Promise<string>      // + getSTVerifier, *VKeyHash, getMaxCensusOrigin, getMaxStatus
+```
+
+### Events (the main reason to come here)
+
+```ts
+registry.onProcessCreated((processID, creator) => …)
+registry.onProcessStatusChanged((processID, oldStatus, newStatus) => …)         // bigints
+registry.onCensusUpdated((processID, root, uri) => …)
+registry.onProcessDurationChanged((processID, duration) => …)
+registry.onStateTransitioned((processID, sender, oldRoot, newRoot, voters, overwritten) => …)
+registry.onProcessResultsSet((processID, sender, result /* bigint[] */) => …)   // ← results landed
+registry.onProcessMaxVotersChanged((processID, maxVoters) => …)
+registry.removeAllListeners()
+registry.setEventPollingInterval(ms)   // default 5000
+```
+
+`onProcessResultsSet` is the clean way to know the tally is final (see `recipes/read-results.ts`).
+
+## Contract-shaped types
+
+These differ from the friendly SDK config; the facade converts at the boundary, coercing to `bigint` where the contract needs it.
+
+```ts
+// core types — what newProcess consumes
+interface BallotMode {           // SAME field names as ProcessConfig.ballot; bounds are decimal strings
+  numFields: number; groupSize?: number;
+  minValue: string; maxValue: string; uniqueValues: boolean;
+  costExponent: number; minValueSum: string; maxValueSum: string;
+}
+interface CensusData {
+  censusOrigin: CensusOrigin; censusRoot: string;
+  contractAddress?: string;      // set for Onchain censuses (else zero address)
+  censusURI: string; onchainAllowAnyValidRoot?: boolean;
+}
+interface EncryptionKey { x: string; y: string; }   // BabyJubJub pubkey (from sequencer getProcessKeys)
+```
+
+`ProcessStatus`:
+
+```ts
+enum ProcessStatus { READY = 0, ENDED = 1, CANCELED = 2, PAUSED = 3, RESULTS = 4 }
+```
+
+## `SmartContractService` (base class)
+
+```ts
+class SmartContractService {
+  static executeTx<T>(stream: AsyncGenerator<TxStatusEvent<T>>): Promise<T>   // unwrap → promise
+  setEventPollingInterval(ms: number): void
+}
+```
+
+`ProcessRegistryService` extends it; the streaming + event plumbing lives here.
+
+## Errors
+
+All contract-layer errors extend `ContractServiceError` (`.operation` field), e.g. `ProcessCreateError`, `ProcessStatusError`, `ProcessCensusError`, `CensusNotUpdatable`, `ProcessDurationError`, `ProcessStateTransitionError`, `ProcessResultError`. No numeric codes here (those are the sequencer's — see `references/sequencer.md`).
+
+## Cross-references
+
+- `references/process.md` — the facade methods you should normally use instead.
+- `references/sequencer.md` — the off-chain side and where `encryptionKey` comes from.
+- `references/errors.md` — `TxStatus.Reverted`/`Failed` handling and revert reasons.
+
+
+================================================================
+# Section: Errors
+================================================================
+
+# `references/errors.md` — Errors, reverts, and gotchas
+
+Companion to the [[davinci-sdk]] skill. Failure modes grouped by where they come from.
+
+## The two status enums — don't confuse them
+
+| Enum         | Where                                   | Values                                                        |
+| ------------ | --------------------------------------- | ------------------------------------------------------------- |
+| `TxStatus`   | on-chain txs (create/end/pause/…)       | `pending` · `completed` · `reverted` · `failed`               |
+| `VoteStatus` | a vote's processing journey             | `pending` · `verified` · `aggregated` · `processed` · `settled` · `error` |
+
+A `TxStatus.Reverted` is the contract rejecting a transaction; a `VoteStatus.Error` is the sequencer rejecting a ballot. They are unrelated code paths.
+
+## Setup / wiring
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| *"SDK must be initialized… Call sdk.init() first."* | You called a method before `await sdk.init()`. |
+| *"Provider required for blockchain operations…"* | An on-chain method (`createProcess`, `getProcess`, lifecycle) ran on a signer with **no provider**. Use `new Wallet(pk, provider)`. Voting doesn't need one. |
+| *"Census URL is required for voting."* | Voting on a Merkle census without `censusUrl` and without a custom `censusProviders`. Add `censusUrl` to the config. |
+| *"Census API URL is required to publish Merkle censuses…"* | `createProcess` tried to auto-publish an `OffchainCensus` but the SDK has no `censusUrl`. Add it, or pass a pre-published / on-chain / CSP census. |
+| *"Failed to fetch contract addresses from sequencer…"* | `init()` couldn't resolve the registry for your chain. The RPC chain isn't supported by this sequencer, or `sequencerUrl` is wrong. Check `getInfo().networks` vs `provider.getNetwork()`, or pass `addresses.processRegistry`. |
+| *"Signer chainId N is not supported by sequencer."* | RPC points at a chain the sequencer doesn't serve. Point RPC at the sequencer's chain. |
+
+## Process creation
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| *"maxVoters is required…"* | Census type needs an explicit `maxVoters` (Onchain/CSP/Published/manual, or an unpublished census). Only published `OffchainCensus`/`OffchainDynamicCensus` auto-derive it. See `references/census.md`. |
+| *"Cannot specify both 'duration' and 'endDate'."* | Pick one in `timing`. |
+| *"Must specify either 'duration' … or 'endDate'."* | `timing` had neither. |
+| *"Start date cannot be in the past."* | `startDate` is >30s before now. Default is now+60s; leave it unset for "start soon". |
+| `TxStatus.Reverted` from `createProcessStream` | On-chain rejection — wrong chain, insufficient gas, malformed struct, or not the organizer. Inspect `event.reason`. |
+| `TxStatus.Failed` | The tx couldn't be sent/mined (`event.error`) — usually RPC/gas/nonce. |
+
+## Sequencer (numeric error codes)
+
+REST errors throw with a numeric `.code`:
+
+| Code | Meaning | Typical handling |
+| ---- | ------- | ---------------- |
+| `40007` | Process not found / not yet indexed | Right after `createProcess` the sequencer hasn't indexed it. Poll `getProcess` with backoff until it appears and `isAcceptingVotes`. |
+| `40001` | Address not in census | Surface a clean "not eligible" message; pre-check with `isAddressAbleToVote`. |
+
+```ts
+try { const p = await sdk.api.sequencer.getProcess(id); }
+catch (e: any) {
+  if (e.code === 40007) { /* wait & retry */ }
+  else throw e;
+}
+```
+
+## Voting
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| *"Process is not currently accepting votes"* | Process isn't `READY`/started yet, is paused/ended, or not indexed. Poll `sdk.api.sequencer.getProcess(id).isAcceptingVotes` first. |
+| *"Choice X is out of range [min, max]"* | A `choices` entry violates `ballot.minValue`/`maxValue`. Also ensure `choices.length === ballot.numFields`. |
+| *"CSP voting requires a CSP census proof provider."* | Voting on a `CspCensus` without `censusProviders.csp`. Supply one (see `references/census.md`). |
+| *"Hash verification failed for circuit.wasm/…"* | A downloaded circuit artifact didn't match the sequencer's published hash (`verifyCircuitFiles`). Don't disable the check — investigate the sequencer/CDN. |
+| *"Generated proof is invalid"* | `verifyProof` caught a bad proof before submit — usually mismatched circuit artifacts or inputs. Confirm the SDK and sequencer agree on the chain/process. |
+| *"Vote did not reach status … within …ms"* | `waitForVoteStatus` timed out. Settlement can take minutes under load; raise the timeout (the SDK demo uses ~800_000ms). |
+| `VoteStatus.Error` | The sequencer rejected the ballot (bad proof/signature/eligibility). Re-check census membership and that the process is live. |
+
+## Reading results
+
+- `getProcess(...).result` is only meaningful once the process is `ENDED`/`RESULTS` **and** votes have settled and results are set on-chain. Before that it may be empty/zeros. Wait for `votersCount` to match expectations, `endProcess`, then await `sdk.processes.onProcessResultsSet` (see `recipes/read-results.ts`).
+- `result` is `bigint[]` per **ballot field**, not per question — map by index to your one-hot options.
+
+## Quick reference: handling a TxStatus stream safely
+
+```ts
+for await (const e of sdk.createProcessStream(cfg)) {
+  if (e.status === TxStatus.Completed) return e.response.processId;
+  if (e.status === TxStatus.Failed)    throw e.error;
+  if (e.status === TxStatus.Reverted)  throw new Error(`reverted: ${e.reason ?? "unknown"}`);
+}
+```
+
+## Cross-references
+
+- `references/setup.md` — the signer/provider rule behind half of these.
+- `references/voting.md`, `references/process.md`, `references/sequencer.md`.
+
+
+================================================================
+# Section: Protocol
+================================================================
+
+# `references/protocol.md` — How Davinci works (the *why* under the SDK)
+
+Companion to the [[davinci-sdk]] skill. This file explains the protocol the SDK calls into: the actors, the five phases, the cryptography, the census models, and the state tree. Read it when the question is conceptual ("why ElGamal", "what's a vote id", "how is the tally kept secret until the end", "what does a sequencer actually do") rather than "how do I call X". It is distilled from the Davinci whitepaper/spec.
+
+## One-paragraph intuition
+
+An election is governed by **Ethereum smart contracts** (the source of truth). Voters never put votes on-chain directly: they **encrypt** their ballot and send it, with **zero-knowledge proofs** of validity and eligibility, to a **sequencer**. Sequencers verify many ballots, **aggregate** them into a single proof, **re-encrypt** them (so voters can't later prove how they voted), and submit a **state-transition proof** on-chain. Individual votes stay encrypted the whole time; only the **final aggregated tally** is decrypted at the end by a threshold of **key wardens**. A results proof anchors the tally to the final state on-chain, where anyone can audit it.
+
+## Actors
+
+- **Organizer** — defines the election (ballot mode + census) and submits the create transaction. In the SDK this is just your `signer`; there is no separate "organization" object.
+- **Key wardens** — a decentralized group that runs a DKG to produce the **encryption public key** voters use, and later cooperate (threshold) to decrypt only the final tally. The SDK fetches the per-process encryption key from the sequencer (`getProcessKeys`); you don't manage wardens.
+- **Voters** — census members; they encrypt and submit ballots off-chain to a sequencer.
+- **Sequencers** — collect, verify, aggregate, re-encrypt, and commit votes to the shared state. You *talk to* a sequencer over REST; you don't run one.
+
+## The five phases (and where the SDK sits)
+
+1. **Election setup** — organizer commits ballot mode + census commitment on-chain. → `sdk.createProcess`.
+2. **Encryption-key generation** — wardens publish the process encryption key (DKG). → fetched for you during `createProcess`.
+3. **Voting period** — voters cast encrypted ballots; sequencers batch and commit them. Runs continuously until the deadline; voters may **overwrite** their vote (coercion resistance, last-vote-wins). → `sdk.submitVote` + `waitForVoteStatus`.
+4. **Tally decryption** — after the deadline, a threshold of wardens publish partial decryptions of the aggregated result (never the individual votes). → triggered by `sdk.endProcess`.
+5. **Finalization** — results + correctness proof are verified on-chain and recorded immutably. → readable via `sdk.getProcess(...).result` / the `onProcessResultsSet` event.
+
+This maps directly onto the SDK's two status enums: on-chain steps surface as `TxStatus`; a single vote's journey through the sequencer surfaces as `VoteStatus` (`pending → verified → aggregated → processed → settled`).
+
+## Cryptography in one screen
+
+- **Homomorphic encryption (ElGamal on BabyJubJub).** Ballots are encrypted to the process public key. Ciphertexts add up, so sequencers can accumulate the encrypted tally without decrypting anything. A ciphertext is a pair of curve points `{ c1, c2 }`, serialized as decimal `[string, string]` coordinate pairs.
+- **zk-SNARKs (Groth16, BN254 for the ballot circuit).** The voter's **ballot circuit** proves the encrypted ballot satisfies the ballot mode *and* that the vote id was derived correctly — without revealing the vote. The SDK runs this locally with `snarkjs`, using circuit artifacts downloaded from the sequencer's `/info`. Sequencers then run **verifier**, **aggregation**, **state-transition**, and **results** circuits.
+- **Re-encryption.** Sequencers re-randomize ciphertexts so a voter can no longer prove their original plaintext — mitigating vote-buying/coercion — without changing the tally.
+- **Signatures (EdDSA).** The voter signs the vote id to prove identity ownership. The SDK signs the 32-byte big-endian vote id for you.
+
+## Vote identifiers (not classic nullifiers)
+
+A **vote id** is `voteID = N + Hash(processID, address, k) mod N` (with `N = 2^63`), where `k` is fresh randomness. It lets a voter confirm their vote was included **without linking to the encrypted ballot**. Uniqueness isn't enforced by a nullifier set; instead the state-transition circuit only inserts a vote id into an *empty* leaf — on the rare collision the voter just resamples `k`. This is why `submitVote` accepts an optional `randomness` (the `k`) and why overwriting is natural: a re-vote writes the voter's reserved ballot slot again (last-vote-wins), updating the tally by subtracting the old contribution and adding the new.
+
+## Census models (the four `CensusOrigin`s)
+
+The contract stores three census parameters — `censusOrigin`, `censusURI`, `censusRoot` — interpreted per model:
+
+| `CensusOrigin`      | `censusRoot` means…           | Membership proof          | Updates during voting |
+| ------------------- | ----------------------------- | ------------------------- | --------------------- |
+| `OffchainStatic` (1)| Merkle root                   | Merkle path               | no                    |
+| `OffchainDynamic`(2)| latest Merkle root            | Merkle path               | append-only           |
+| `Onchain` (3)       | census contract address       | Merkle path vs on-chain roots | append-only       |
+| `CSP` (4)           | hash of the CSP public key    | CSP signature over `(processID, idx, address, weight)` | external |
+
+Each voter has an index `idx`, an `address`, and a `weight`. Weights enable weighted voting; by default everyone is weight 1. The SDK's census classes (`OffchainCensus`, …) are thin builders over this — see `references/census.md`.
+
+## State tree (why results appear when they do)
+
+Election state is one fixed-depth (D=64) sparse Merkle tree committed on-chain as `stateRoot`. Low indices hold config (process id, ballot mode, encryption key, the encrypted `resultsAdd`/`resultsSub` accumulators, census origin); a middle region holds each voter's reserved encrypted-ballot slot (derived from `idx`); the upper half holds vote ids. Each sequencer batch produces a new `stateRoot` proven by the state-transition circuit and verified on-chain. The tally stays encrypted in the accumulators until the process ends and wardens decrypt it — which is exactly why `getProcess(...).result` is only meaningful after `endProcess` and settlement.
+
+## What this means for SDK users
+
+- You can't read individual votes — by design. You read aggregate `result` after the election ends.
+- "It takes minutes to settle" is the batching + on-chain state transition, not a bug. Size your `waitForVoteStatus` timeouts accordingly.
+- Overwriting is supported and expected; don't treat `hasAddressVoted === true` as final.
+- The encryption key, circuits, and contract addresses all come from the sequencer's `/info` — keep the SDK pointed at a sequencer that matches your chain.
+
+## Cross-references
+
+- `references/ballot-modes.md` — the parametric ballot protocol in practice.
+- `references/voting.md` — the `VoteStatus` lifecycle that mirrors phases 3–5.
+- `references/sequencer.md` — `getInfo`, circuits, the encryption key.
+
+
+================================================================
+# Section: Recipes
+================================================================
+
+
+## Recipe: bootstrap.ts
+
+```typescript
+/**
+ * recipes/bootstrap.ts
+ *
+ * Wire up the Davinci SDK and verify the connection. This is the foundation
+ * every other recipe builds on.
+ *
+ *   - construct a DavinciSDK with an ethers v6 signer + sequencer/census URLs
+ *   - init() (mandatory — resolves contract addresses from the sequencer)
+ *   - sanity-check that the RPC chain matches what the sequencer serves
+ *
+ * Usage:
+ *   npm install @vocdoni/davinci-sdk ethers
+ *   # set env vars (see references/setup.md), then:
+ *   tsx bootstrap.ts
+ */
+
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK } from "@vocdoni/davinci-sdk";
+
+const SEQUENCER_API_URL = process.env.SEQUENCER_API_URL!; // e.g. https://sequencer-dev.davinci.vote
+const CENSUS_API_URL = process.env.CENSUS_API_URL!;       // e.g. https://c3-dev.davinci.vote
+const RPC_URL = process.env.RPC_URL!;
+const PRIVATE_KEY = process.env.PRIVATE_KEY!;
+
+async function main() {
+  // An organizer signer needs a provider (on-chain ops). A voting-only signer would not.
+  const signer = new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL));
+
+  const sdk = new DavinciSDK({
+    signer,
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL, // only needed to publish Merkle censuses / fetch census proofs
+  });
+
+  await sdk.init(); // REQUIRED before any other method
+  console.log("SDK initialized");
+
+  // Sanity check: does the sequencer serve our RPC's chain?
+  const info = await sdk.api.sequencer.getInfo();
+  const net = await signer.provider!.getNetwork();
+  const chainId = Number(net.chainId);
+
+  const supported = Object.values(info.networks).some((n) => n.chainID === chainId);
+  if (!supported) {
+    const available = Object.values(info.networks)
+      .map((n) => `${n.shortName}(${n.chainID})`)
+      .join(", ");
+    throw new Error(`RPC chain ${chainId} not served by this sequencer. Available: ${available}`);
+  }
+
+  console.log(`Connected. chainId=${chainId}, sequencer=${info.sequencerAddress}`);
+  console.log(`Ballot-proof circuit: ${info.circuitUrl}`);
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
+
+## Recipe: create-process.ts
+
+```typescript
+/**
+ * recipes/create-process.ts
+ *
+ * Create a voting process with a locally-built Merkle census, watching the
+ * on-chain transaction in real time.
+ *
+ *   - build an OffchainCensus (auto-published by createProcess)
+ *   - one single-choice question with 4 options, encoded as 4 one-hot fields
+ *   - stream TxStatus events so a UI can show progress
+ *
+ * The organizer signer MUST have a provider (process creation is on-chain).
+ *
+ * Usage:
+ *   tsx create-process.ts
+ */
+
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, OffchainCensus, TxStatus } from "@vocdoni/davinci-sdk";
+
+const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+
+async function main() {
+  const sdk = new DavinciSDK({
+    signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL, // required to publish the Merkle census
+  });
+  await sdk.init();
+
+  // 1. Census of eligible voters. Plain addresses → weight 1 each.
+  //    (For weighted voting use census.add({ key, weight }).)
+  const census = new OffchainCensus();
+  census.add([
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+    "0x3333333333333333333333333333333333333333",
+  ]);
+
+  // 2. Process config. One question, 4 options → numFields: 4 (one-hot).
+  //    Single-choice: each field 0..1, exactly one selected (maxValueSum "1").
+  const config = {
+    title: "Favourite colour",
+    description: "Pick one",
+    census, // auto-published; maxVoters defaults to participant count
+    ballot: {
+      numFields: 4,
+      minValue: "0",
+      maxValue: "1",
+      uniqueValues: false,
+      costExponent: 1,
+      minValueSum: "1",
+      maxValueSum: "1",
+    },
+    timing: {
+      startDate: new Date(Date.now() + 60 * 1000), // start in ~1 minute
+      duration: 3600 * 8, // 8 hours
+    },
+    questions: [
+      {
+        title: "What is your favourite colour?",
+        choices: [
+          { title: "Red", value: 0 },
+          { title: "Blue", value: 1 },
+          { title: "Green", value: 2 },
+          { title: "Yellow", value: 3 },
+        ],
+      },
+    ],
+  };
+
+  // 3. Stream the creation so we can react to each on-chain state.
+  let processId = "";
+  for await (const event of sdk.createProcessStream(config)) {
+    switch (event.status) {
+      case TxStatus.Pending:
+        console.log("Tx submitted:", event.hash);
+        break;
+      case TxStatus.Completed:
+        processId = event.response.processId;
+        console.log("Process created:", processId);
+        console.log("Tx:", event.response.transactionHash);
+        break;
+      case TxStatus.Failed:
+        throw event.error;
+      case TxStatus.Reverted:
+        throw new Error(`Reverted: ${event.reason ?? "unknown"}`);
+    }
+  }
+
+  // Simpler, non-streaming equivalent:
+  //   const { processId } = await sdk.createProcess(config);
+
+  console.log("Done. processId =", processId);
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
+
+## Recipe: cast-vote.ts
+
+```typescript
+/**
+ * recipes/cast-vote.ts
+ *
+ * Cast a single encrypted vote and wait for it to settle.
+ *
+ *   - construct a DavinciSDK as the VOTER (their wallet; no provider needed)
+ *   - confirm the process is accepting votes
+ *   - submitVote with a one-hot choices array
+ *   - waitForVoteStatus(Settled)
+ *
+ * The SDK does all the cryptography (ElGamal encrypt → zk-SNARK proof → sign).
+ * You only ever supply `choices`.
+ *
+ * Usage:
+ *   tsx cast-vote.ts <processId>
+ */
+
+import { Wallet } from "ethers";
+import { DavinciSDK, VoteStatus } from "@vocdoni/davinci-sdk";
+
+const { SEQUENCER_API_URL, CENSUS_API_URL, VOTER_PRIVATE_KEY } = process.env as Record<string, string>;
+const processId = process.argv[2];
+
+async function main() {
+  if (!processId) throw new Error("usage: tsx cast-vote.ts <processId>");
+
+  // Voter SDK — a bare Wallet is fine; voting never touches the chain directly.
+  const voter = new DavinciSDK({
+    signer: new Wallet(VOTER_PRIVATE_KEY),
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL, // lets the SDK fetch this voter's census proof/weight
+  });
+  await voter.init();
+
+  const address = await new Wallet(VOTER_PRIVATE_KEY).getAddress();
+
+  // Optional pre-checks (no provider needed).
+  if (!(await voter.isAddressAbleToVote(processId, address))) {
+    throw new Error(`${address} is not in this process's census`);
+  }
+
+  // Wait until the sequencer reports the process is accepting votes.
+  for (let i = 0; i < 30; i++) {
+    try {
+      const p = await voter.api.sequencer.getProcess(processId);
+      if (p.isAcceptingVotes) break;
+    } catch (e: any) {
+      if (e.code !== 40007) throw e; // 40007 = not indexed yet
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+
+  // Submit. choices.length MUST equal the process's ballot.numFields.
+  // Here: 4 one-hot fields, voting for option 1 ("Blue").
+  const result = await voter.submitVote({
+    processId,
+    choices: [0, 1, 0, 0],
+  });
+  console.log("Vote submitted:", result.voteId, "status:", result.status);
+
+  // The vote only counts once settled — settlement can take minutes.
+  const final = await voter.waitForVoteStatus(
+    processId,
+    result.voteId,
+    VoteStatus.Settled,
+    800_000, // generous timeout
+    5_000,
+  );
+  console.log("Final status:", final.status);
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
+
+## Recipe: full-election.ts
+
+```typescript
+/**
+ * recipes/full-election.ts
+ *
+ * The complete Davinci flow in one file, condensed from the SDK's own demo:
+ *
+ *   1. organizer SDK (signer WITH provider)
+ *   2. build an OffchainCensus of N random voters
+ *   3. createProcess (one 4-option question)
+ *   4. wait until the process accepts votes
+ *   5. each voter votes from their OWN SDK (signer, no provider)
+ *   6. wait for every vote to settle
+ *   7. end the process and print the tally
+ *
+ * This is the spine; every variant (CSP, on-chain, weighted, multi-question)
+ * is this shape with a different census and/or ballot mode. See the other
+ * recipes and references/ for those.
+ *
+ * Usage:
+ *   tsx full-election.ts
+ */
+
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, OffchainCensus, VoteStatus, TxStatus } from "@vocdoni/davinci-sdk";
+
+const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+const NUM_VOTERS = 3;
+
+function organizerConfig() {
+  return {
+    signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL,
+  };
+}
+function voterConfig(pk: string) {
+  // Voting needs no provider — a bare Wallet is enough.
+  return { signer: new Wallet(pk), sequencerUrl: SEQUENCER_API_URL, censusUrl: CENSUS_API_URL };
+}
+
+async function main() {
+  // 1. Organizer
+  const sdk = new DavinciSDK(organizerConfig());
+  await sdk.init();
+
+  // 2. Census of random voters (weight 1 each)
+  const voters = Array.from({ length: NUM_VOTERS }, () => Wallet.createRandom());
+  const census = new OffchainCensus();
+  census.add(voters.map((v) => v.address));
+
+  // 3. Create the process (single question, 4 one-hot options)
+  let processId = "";
+  for await (const e of sdk.createProcessStream({
+    title: "Favourite colour " + Date.now(),
+    description: "Demo election",
+    census,
+    ballot: {
+      numFields: 4, minValue: "0", maxValue: "1",
+      uniqueValues: false, costExponent: 1, minValueSum: "1", maxValueSum: "1",
+    },
+    timing: { startDate: new Date(Date.now() + 60_000), duration: 3600 * 8 },
+    questions: [{
+      title: "What is your favourite colour?",
+      choices: [
+        { title: "Red", value: 0 }, { title: "Blue", value: 1 },
+        { title: "Green", value: 2 }, { title: "Yellow", value: 3 },
+      ],
+    }],
+  })) {
+    if (e.status === TxStatus.Completed) processId = e.response.processId;
+    else if (e.status === TxStatus.Failed) throw e.error;
+    else if (e.status === TxStatus.Reverted) throw new Error(`reverted: ${e.reason}`);
+  }
+  console.log("processId:", processId);
+
+  // 4. Wait until the sequencer reports the process is accepting votes
+  await new Promise((r) => setTimeout(r, 10_000));
+  for (let i = 0; i < 30; i++) {
+    try {
+      if ((await sdk.api.sequencer.getProcess(processId)).isAcceptingVotes) break;
+    } catch (e: any) {
+      if (e.code !== 40007) throw e; // not indexed yet
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+  console.log("accepting votes");
+
+  // 5. Each voter votes from their own SDK. Random one-hot choice.
+  const voteIds: string[] = [];
+  for (const v of voters) {
+    const voterSdk = new DavinciSDK(voterConfig(v.privateKey));
+    await voterSdk.init();
+    const choice = Math.floor(Math.random() * 4);
+    const choices = [0, 0, 0, 0];
+    choices[choice] = 1;
+    const { voteId } = await voterSdk.submitVote({ processId, choices });
+    voteIds.push(voteId);
+    console.log(`voter ${v.address} → option ${choice}, voteId ${voteId}`);
+  }
+
+  // 6. Wait for all votes to settle (settlement can take minutes)
+  await Promise.all(
+    voteIds.map((voteId) =>
+      sdk.waitForVoteStatus(processId, voteId, VoteStatus.Settled, 800_000, 5_000),
+    ),
+  );
+  console.log("all votes settled");
+
+  // 7. End the process and read the tally
+  await sdk.endProcess(processId);
+  await new Promise<void>((resolve) =>
+    sdk.processes.onProcessResultsSet((id) => {
+      if (id.toLowerCase() === processId.toLowerCase()) resolve();
+    }),
+  );
+  const info = await sdk.getProcess(processId);
+  console.log("\nResults:");
+  info.questions[0].choices.forEach((c, i) =>
+    console.log(`  ${c.title}: ${info.result[i]?.toString() ?? "0"}`),
+  );
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
+
+## Recipe: read-results.ts
+
+```typescript
+/**
+ * recipes/read-results.ts
+ *
+ * End a process and read its final tally.
+ *
+ *   - (optionally) wait until all expected votes are counted on-chain
+ *   - endProcess (triggers tally decryption + on-chain results)
+ *   - await the ProcessResultsSet contract event
+ *   - print result[] mapped back to the question's options
+ *
+ * Needs an organizer signer WITH a provider (reading the contract + ending the
+ * process are on-chain operations).
+ *
+ * Usage:
+ *   tsx read-results.ts <processId> [expectedVoteCount]
+ */
+
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, TxStatus } from "@vocdoni/davinci-sdk";
+
+const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+const processId = process.argv[2];
+const expected = process.argv[3] ? Number(process.argv[3]) : undefined;
+
+async function main() {
+  if (!processId) throw new Error("usage: tsx read-results.ts <processId> [expectedVoteCount]");
+
+  const sdk = new DavinciSDK({
+    signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL,
+  });
+  await sdk.init();
+
+  // 1. Optionally wait for the on-chain vote count to reach the expected number.
+  if (expected !== undefined) {
+    while (true) {
+      const info = await sdk.getProcess(processId);
+      if (Number(info.votersCount) >= expected) break;
+      console.log(`counted ${info.votersCount}/${expected}…`);
+      await new Promise((r) => setTimeout(r, 10_000));
+    }
+  }
+
+  // 2. End the process (stops voting; triggers tally). Stream the tx.
+  for await (const event of sdk.endProcessStream(processId)) {
+    if (event.status === TxStatus.Completed) console.log("Process ended");
+    else if (event.status === TxStatus.Failed) throw event.error;
+    else if (event.status === TxStatus.Reverted) throw new Error(`Reverted: ${event.reason}`);
+  }
+
+  // 3. Wait for results to be set on-chain (escape-hatch contract event).
+  await new Promise<void>((resolve) => {
+    sdk.processes.onProcessResultsSet((id, _sender, _result) => {
+      if (id.toLowerCase() === processId.toLowerCase()) resolve();
+    });
+  });
+
+  // 4. Read and display the tally. result[] is one bigint per ballot field.
+  const info = await sdk.getProcess(processId);
+  console.log(`\nResults for: ${info.title}`);
+  info.questions[0].choices.forEach((choice, i) => {
+    console.log(`  ${choice.title}: ${info.result[i]?.toString() ?? "0"}`);
+  });
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
+
+## Recipe: token-census.ts
+
+```typescript
+/**
+ * recipes/token-census.ts
+ *
+ * Create a process whose electorate is an on-chain token / contract census
+ * (e.g. ERC20 / ERC721 holders), via OnchainCensus.
+ *
+ * Unlike a Merkle census, an OnchainCensus is NOT published — it points at an
+ * existing contract plus an indexer/subgraph URI the sequencer reads holders
+ * from. Because of that:
+ *   - maxVoters is REQUIRED at process creation
+ *   - after creation, the sequencer needs a moment to import voter weights;
+ *     poll getAddressWeight until your voters appear
+ *
+ * This recipe assumes the token/census contract and its indexer already exist.
+ * (Standing up the indexer for a freshly deployed contract is environment-
+ * specific — see the SDK's examples/script/src/onchain.ts.)
+ *
+ * Usage:
+ *   tsx token-census.ts
+ */
+
+import { JsonRpcProvider, Wallet } from "ethers";
+import { DavinciSDK, OnchainCensus, TxStatus } from "@vocdoni/davinci-sdk";
+
+const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+
+// The token/census contract and the indexer endpoint that serves its holders.
+const TOKEN_CONTRACT = process.env.TOKEN_CONTRACT!; // 0x… ERC20/721 or census contract
+// Indexer URI. OnchainCensus accepts a graphql:// or https:// endpoint the
+// sequencer queries for membership/weights, e.g.:
+//   graphql://indexer.example/<chainId>/<contractAddress>/graphql
+const CENSUS_URI = process.env.ONCHAIN_CENSUS_URI!;
+const MAX_VOTERS = Number(process.env.ONCHAIN_MAX_VOTERS ?? "10000");
+
+async function main() {
+  const sdk = new DavinciSDK({
+    signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
+    sequencerUrl: SEQUENCER_API_URL,
+    censusUrl: CENSUS_API_URL,
+  });
+  await sdk.init();
+
+  // 1. On-chain census — references existing chain data; nothing to publish.
+  const census = new OnchainCensus(TOKEN_CONTRACT, CENSUS_URI);
+
+  // 2. Create the process. maxVoters is REQUIRED for on-chain censuses.
+  const { processId } = await sdk.createProcess({
+    title: "Token-holder governance",
+    description: "One question, weighted by token balance",
+    census,
+    maxVoters: MAX_VOTERS, // REQUIRED
+    ballot: {
+      numFields: 4, // 4 one-hot options
+      minValue: "0",
+      // headroom for weighted voting: a holder puts their weight in the chosen field
+      maxValue: "1000000",
+      uniqueValues: false,
+      costExponent: 1,
+      minValueSum: "0",
+      maxValueSum: "1000000",
+    },
+    timing: { startDate: new Date(Date.now() + 60_000), duration: 3600 * 24 },
+    questions: [
+      {
+        title: "Which proposal?",
+        choices: [
+          { title: "A", value: 0 },
+          { title: "B", value: 1 },
+          { title: "C", value: 2 },
+          { title: "D", value: 3 },
+        ],
+      },
+    ],
+  });
+  console.log("Process created:", processId);
+
+  // 3. Wait for the process to accept votes AND for the sequencer to import
+  //    on-chain weights (token censuses are imported asynchronously).
+  for (let i = 0; i < 60; i++) {
+    try {
+      const p = await sdk.api.sequencer.getProcess(processId);
+      if (p.isAcceptingVotes) {
+        console.log("Process is accepting votes");
+        break;
+      }
+    } catch (e: any) {
+      if (e.code !== 40007) throw e;
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+
+  // Example: check a specific holder's imported weight before they vote.
+  const holder = process.env.HOLDER_ADDRESS;
+  if (holder) {
+    const weight = await sdk.getAddressWeight(processId, holder);
+    console.log(`${holder} weight = ${weight}`); // "0" until imported / if not a holder
+  }
+
+  // Voters then vote exactly as in cast-vote.ts. For weighted voting, put the
+  // voter's weight (from getAddressWeight) into the chosen one-hot field:
+  //   const w = Number(await voter.getAddressWeight(processId, addr));
+  //   await voter.submitVote({ processId, choices: [0, w, 0, 0] }); // weight on option 1
+}
+
+main().then(
+  () => process.exit(0),
+  (err) => {
+    console.error(err);
+    process.exit(1);
+  },
+);
+```
+
