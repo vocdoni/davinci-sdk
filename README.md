@@ -401,6 +401,15 @@ Common error categories:
 
 A runnable end-to-end script lives under [`examples/script/`](examples/script). It exercises the full lifecycle — process creation, vote submission, and settlement — against a configurable sequencer and census service.
 
+## AI-assisted integration
+
+Machine-readable documentation for AI coding tools (Cursor, Claude Code, Cline, ChatGPT, custom agents) lives at the repo root as `llms.txt` (index) and `llms-full.txt` (full bundle). Configure your tool to load the raw URL:
+
+- https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms.txt
+- https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms-full.txt
+
+Browsable source for the same content is under [`docs/ai/`](docs/ai). For a Claude Code plugin installation, see the [`@vocdoni/skills`](https://github.com/vocdoni/skills) marketplace.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, branching, and PR conventions.
@@ -426,4 +435,5 @@ AGPL-3.0 is a copyleft license: derivative works and network-deployed applicatio
 - Discord — https://chat.vocdoni.io
 - Telegram — https://t.me/vocdoni_community
 - Twitter — https://twitter.com/vocdoni
+- AI documentation — [`docs/ai/`](docs/ai)
 - Website — https://vocdoni.io
