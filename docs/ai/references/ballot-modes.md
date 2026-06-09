@@ -2,6 +2,28 @@
 
 Companion to the [[davinci-sdk]] skill. Davinci uses **one parametric ballot circuit** for every voting system. A ballot is a fixed-length array of integers (`choices`), and a small set of parameters — the **ballot mode** — constrains what's valid. Approval, ranking, quadratic, multiple-choice, budget, and plain single-choice are all special cases of the same parameters. This file maps each voting system to a concrete `BallotMode`.
 
+## Preset election types (v1.0.0+)
+
+Most voting modes don't require manually computing a `BallotMode`. Pass an `electionPreset` discriminated union on `ProcessConfig` instead:
+
+```typescript
+import type { ElectionPreset } from '@vocdoni/davinci-sdk';
+
+const preset: ElectionPreset = { type: 'quadratic', budget: 100 };
+
+await sdk.createProcess({
+  electionPreset: preset,
+  questions: [{ title: 'Q', choices: [/* ... */] }],
+  /* census, timing, ... */
+});
+```
+
+Six presets are available — `single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic` — each derived from the DAVINCI ballot protocol. The SDK uses `questions[0].choices.length` as the field count. Raw `BallotMode` remains supported as the escape hatch; `ballot` and `electionPreset` are mutually exclusive.
+
+For the exact `BallotMode` mapping per preset, see the JSDoc on `ElectionPreset` in `src/core/types/ballot.ts`, or read the README "Election presets" section.
+
+---
+
 ## The parameters (recap from `references/process.md`)
 
 ```ts

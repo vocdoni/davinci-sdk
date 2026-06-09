@@ -141,6 +141,27 @@ console.log('Process ID:', result.processId);
 
 `OffchainCensus` is published automatically as part of `createProcess`, and `maxVoters` is set to the participant count. For other census types, see Advanced configuration.
 
+### Election presets
+
+For common voting modes, pass an `electionPreset` instead of a raw `BallotMode`. The SDK derives the ballot mode using `questions[0].choices.length` as the field count. `ballot` and `electionPreset` are mutually exclusive — provide one or the other.
+
+```typescript
+await sdk.createProcess({
+  electionPreset: { type: 'rating', maxValue: 5 },
+  questions: [{
+    title: 'Rate each candidate',
+    choices: [
+      { title: 'Alice', value: 0 },
+      { title: 'Bob',   value: 1 },
+      { title: 'Carol', value: 2 },
+    ],
+  }],
+  /* census, timing, ... */
+});
+```
+
+The six supported presets — `single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic` — follow the canonical DAVINCI ballot protocol. Each variant carries its own typed options (e.g. `rating` requires `maxValue`, `quadratic` requires `budget`). See the JSDoc on `ElectionPreset` for the exact parameter mapping per type.
+
 ### `createProcessStream(config)`
 
 Returns an async iterator of `TxStatus` events for the underlying transaction. Use this in UI flows that need to display submission, mining, and revert states.

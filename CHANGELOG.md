@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `electionPreset` field on `ProcessConfig` accepting a discriminated union of six canonical voting modes (`single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic`). Mutually exclusive with the existing `ballot` field, which remains supported as the raw-mode escape hatch.
+- `resolveElectionPreset(preset, questions)` exported for callers that need to compute a `BallotMode` outside of `createProcess`.
+
 ## [1.0.0] - 2026-06-02
 
 ### Changed
