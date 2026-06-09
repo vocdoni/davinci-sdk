@@ -2,6 +2,7 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
 import { BallotMode, CensusData, EncryptionKey } from '../types';
+import { ElectionPreset, resolveElectionPreset } from '../types/ballot';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
@@ -68,8 +69,26 @@ interface BaseProcessConfig {
     uri: string;
   };
 
-  /** Ballot configuration */
-  ballot: BallotMode;
+  /**
+   * Ballot configuration. Mutually exclusive with `electionPreset`:
+   * provide one or the other.
+   *
+   * For common voting modes, prefer `electionPreset` — it derives the
+   * raw `BallotMode` from a friendly typed shape. Use this field when
+   * you need to express a ballot that does not map to a preset.
+   */
+  ballot?: BallotMode;
+
+  /**
+   * Election preset configuration (alternative to `ballot`).
+   *
+   * Pass a discriminated value like `{ type: 'rating', maxValue: 5 }`
+   * and the SDK resolves it to a `BallotMode` using
+   * `questions[0].choices.length` as `numFields`. Mutually exclusive
+   * with `ballot`. Requires the metadata-driven config variant
+   * (`questions` must be present); not usable with `metadataUri`.
+   */
+  electionPreset?: ElectionPreset;
 
   /** Process timing - use either duration-based or date-based configuration */
   timing: {
@@ -344,7 +363,7 @@ export class ProcessOrchestrationService {
    *   title: "My Election",
    *   description: "A simple election",
    *   census: { ... },
-   *   ballot: { ... },
+   *   electionPreset: { type: 'single_choice' },
    *   timing: { ... },
    *   questions: [ ... ]
    * });
@@ -463,8 +482,8 @@ export class ProcessOrchestrationService {
     const censusConfig = await this.handleCensus(config.census);
     const censusRoot = censusConfig.root;
 
-    // 4. Use ballot mode configuration directly
-    const ballotMode = config.ballot;
+    // 4. Resolve ballot mode — either raw `ballot` or `electionPreset`
+    const ballotMode = this.resolveBallotConfig(config);
 
     // 5. Handle metadata - either use provided URI or create and upload new metadata
     let metadataUri: string;
@@ -529,6 +548,36 @@ export class ProcessOrchestrationService {
       sequencerResult,
       census,
     };
+  }
+
+  /**
+   * Resolve the ballot mode for a process config. Enforces mutual
+   * exclusivity between `ballot` and `electionPreset`, and resolves the
+   * preset into a raw `BallotMode` when given.
+   *
+   * @private
+   */
+  private resolveBallotConfig(config: ProcessConfig): BallotMode {
+    const hasBallot = config.ballot !== undefined;
+    const hasPreset = config.electionPreset !== undefined;
+
+    if (hasBallot && hasPreset) {
+      throw new Error('Provide ballot OR electionPreset, not both');
+    }
+    if (!hasBallot && !hasPreset) {
+      throw new Error('Either ballot or electionPreset is required');
+    }
+
+    if (hasPreset) {
+      if (!('questions' in config)) {
+        throw new Error(
+          'electionPreset requires `questions`; use `ballot` directly for metadataUri configs',
+        );
+      }
+      return resolveElectionPreset(config.electionPreset!, config.questions);
+    }
+
+    return config.ballot!;
   }
 
   /**
