@@ -1600,4 +1600,190 @@ describe('Simple Process Creation Integration', () => {
     expect(process.questions[0].title).toBe('Do you approve this test?');
     expect(process.questions[0].description).toBe('Test question for metadataUri');
   });
+
+  describe('electionPreset round-trip', () => {
+    type PresetCase = {
+      label: string;
+      preset: import('../../../src/core/types/ballot').ElectionPreset;
+      choices: number;
+      expected: {
+        minValue: string;
+        maxValue: string;
+        uniqueValues: boolean;
+        costExponent: number;
+        minValueSum: string;
+        maxValueSum: string;
+      };
+    };
+
+    const cases: PresetCase[] = [
+      {
+        label: 'single_choice',
+        preset: { type: 'single_choice' },
+        choices: 3,
+        expected: {
+          minValue: '0',
+          maxValue: '1',
+          uniqueValues: false,
+          costExponent: 1,
+          minValueSum: '1',
+          maxValueSum: '1',
+        },
+      },
+      {
+        label: 'multiple_choice (max=2)',
+        preset: { type: 'multiple_choice', maxSelections: 2 },
+        choices: 4,
+        expected: {
+          minValue: '0',
+          maxValue: '1',
+          uniqueValues: false,
+          costExponent: 1,
+          minValueSum: '0',
+          maxValueSum: '2',
+        },
+      },
+      {
+        label: 'approval',
+        preset: { type: 'approval' },
+        choices: 3,
+        expected: {
+          minValue: '0',
+          maxValue: '1',
+          uniqueValues: false,
+          costExponent: 1,
+          minValueSum: '0',
+          maxValueSum: '3',
+        },
+      },
+      {
+        label: 'rating (max=5)',
+        preset: { type: 'rating', maxValue: 5 },
+        choices: 3,
+        expected: {
+          minValue: '0',
+          maxValue: '5',
+          uniqueValues: false,
+          costExponent: 1,
+          minValueSum: '0',
+          maxValueSum: '15',
+        },
+      },
+      {
+        label: 'ranking',
+        preset: { type: 'ranking' },
+        choices: 3,
+        expected: {
+          minValue: '1',
+          maxValue: '3',
+          uniqueValues: true,
+          costExponent: 1,
+          minValueSum: '6',
+          maxValueSum: '6',
+        },
+      },
+      {
+        label: 'quadratic (budget=100)',
+        preset: { type: 'quadratic', budget: 100 },
+        choices: 3,
+        expected: {
+          minValue: '0',
+          maxValue: '100',
+          uniqueValues: false,
+          costExponent: 2,
+          minValueSum: '0',
+          maxValueSum: '100',
+        },
+      },
+    ];
+
+    for (const c of cases) {
+      it(`creates and round-trips ${c.label}`, async () => {
+        const census = new OffchainCensus();
+        const voterAddrs = Array.from({ length: 3 }, () => randomHex(20));
+        census.add(voterAddrs);
+
+        const { processId } = await sdk.createProcess({
+          title: `preset ${c.label}`,
+          description: 'preset round-trip test',
+          census,
+          timing: {
+            startDate: new Date(Date.now() + 60_000),
+            duration: 3600,
+          },
+          electionPreset: c.preset,
+          questions: [
+            {
+              title: 'Pick one',
+              choices: Array.from({ length: c.choices }, (_, i) => ({
+                title: `Choice ${i}`,
+                value: i,
+              })),
+            },
+          ],
+        });
+
+        const info = await sdk.getProcess(processId);
+        expect(info.ballot.numFields).toBe(c.choices);
+        expect(info.ballot.minValue).toBe(c.expected.minValue);
+        expect(info.ballot.maxValue).toBe(c.expected.maxValue);
+        expect(info.ballot.uniqueValues).toBe(c.expected.uniqueValues);
+        expect(info.ballot.costExponent).toBe(c.expected.costExponent);
+        expect(info.ballot.minValueSum).toBe(c.expected.minValueSum);
+        expect(info.ballot.maxValueSum).toBe(c.expected.maxValueSum);
+      }, 180_000);
+    }
+  });
+
+  describe('electionPreset validation', () => {
+    it('rejects providing both ballot and electionPreset', async () => {
+      const census = new OffchainCensus();
+      census.add([randomHex(20)]);
+
+      await expect(
+        sdk.createProcess({
+          title: 'invalid both',
+          description: 'should reject',
+          census,
+          timing: {
+            startDate: new Date(Date.now() + 60_000),
+            duration: 3600,
+          },
+          ballot: {
+            numFields: 1,
+            maxValue: '1',
+            minValue: '0',
+            uniqueValues: false,
+            costExponent: 1,
+            maxValueSum: '1',
+            minValueSum: '0',
+          },
+          electionPreset: { type: 'approval' },
+          questions: [
+            { title: 'Q', choices: [{ title: 'c', value: 0 }] },
+          ],
+        }),
+      ).rejects.toThrow(/Provide ballot OR electionPreset, not both/);
+    });
+
+    it('rejects providing neither ballot nor electionPreset', async () => {
+      const census = new OffchainCensus();
+      census.add([randomHex(20)]);
+
+      await expect(
+        sdk.createProcess({
+          title: 'invalid neither',
+          description: 'should reject',
+          census,
+          timing: {
+            startDate: new Date(Date.now() + 60_000),
+            duration: 3600,
+          },
+          questions: [
+            { title: 'Q', choices: [{ title: 'c', value: 0 }] },
+          ],
+        } as unknown as ProcessConfig),
+      ).rejects.toThrow(/Either ballot or electionPreset is required/);
+    });
+  });
 });
