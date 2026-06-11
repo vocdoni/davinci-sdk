@@ -2,7 +2,7 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
 import { BallotMode, CensusData, EncryptionKey } from '../types';
-import { ElectionPreset, resolveElectionPreset } from '../types/ballot';
+import { ElectionPreset, parseElectionPresetFromMetadata, resolveElectionPreset } from '../types/ballot';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
@@ -208,6 +208,15 @@ export interface ProcessInfo extends BaseProcess {
 
   /** Raw contract data (for advanced users) */
   raw?: any;
+
+  /**
+   * Election preset used to create the process, recovered from
+   * off-chain metadata. Absent when the process was created with a
+   * raw `BallotMode`, when metadata is unavailable, or when the
+   * stored value doesn't match a recognized preset shape. The raw
+   * `ballot: BallotMode` field is always present regardless.
+   */
+  electionPreset?: ElectionPreset;
 }
 
 /**
@@ -327,6 +336,9 @@ export class ProcessOrchestrationService {
       minValueSum: rawProcess.ballotMode.minValueSum.toString(),
     };
 
+    // 5b. Extract election preset from metadata (if present)
+    const electionPreset = parseElectionPresetFromMetadata(metadata);
+
     // 6. Return user-friendly process info
     return {
       processId,
@@ -347,6 +359,7 @@ export class ProcessOrchestrationService {
       overwrittenVotesCount: Number(rawProcess.overwrittenVotesCount),
       metadataURI: rawProcess.metadataURI,
       raw: rawProcess,
+      ...(electionPreset && { electionPreset }),
     };
   }
 
@@ -682,6 +695,12 @@ export class ProcessOrchestrationService {
         meta: {},
       })),
     }));
+
+
+    // Round-trip the preset through metadata when present
+    if (config.electionPreset !== undefined) {
+      metadata.type = config.electionPreset;
+    }
 
     return metadata;
   }
