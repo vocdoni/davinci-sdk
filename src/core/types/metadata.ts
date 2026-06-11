@@ -1,3 +1,5 @@
+import type { ElectionPreset } from './ballot';
+
 // Basic JSON types
 export type AnyJson = boolean | number | string | null | JsonArray | JsonMap | any;
 export interface JsonMap {
@@ -36,72 +38,20 @@ export interface IQuestion {
 
 export type Question = Pick<IQuestion, 'title' | 'description' | 'choices' | 'meta'>;
 
-// Election result types
-export enum ElectionResultsTypeNames {
-  SINGLE_CHOICE_MULTIQUESTION = 'single-choice-multiquestion',
-  MULTIPLE_CHOICE = 'multiple-choice',
-  BUDGET = 'budget-based',
-  APPROVAL = 'approval',
-  QUADRATIC = 'quadratic',
-}
-
-// Properties for different election types
-export interface AbstainProperties {
-  canAbstain: boolean;
-  abstainValues: Array<string>;
-}
-
-export interface ChoiceProperties {
-  repeatChoice: boolean;
-  numChoices: {
-    min: number;
-    max: number;
-  };
-}
-
-export interface BudgetProperties {
-  useCensusWeightAsBudget: boolean;
-  maxBudget: number;
-  minStep: number;
-  forceFullBudget: boolean;
-}
-
-export interface ApprovalProperties {
-  rejectValue: number;
-  acceptValue: number;
-}
-
-export interface QuadraticProperties extends BudgetProperties {
-  quadraticCost: number;
-}
-
-// Election result type definitions
-export type ElectionResultsType =
-  | {
-      name: ElectionResultsTypeNames.SINGLE_CHOICE_MULTIQUESTION;
-      properties: Record<string, never>;
-    }
-  | {
-      name: ElectionResultsTypeNames.MULTIPLE_CHOICE;
-      properties: AbstainProperties & ChoiceProperties;
-    }
-  | {
-      name: ElectionResultsTypeNames.BUDGET;
-      properties: BudgetProperties;
-    }
-  | {
-      name: ElectionResultsTypeNames.APPROVAL;
-      properties: ApprovalProperties;
-    }
-  | {
-      name: ElectionResultsTypeNames.QUADRATIC;
-      properties: QuadraticProperties;
-    };
-
 // Protocol version type
 export type ProtocolVersion = '1.1' | '1.2';
 
-// Main election metadata interface
+/**
+ * Off-chain election metadata stored at `metadataURI`.
+ *
+ * The optional `type` field records the {@link ElectionPreset} used to
+ * create the process (when one was used). Processes created with a raw
+ * `BallotMode` carry no `type` value. Direct consumers of metadata
+ * produced by older SDK versions may see legacy enum-shaped values in
+ * `type`; readers should treat anything that doesn't match the current
+ * `ElectionPreset` shape as "no preset" (see
+ * `parseElectionPresetFromMetadata` in `./ballot.ts`).
+ */
 export interface ElectionMetadata {
   version: ProtocolVersion;
   title: MultiLanguage<string>;
@@ -114,10 +64,12 @@ export interface ElectionMetadata {
     [key: string]: unknown;
   };
   questions: Array<IQuestion>;
-  type: ElectionResultsType;
+  type?: ElectionPreset;
 }
 
-// Template for creating new election metadata
+// Template for creating new election metadata. The `type` field is
+// intentionally omitted — it is populated by the SDK when the caller
+// passes an `electionPreset` during process creation.
 export const ElectionMetadataTemplate: ElectionMetadata = {
   version: '1.2',
   title: {
@@ -158,10 +110,6 @@ export const ElectionMetadataTemplate: ElectionMetadata = {
       ],
     },
   ],
-  type: {
-    name: ElectionResultsTypeNames.SINGLE_CHOICE_MULTIQUESTION,
-    properties: {},
-  },
 };
 
 // Helper function to create a new metadata template
