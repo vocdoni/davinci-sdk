@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ElectionPreset,
+  parseElectionPresetFromMetadata,
   resolveElectionPreset,
 } from '../../../src/core/types/ballot';
 
@@ -260,6 +261,59 @@ describe('resolveElectionPreset', () => {
       expect(() =>
         resolveElectionPreset({ type: 'approval' }, [{ choices: [] }]),
       ).toThrow(/questions\[0\]\.choices to be non-empty/);
+    });
+  });
+});
+
+describe('parseElectionPresetFromMetadata', () => {
+  describe('happy path — recovers each preset shape', () => {
+    const cases: Array<[string, ElectionPreset]> = [
+      ['single_choice', { type: 'single_choice' }],
+      ['single_choice w/ abstain', { type: 'single_choice', allowAbstain: true }],
+      ['multiple_choice', { type: 'multiple_choice', maxSelections: 3 }],
+      ['approval', { type: 'approval' }],
+      ['rating', { type: 'rating', maxValue: 5 }],
+      ['ranking', { type: 'ranking' }],
+      ['quadratic', { type: 'quadratic', budget: 100 }],
+    ];
+
+    for (const [label, preset] of cases) {
+      it(`returns ${label}`, () => {
+        expect(parseElectionPresetFromMetadata({ type: preset })).toEqual(preset);
+      });
+    }
+  });
+
+  describe('missing or absent', () => {
+    it('returns undefined for null metadata', () => {
+      expect(parseElectionPresetFromMetadata(null)).toBeUndefined();
+    });
+
+    it('returns undefined for undefined metadata', () => {
+      expect(parseElectionPresetFromMetadata(undefined)).toBeUndefined();
+    });
+
+    it('returns undefined when type is absent', () => {
+      expect(parseElectionPresetFromMetadata({})).toBeUndefined();
+    });
+  });
+
+  describe('legacy / unknown shapes', () => {
+    it('ignores legacy ElectionResultsType shape', () => {
+      const legacy = {
+        type: { name: 'single-choice-multiquestion', properties: {} },
+      };
+      expect(parseElectionPresetFromMetadata(legacy)).toBeUndefined();
+    });
+
+    it('ignores unknown preset discriminator', () => {
+      const unknown = { type: { type: 'borda' } };
+      expect(parseElectionPresetFromMetadata(unknown)).toBeUndefined();
+    });
+
+    it('ignores string type (not object)', () => {
+      const malformed = { type: 'rating' };
+      expect(parseElectionPresetFromMetadata(malformed)).toBeUndefined();
     });
   });
 });
