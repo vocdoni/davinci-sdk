@@ -1731,8 +1731,49 @@ describe('Simple Process Creation Integration', () => {
         expect(info.ballot.costExponent).toBe(c.expected.costExponent);
         expect(info.ballot.minValueSum).toBe(c.expected.minValueSum);
         expect(info.ballot.maxValueSum).toBe(c.expected.maxValueSum);
+
+        // Preset round-trips through metadata
+        expect(info.electionPreset).toEqual(c.preset);
       }, 180_000);
     }
+
+    it('returns no electionPreset when created with raw ballot', async () => {
+      const census = new OffchainCensus();
+      const voterAddrs = Array.from({ length: 3 }, () => randomHex(20));
+      census.add(voterAddrs);
+
+      const { processId } = await sdk.createProcess({
+        title: 'raw ballot, no preset',
+        description: 'raw-ballot round-trip test',
+        census,
+        timing: {
+          startDate: new Date(Date.now() + 60_000),
+          duration: 3600,
+        },
+        ballot: {
+          numFields: 3,
+          maxValue: '1',
+          minValue: '0',
+          uniqueValues: false,
+          costExponent: 1,
+          maxValueSum: '3',
+          minValueSum: '0',
+        },
+        questions: [
+          {
+            title: 'pick any',
+            choices: Array.from({ length: 3 }, (_, i) => ({
+              title: `c${i}`,
+              value: i,
+            })),
+          },
+        ],
+      });
+
+      const info = await sdk.getProcess(processId);
+      expect(info.ballot.numFields).toBe(3);
+      expect(info.electionPreset).toBeUndefined();
+    }, 180_000);
   });
 
   describe('electionPreset validation', () => {
