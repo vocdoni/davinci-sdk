@@ -279,7 +279,7 @@ describe('parseElectionPresetFromMetadata', () => {
 
     for (const [label, preset] of cases) {
       it(`returns ${label}`, () => {
-        expect(parseElectionPresetFromMetadata({ type: preset })).toEqual(preset);
+        expect(parseElectionPresetFromMetadata({ meta: { electionPreset: preset } })).toEqual(preset);
       });
     }
   });
@@ -293,26 +293,30 @@ describe('parseElectionPresetFromMetadata', () => {
       expect(parseElectionPresetFromMetadata(undefined)).toBeUndefined();
     });
 
-    it('returns undefined when type is absent', () => {
+    it('returns undefined when meta is absent', () => {
       expect(parseElectionPresetFromMetadata({})).toBeUndefined();
+    });
+
+    it('returns undefined when meta.electionPreset is absent', () => {
+      expect(parseElectionPresetFromMetadata({ meta: {} })).toBeUndefined();
     });
   });
 
   describe('legacy / unknown shapes', () => {
-    it('ignores legacy ElectionResultsType shape', () => {
+    it('ignores legacy ElectionResultsType shape if present in meta', () => {
       const legacy = {
-        type: { name: 'single-choice-multiquestion', properties: {} },
+        meta: { electionPreset: { name: 'single-choice-multiquestion', properties: {} } },
       };
       expect(parseElectionPresetFromMetadata(legacy)).toBeUndefined();
     });
 
     it('ignores unknown preset discriminator', () => {
-      const unknown = { type: { type: 'borda' } };
+      const unknown = { meta: { electionPreset: { type: 'borda' } } };
       expect(parseElectionPresetFromMetadata(unknown)).toBeUndefined();
     });
 
-    it('ignores string type (not object)', () => {
-      const malformed = { type: 'rating' };
+    it('ignores string electionPreset (not object)', () => {
+      const malformed = { meta: { electionPreset: 'rating' } };
       expect(parseElectionPresetFromMetadata(malformed)).toBeUndefined();
     });
   });
