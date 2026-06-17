@@ -162,6 +162,8 @@ await sdk.createProcess({
 
 The six supported presets — `single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic` — follow the canonical DAVINCI ballot protocol. Each variant carries its own typed options (e.g. `rating` requires `maxValue`, `quadratic` requires `budget`). See the JSDoc on `ElectionPreset` for the exact parameter mapping per type.
 
+When a process is created with `electionPreset`, the preset is also stored in the off-chain election metadata (under `meta.electionPreset`). `getProcess(processId)` reads it back and exposes it as `info.electionPreset` alongside the raw `info.ballot`. Processes created with a raw `BallotMode` carry no preset on the way out — only `info.ballot` is populated.
+
 ### `createProcessStream(config)`
 
 Returns an async iterator of `TxStatus` events for the underlying transaction. Use this in UI flows that need to display submission, mining, and revert states.

@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `electionPreset` field on `ProcessConfig` accepting a discriminated union of six canonical voting modes (`single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic`). Mutually exclusive with the existing `ballot` field, which remains supported as the raw-mode escape hatch.
 - `resolveElectionPreset(preset, questions)` exported for callers that need to compute a `BallotMode` outside of `createProcess`.
+- `electionPreset?: ElectionPreset` on `ProcessInfo`. Populated by `getProcess(processId)` when the on-chain metadata records a recognized preset (stored at `metadata.meta.electionPreset`). Absent for raw-ballot processes or when metadata is unavailable.
+- `parseElectionPresetFromMetadata(metadata)` exported for callers that need to extract a preset from a metadata object outside of `getProcess`.
+
+### Changed
+- `ElectionMetadata.meta` map now declares a typed `electionPreset?: ElectionPreset` key, populated by the SDK when an `electionPreset` is provided during process creation. The open-ended `[key: string]: unknown` index signature is preserved for caller-supplied keys.
+- The preset is stored under `metadata.meta.electionPreset` (not the top-level `metadata.type` field, which is reserved by the sequencer). `ElectionMetadataTemplate` (and `getElectionMetadataTemplate()`) do not set this field — the SDK populates it only when the caller passes an `electionPreset`.
+
+### Removed
+- **BREAKING**: `ElectionMetadata.type` field. The legacy `type: ElectionResultsType` field on the metadata interface is gone. Consumers parsing SDK-produced metadata should look at `meta.electionPreset` instead (or use the new `parseElectionPresetFromMetadata` helper).
+- **BREAKING**: `ElectionResultsTypeNames` enum.
+- **BREAKING**: `ElectionResultsType` discriminated union.
+- **BREAKING**: `AbstainProperties`, `ChoiceProperties`, `BudgetProperties`, `ApprovalProperties`, `QuadraticProperties` interfaces.
+
+  These types were exported but never produced meaningful values inside the SDK (`metadata.type` was always defaulted to `{ name: 'single-choice-multiquestion', properties: {} }`). Consumers reading metadata produced by older SDK versions will still see that legacy shape in the raw JSON's `type` field; the new schema does not expose it on the TypeScript interface, and `parseElectionPresetFromMetadata` ignores legacy values entirely.
 
 ## [1.0.0] - 2026-06-02
 
