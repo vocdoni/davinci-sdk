@@ -7,25 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-11
+
 ### Added
+- Class-level JSDoc on `VocdoniSequencerService`, `VocdoniCensusService`, and `ProcessRegistryService`.
+- Unit tests for `ElGamal` primitives (`test/crypto/unit/ElGamal.test.ts`).
+- Unit tests for `BallotBuilder` RTE/TE coordinate transforms (`test/crypto/unit/BallotBuilder.test.ts`).
 - `electionPreset` field on `ProcessConfig` accepting a discriminated union of six canonical voting modes (`single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic`). Mutually exclusive with the existing `ballot` field, which remains supported as the raw-mode escape hatch.
 - `resolveElectionPreset(preset, questions)` exported for callers that need to compute a `BallotMode` outside of `createProcess`.
 - `electionPreset?: ElectionPreset` on `ProcessInfo`. Populated by `getProcess(processId)` when the on-chain metadata records a recognized preset (stored at `metadata.meta.electionPreset`). Absent for raw-ballot processes or when metadata is unavailable.
 - `parseElectionPresetFromMetadata(metadata)` exported for callers that need to extract a preset from a metadata object outside of `getProcess`.
-
-### Changed
-- `ElectionMetadata.meta` map now declares a typed `electionPreset?: ElectionPreset` key, populated by the SDK when an `electionPreset` is provided during process creation. The open-ended `[key: string]: unknown` index signature is preserved for caller-supplied keys.
-- The preset is stored under `metadata.meta.electionPreset` (not the top-level `metadata.type` field, which is reserved by the sequencer). `ElectionMetadataTemplate` (and `getElectionMetadataTemplate()`) do not set this field — the SDK populates it only when the caller passes an `electionPreset`.
-
-### Removed
-- **BREAKING**: `ElectionMetadata.type` field. The legacy `type: ElectionResultsType` field on the metadata interface is gone. Consumers parsing SDK-produced metadata should look at `meta.electionPreset` instead (or use the new `parseElectionPresetFromMetadata` helper).
-- **BREAKING**: `ElectionResultsTypeNames` enum.
-- **BREAKING**: `ElectionResultsType` discriminated union.
-- **BREAKING**: `AbstainProperties`, `ChoiceProperties`, `BudgetProperties`, `ApprovalProperties`, `QuadraticProperties` interfaces.
-
-  These types were exported but never produced meaningful values inside the SDK (`metadata.type` was always defaulted to `{ name: 'single-choice-multiquestion', properties: {} }`). Consumers reading metadata produced by older SDK versions will still see that legacy shape in the raw JSON's `type` field; the new schema does not expose it on the TypeScript interface, and `parseElectionPresetFromMetadata` ignores legacy values entirely.
-
-## [1.0.0] - 2026-06-02
 
 ### Changed
 - Upgraded `@vocdoni/davinci-contracts` from `0.0.45-rc1` to `^0.0.49`.
@@ -35,18 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Consumers passing strongly-typed values are unaffected; callers relying on implicit `any` widening may need an explicit cast.
 - Updated `SECURITY.md` supported-versions table to `1.0.x`.
 - Updated `CONTRIBUTING.md`: corrected the license reference (now correctly AGPL-3.0), refreshed the test-tooling references from Jest to Vitest, and bumped the documented Node minimum to 18.
-
-### Added
-- Class-level JSDoc on `VocdoniSequencerService`, `VocdoniCensusService`, and `ProcessRegistryService`.
-- Unit tests for `ElGamal` primitives (`test/crypto/unit/ElGamal.test.ts`).
-- Unit tests for `BallotBuilder` RTE/TE coordinate transforms (`test/crypto/unit/BallotBuilder.test.ts`).
+- `ElectionMetadata.meta` map now declares a typed `electionPreset?: ElectionPreset` key, populated by the SDK when an `electionPreset` is provided during process creation. The open-ended `[key: string]: unknown` index signature is preserved for caller-supplied keys.
+- The preset is stored under `metadata.meta.electionPreset` (not the top-level `metadata.type` field, which is reserved by the sequencer). `ElectionMetadataTemplate` (and `getElectionMetadataTemplate()`) do not set this field — the SDK populates it only when the caller passes an `electionPreset`.
 
 ### Removed
 - Removed the always-skipped working-census participants integration test; the underlying sequencer endpoint was never implemented.
+- **BREAKING**: `ElectionMetadata.type` field. The legacy `type: ElectionResultsType` field on the metadata interface is gone. Consumers parsing SDK-produced metadata should look at `meta.electionPreset` instead (or use the new `parseElectionPresetFromMetadata` helper).
+- **BREAKING**: `ElectionResultsTypeNames` enum.
+- **BREAKING**: `ElectionResultsType` discriminated union.
+- **BREAKING**: `AbstainProperties`, `ChoiceProperties`, `BudgetProperties`, `ApprovalProperties`, `QuadraticProperties` interfaces.
+
+  These types were exported but never produced meaningful values inside the SDK (`metadata.type` was always defaulted to `{ name: 'single-choice-multiquestion', properties: {} }`). Consumers reading metadata produced by older SDK versions will still see that legacy shape in the raw JSON's `type` field; the new schema does not expose it on the TypeScript interface, and `parseElectionPresetFromMetadata` ignores legacy values entirely.
 
 ### Migrating from 0.4.x
 - **Node.js minimum is now 18.** Node 16 will refuse to install due to the new `engines` field.
 - **Type tightening.** Callers that relied on passing `any` to `isMerkleCensusProof`, `isCSPCensusProof`, or to the `meta` map on `ElectionMetadata` should now pass `unknown` (or the proper typed value). The runtime behavior is unchanged.
+- **`ElectionResultsType` and related types are removed.** If you imported `ElectionResultsTypeNames`, `ElectionResultsType`, `AbstainProperties`, `ChoiceProperties`, `BudgetProperties`, `ApprovalProperties`, or `QuadraticProperties`, the imports will now fail at compile time. These types never carried meaningful values inside the SDK (`metadata.type` was always a placeholder); to know what kind of election a process is, use the new `info.electionPreset` field on `getProcess()` or `parseElectionPresetFromMetadata(metadata)`.
 
 ## [0.4.0] - 2026-05-14
 
