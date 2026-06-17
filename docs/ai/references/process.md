@@ -182,6 +182,8 @@ interface ProcessInfo {
   overwrittenVotesCount: number;  // overwrites (last-vote-wins)
   metadataURI: string;
   raw?: any;                      // raw contract struct, for advanced use
+
+  electionPreset?: ElectionPreset; // preset used at creation, if any (round-tripped via metadata.meta.electionPreset)
 }
 ```
 

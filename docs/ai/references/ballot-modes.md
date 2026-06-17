@@ -22,6 +22,8 @@ Six presets are available — `single_choice`, `multiple_choice`, `approval`, `r
 
 For the exact `BallotMode` mapping per preset, see the JSDoc on `ElectionPreset` in `src/core/types/ballot.ts`, or read the README "Election presets" section.
 
+Presets round-trip through metadata: created with `electionPreset` → stored at `metadata.meta.electionPreset` (off-chain) → re-emerged as `info.electionPreset` on `getProcess()`. Raw-`BallotMode` processes have no preset on the way out; only `info.ballot` is populated. The top-level `metadata.type` field is reserved by the sequencer for its own use, which is why the preset lives inside `meta` instead. The `parseElectionPresetFromMetadata` helper used internally rejects any shape that doesn't match the current `ElectionPreset` discriminator.
+
 ---
 
 ## The parameters (recap from `references/process.md`)
