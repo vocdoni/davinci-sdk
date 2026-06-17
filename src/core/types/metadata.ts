@@ -44,13 +44,15 @@ export type ProtocolVersion = '1.1' | '1.2';
 /**
  * Off-chain election metadata stored at `metadataURI`.
  *
- * The optional `type` field records the {@link ElectionPreset} used to
- * create the process (when one was used). Processes created with a raw
- * `BallotMode` carry no `type` value. Direct consumers of metadata
- * produced by older SDK versions may see legacy enum-shaped values in
- * `type`; readers should treat anything that doesn't match the current
- * `ElectionPreset` shape as "no preset" (see
- * `parseElectionPresetFromMetadata` in `./ballot.ts`).
+ * The {@link ElectionPreset} used to create the process (when one was
+ * used) is stored in `meta.electionPreset`. Processes created with a raw
+ * `BallotMode` carry no `meta.electionPreset` value. Readers should treat
+ * anything that doesn't match the current `ElectionPreset` shape as "no
+ * preset" (see `parseElectionPresetFromMetadata` in `./ballot.ts`).
+ *
+ * Note: the top-level `type` field is reserved by the sequencer for its
+ * own use and is not surfaced on this interface. Storing the preset
+ * there does not round-trip correctly.
  */
 export interface ElectionMetadata {
   version: ProtocolVersion;
@@ -61,15 +63,15 @@ export interface ElectionMetadata {
     logo: string;
   };
   meta?: {
+    electionPreset?: ElectionPreset;
     [key: string]: unknown;
   };
   questions: Array<IQuestion>;
-  type?: ElectionPreset;
 }
 
-// Template for creating new election metadata. The `type` field is
-// intentionally omitted — it is populated by the SDK when the caller
-// passes an `electionPreset` during process creation.
+// Template for creating new election metadata. The `meta.electionPreset`
+// field is intentionally omitted — it is populated by the SDK when the
+// caller passes an `electionPreset` during process creation.
 export const ElectionMetadataTemplate: ElectionMetadata = {
   version: '1.2',
   title: {

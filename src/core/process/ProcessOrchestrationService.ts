@@ -697,9 +697,10 @@ export class ProcessOrchestrationService {
     }));
 
 
-    // Round-trip the preset through metadata when present
+    // Round-trip the preset through metadata.meta.electionPreset when
+    // present. (We can't use metadata.type — the sequencer reserves it.)
     if (config.electionPreset !== undefined) {
-      metadata.type = config.electionPreset;
+      metadata.meta = { ...metadata.meta, electionPreset: config.electionPreset };
     }
 
     return metadata;

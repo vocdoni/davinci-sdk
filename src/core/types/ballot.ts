@@ -203,13 +203,11 @@ function makeBallotMode(
 /**
  * Extract an {@link ElectionPreset} from an off-chain metadata object.
  *
- * Returns the preset when `metadata.type` carries one of the known
- * preset discriminator shapes (`{ type: 'single_choice' | ... }`).
+ * Returns the preset when `metadata.meta.electionPreset` carries one of
+ * the known preset discriminator shapes (`{ type: 'single_choice' | ... }`).
  * Returns `undefined` for:
- * - Missing metadata or missing `type` field
- * - Legacy `ElectionResultsType` shape (`{ name, properties }`) from
- *   older SDK versions
- * - Any other unknown / malformed value
+ * - Missing metadata, missing `meta`, or missing `electionPreset` field
+ * - Any unknown / malformed value
  *
  * This is a structural check, not a deep validator: a preset object
  * with the right discriminator but missing required sub-fields will
@@ -217,9 +215,9 @@ function makeBallotMode(
  * validate the per-variant fields themselves.
  */
 export function parseElectionPresetFromMetadata(
-  metadata: { type?: unknown } | null | undefined,
+  metadata: { meta?: { electionPreset?: unknown } } | null | undefined,
 ): ElectionPreset | undefined {
-  const t = metadata?.type;
+  const t = metadata?.meta?.electionPreset;
   if (!t || typeof t !== 'object') return undefined;
   const candidate = t as { type?: string };
   switch (candidate.type) {

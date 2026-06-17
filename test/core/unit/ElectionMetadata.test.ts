@@ -5,10 +5,9 @@ import {
 } from '../../../src/core/types/metadata';
 
 describe('getElectionMetadataTemplate', () => {
-  it('does not set a default `type`', () => {
+  it('does not set a default `meta.electionPreset`', () => {
     const m = getElectionMetadataTemplate();
-    expect(m.type).toBeUndefined();
-    expect('type' in m).toBe(false);
+    expect(m.meta?.electionPreset).toBeUndefined();
   });
 
   it('returns a fresh copy on each call', () => {
