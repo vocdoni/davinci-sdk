@@ -142,5 +142,36 @@ commit, or from `fixtures_commit`. Secrets:
 
 ## Measured
 
-To be filled in after the first reported run: wall time per phase and per
-scenario, and the organizer's cost.
+One run on 2026-09-30, from the Docker runner on the host of both nodes
+(sequencer v0.3.2), with the Gnosis preset RPCs and all eight scenarios
+passing:
+
+- `prepare`: about 30 s once the circuit files are cached, almost all of it
+  proving the 27 planned ballots (the first download adds 44 MB).
+- `run`: 10 min (598 s). The checks before anything is created take 2 s; the
+  eight creations and the census contract take 2 min (about 10 s per organizer
+  transaction, one at a time).
+
+| scenario | time | results after the grace end |
+|---|---|---|
+| s1 static census | 7:35 | 5 s |
+| s2 CSP census | 6:28 | 5 s |
+| s3 updatable census | 6:49 | 10 s |
+| s4 on-chain census | 7:25 | 5 s |
+| s5 committee key | 8:42 | 1:55 (request, decryption, finalize) |
+| s6 locked committee key | 9:52 | 2:23 after the reveal (sent 1:22 after the grace end, the suite's 60 s hold included) |
+| s7 metadata | 6:41 | 5 s |
+| s8 organizer refusals | 5:21 | (canceled) |
+
+From a close to its results: the notice (60 s plus 45 s of slack), then the
+grace floor (150 s after the last batch lands), then the results. A
+sequencer-key election had its results 4 to 6 minutes after the close was
+sent.
+
+Cost: the organizer sent 31 transactions, 15.0 M gas in all. At the 14-17 wei
+gas price of that day this was 2.3e-10 xDAI. The largest items are the
+`PoseidonT3` library deployment (5.2 M gas; Gnosis has none at its
+deterministic address, so every run deploys one), the `OwnedCensus`
+deployment (1.5 M) and the creations (0.6-0.7 M with a sequencer key, 1.0 M
+for `dkg`, 1.4 M for `dkg-locked`). Settlements and results are paid by the
+node operators. Keep the organizer above the 0.05 xDAI the run checks for.
