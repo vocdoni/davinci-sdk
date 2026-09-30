@@ -1,9 +1,6 @@
 /**
- * @fileoverview Standardized types and interfaces for contract services
- *
- * This module provides consistent type definitions for callbacks, interfaces,
- * and common data structures used across contract services: the registry's
- * enums and structs as the SDK decodes them, and its events.
+ * @fileoverview The registry's enums and structs as the SDK decodes them, its
+ * events, and the callbacks of the event listeners.
  */
 
 import type { BjjPoint } from '../crypto/babyjubjub';

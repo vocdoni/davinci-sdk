@@ -18,7 +18,7 @@ import {
 import { checkVerificationKey, loadArtifactFile } from '../../../src/prover/artifacts';
 import { PINNED_VKEY_TEXT, V1_VKEY } from '../../helpers/realProof';
 
-// davinci-circom a39a9f9, as gap-analysis §4.2 lists it (sha256sum of the checkout's artifacts/).
+// davinci-circom a39a9f9: sha256sum of the checkout's artifacts/.
 const A39A9F9 = 'a39a9f9867bb70726ad2137ed536d75670e042b9';
 const PINNED = {
   wasm: ['ballot_proof.wasm', '07ecaef89f730cd4a3ee0355821a1fee4eb235fe8934f3c4bf24744bf1c7e4d5'],

@@ -18,8 +18,8 @@ import {
 } from '../../../src/contracts/abis';
 
 // Drift guard for the vendored ABIs (davinci-contracts 36c0b0a). Every value
-// below is transcribed from the selector and topic tables the SDK was designed
-// against; a sync that moves any of them must be a deliberate change here too.
+// below is written out by hand from that commit's contracts; a sync that moves
+// any of them must be a deliberate change here too.
 
 const registry = new Interface(PROCESS_REGISTRY_ABI);
 const adapter = new Interface(DAVINCI_DKG_ADAPTER_ABI);

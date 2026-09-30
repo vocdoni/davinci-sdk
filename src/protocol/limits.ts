@@ -2,7 +2,7 @@
  * @fileoverview Protocol limits of the zkVM stack, mirrored from davinci-zkvm
  * `rust-sdk/src/limits.rs` (itself mirrored from the guest's
  * `circuit-primitives/src/types.rs`), plus the ballot and census bit widths of
- * `rust-sdk/src/ballot.rs` and `census.rs`. `test/protocol/unit/limits.test.ts`
+ * `rust-sdk/src/ballot.rs` and `census.rs`. `test/protocol/unit/Protocol.test.ts`
  * checks them against a verbatim copy of `limits.rs`.
  */
 

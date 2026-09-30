@@ -347,7 +347,7 @@ describe('response wire', () => {
     });
   });
 
-  it('decodes tracker proofs, and the P1 vectors verify as the sequencer verdict', () => {
+  it('decodes tracker proofs, and the tracker vectors verify as the sequencer verdict', () => {
     const t = decodeTrackerProof(wire.trackerProof);
     expect(t.voteId).toBe(0x8000000000004321n);
     expect(t.siblings).toHaveLength(3);

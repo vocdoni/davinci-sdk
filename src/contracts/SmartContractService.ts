@@ -16,10 +16,7 @@ import {
 import { type DavinciErrorDescription, decodeDavinciError } from './abis';
 import type { ContractServiceError } from './errors';
 
-/**
- * Enum representing the possible states of a transaction during its lifecycle.
- * Used to track and report transaction status in the event stream.
- */
+/** Where a transaction stands, as a write stream reports it. */
 export enum TxStatus {
   /** Transaction has been submitted and is waiting to be mined */
   Pending = 'pending',
@@ -32,8 +29,7 @@ export enum TxStatus {
 }
 
 /**
- * Union type representing the different events that can occur during a transaction's lifecycle.
- * Each event includes relevant data based on the transaction status.
+ * One event of a write stream: the hash once sent, then the result or the error.
  *
  * @template T - The type of the successful response data
  */
@@ -140,14 +136,14 @@ export interface ContractWrite<T> {
 }
 
 /**
- * Abstract base class providing common functionality for smart contract interactions.
- * Implements transaction handling, status monitoring, event normalization, and
- * event listener management with automatic fallback for RPCs that don't support eth_newFilter.
+ * Base of the contract services: write streams (simulate, sign, send, wait
+ * and name a revert) and event listeners, which poll `eth_getLogs` on RPCs
+ * that keep no filters.
  */
 export abstract class SmartContractService {
-  /** Active polling intervals for event listeners using fallback mode */
+  /** Timers of the polling listeners. */
   private pollingIntervals: NodeJS.Timeout[] = [];
-  /** Default polling interval in milliseconds for event listener fallback */
+  /** Polling period of the fallback listeners, in milliseconds. */
   protected eventPollingInterval: number = 5000;
   /** Longest wait for a transaction receipt, in milliseconds. */
   protected receiptTimeoutMs: number = RECEIPT_TIMEOUT_MS;
@@ -296,26 +292,16 @@ export abstract class SmartContractService {
       return decodeRevert(err, contract.interface);
     }
   }
+
   /**
-   * Executes a transaction stream and returns the result or throws an error.
-   * This is a convenience method that processes a transaction stream and either
-   * returns the successful result or throws an appropriate error.
+   * Runs a write stream to its end and returns the result.
    *
    * @template T - The type of the successful response data
-   * @param stream - AsyncGenerator of transaction status events
-   * @returns Promise resolving to the successful response data
-   * @throws Error if the transaction fails or reverts
+   * @throws the error of the stream's `Failed` or `Reverted` event
    *
    * @example
    * ```typescript
-   * try {
-   *   const result = await SmartContractService.executeTx(
-   *     contract.someMethod()
-   *   );
-   *   console.log('Transaction successful:', result);
-   * } catch (error) {
-   *   console.error('Transaction failed:', error);
-   * }
+   * await SmartContractService.executeTx(registry.setProcessMaxVoters(processId, 500));
    * ```
    */
   static async executeTx<T>(stream: AsyncGenerator<TxStatusEvent<T>>): Promise<T> {
@@ -362,25 +348,11 @@ export abstract class SmartContractService {
   }
 
   /**
-   * Sets up an event listener with automatic fallback for RPCs that don't support eth_newFilter.
-   * First attempts to use contract.on() which relies on eth_newFilter. If the RPC doesn't support
-   * this method (error code -32601), automatically falls back to polling with queryFilter.
+   * Subscribes `callback` to `eventFilter`: with `contract.on` when the RPC
+   * keeps filters (`eth_newFilter` and `eth_getFilterChanges` both answer),
+   * else by polling `eth_getLogs` (see {@link setEventPollingInterval}).
    *
    * @template Args - Tuple type representing the event arguments
-   * @param contract - The contract instance to listen to
-   * @param eventFilter - The event filter to listen for
-   * @param callback - The callback function to invoke when the event occurs
-   *
-   * @example
-   * ```typescript
-   * this.setupEventListener(
-   *   this.contract,
-   *   'Transfer',
-   *   (from: string, to: string, amount: bigint) => {
-   *     console.log(`Transfer: ${from} -> ${to}: ${amount}`);
-   *   }
-   * );
-   * ```
    */
   protected async setupEventListener<Args extends unknown[]>(
     contract: BaseContract,
@@ -389,7 +361,6 @@ export abstract class SmartContractService {
   ): Promise<void> {
     const normalizedCallback = this.normalizeListener(callback);
 
-    // First, test if eth_newFilter is supported by trying to create a filter
     const provider = contract.runner?.provider as
       | (Provider & { send?: (method: string, params: unknown[]) => Promise<unknown> })
       | undefined;
@@ -399,30 +370,20 @@ export abstract class SmartContractService {
     }
 
     try {
-      // Test if the provider supports eth_newFilter
-      // We do this by attempting to get logs with a filter
-      // If it fails, we'll catch the error and use polling
       const testFilter = {
         address: await contract.getAddress(),
         topics: [],
       };
 
-      // Try to create a filter - this will fail if eth_newFilter is not supported
-      // We use the provider's internal method if available
+      // Some RPCs create a filter and then lose it: probe both calls.
       if (typeof provider.send === 'function') {
         try {
-          // Test both creating the filter AND getting changes to ensure full support
           const filterId = await provider.send('eth_newFilter', [testFilter]);
-
-          // Try to get filter changes - this will fail if RPC doesn't maintain filters
           await provider.send('eth_getFilterChanges', [filterId]);
-
-          // If we get here, both eth_newFilter and eth_getFilterChanges work
           await contract.on(eventFilter as ContractEventName, normalizedCallback);
           return;
         } catch (error) {
           if (this.isUnsupportedMethodError(error)) {
-            // eth_newFilter or eth_getFilterChanges not working, use polling
             console.warn(
               'RPC does not fully support eth_newFilter/eth_getFilterChanges, falling back to polling for events. ' +
                 'This may result in delayed event notifications.'
@@ -430,7 +391,7 @@ export abstract class SmartContractService {
             this.setupPollingListener(contract, eventFilter, callback);
             return;
           }
-          // Any other probe error: use polling to avoid runtime listener crashes
+          // Any other probe error: poll rather than risk a listener that crashes later.
           console.warn(
             'Could not verify RPC filter support, falling back to polling for events. ' +
               'This may result in delayed event notifications.'
@@ -440,10 +401,8 @@ export abstract class SmartContractService {
         }
       }
 
-      // Default: set up contract listener directly
       await contract.on(eventFilter as ContractEventName, normalizedCallback);
     } catch (error) {
-      // Fallback to polling on any setup error
       console.warn(
         'Error setting up event listener, falling back to polling:',
         error instanceof Error ? error.message : error
@@ -453,27 +412,21 @@ export abstract class SmartContractService {
   }
 
   /**
-   * Checks if an error indicates that the RPC method is unsupported or filter operations are not working.
-   * This includes:
-   * - Method not found (-32601): RPC doesn't support eth_newFilter
-   * - Filter not found (-32000): RPC doesn't properly maintain filters
-   *
-   * @param error - The error to check
-   * @returns true if the error indicates unsupported or broken filter functionality
+   * Whether a filter probe failed because the RPC keeps no filters: method not
+   * found (-32601), or a filter it created and then lost (-32000, "filter not
+   * found").
    */
   private isUnsupportedMethodError(error: unknown): boolean {
     type RpcError = { code?: unknown; message?: unknown };
     const e = (error ?? {}) as RpcError & { error?: RpcError; data?: RpcError };
     const includes = (m: unknown, what: string) => typeof m === 'string' && m.includes(what);
 
-    // Check for error code -32601 (method not found) - RPC doesn't support eth_newFilter
     const isMethodNotFound =
       e.code === -32601 ||
       e.error?.code === -32601 ||
       e.data?.code === -32601 ||
       includes(e.message, 'unsupported method');
 
-    // Check for error code -32000 with "filter not found" - RPC supports creating filters but doesn't maintain them
     const isFilterNotFound =
       (e.code === -32000 ||
         e.error?.code === -32000 ||
@@ -484,13 +437,8 @@ export abstract class SmartContractService {
   }
 
   /**
-   * Sets up a polling-based event listener as fallback when eth_newFilter is not supported.
-   * Periodically queries for new events and invokes the callback for each new event found.
-   *
-   * @template Args - Tuple type representing the event arguments
-   * @param contract - The contract instance to poll
-   * @param eventFilter - The event filter to poll for
-   * @param callback - The callback function to invoke for each event
+   * Polls `eventFilter` every {@link eventPollingInterval} ms, from the current
+   * block on, and calls `callback` with each event's arguments.
    */
   private setupPollingListener<Args extends unknown[]>(
     contract: BaseContract,
@@ -507,15 +455,11 @@ export abstract class SmartContractService {
           return;
         }
 
-        // Get current block number
         const currentBlock = await provider.getBlockNumber();
-
-        // Initialize lastProcessedBlock on first poll
         if (lastProcessedBlock === 0) {
           lastProcessedBlock = currentBlock - 1;
         }
 
-        // Query for events since last processed block
         if (currentBlock > lastProcessedBlock) {
           const events = await contract.queryFilter(
             eventFilter as ContractEventName,
@@ -523,7 +467,7 @@ export abstract class SmartContractService {
             currentBlock
           );
 
-          // Process each event - filter to only EventLog types that have args
+          // Only decoded logs (EventLog) carry args.
           for (const event of events) {
             if ('args' in event && event.args) {
               callback(...(event.args as unknown as Args));
@@ -537,18 +481,12 @@ export abstract class SmartContractService {
       }
     };
 
-    // Start polling
     const intervalId = setInterval(() => void poll(), this.eventPollingInterval);
     this.pollingIntervals.push(intervalId);
-
-    // Do an initial poll
     void poll();
   }
 
-  /**
-   * Clears all active polling intervals.
-   * Should be called when removing all listeners or cleaning up the service.
-   */
+  /** Stops every polling listener. */
   protected clearPollingIntervals(): void {
     for (const intervalId of this.pollingIntervals) {
       clearInterval(intervalId);
@@ -556,11 +494,7 @@ export abstract class SmartContractService {
     this.pollingIntervals = [];
   }
 
-  /**
-   * Sets the polling interval for event listeners using the fallback mechanism.
-   *
-   * @param intervalMs - Polling interval in milliseconds
-   */
+  /** Sets the polling period of the fallback listeners, in milliseconds. */
   setEventPollingInterval(intervalMs: number): void {
     this.eventPollingInterval = intervalMs;
   }

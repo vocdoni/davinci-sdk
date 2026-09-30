@@ -1,18 +1,13 @@
 /**
- * @fileoverview Standardized error classes for contract services
- *
- * This module provides a consistent error hierarchy for all contract service operations.
- * All errors extend from ContractServiceError and include operation context for better debugging.
- * A write that reverts, in its preflight or once mined, carries the decoded
- * custom error (registry, DKG adapter, DKG or verifier) in `revert`.
+ * @fileoverview Errors of the contract services. Each operation has its own
+ * class, all extending {@link ContractServiceError}. A write that reverts, in
+ * its simulation or once mined, carries the decoded custom error (registry,
+ * DKG adapter, DKG or verifier) in `revert`.
  */
 
 import type { DavinciErrorDescription } from './abis';
 
-/**
- * Abstract base class for all contract service errors.
- * Provides consistent error structure with operation context.
- */
+/** Any contract service failure, with the operation that failed. */
 export abstract class ContractServiceError extends Error {
   /**
    * Creates a new ContractServiceError instance.

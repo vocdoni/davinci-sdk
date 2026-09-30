@@ -287,7 +287,7 @@ The URL must serve the bytes unchanged over public `http(s)`, with no redirect: 
 
 ## Circuit files
 
-Voters prove their ballot with the `BallotProof(16)` circuit (a 44 MB proving key). The SDK downloads the files once per prover, checks each against its pinned sha256, and checks that the verification key, and the key the proving key carries, hash to the ballot VK hash the registry pins. Nothing else is trusted.
+Voters prove their ballot with the `BallotProof(16)` circuit (about 44 MB of circuit files, most of it the proving key). The SDK downloads the files once per prover, checks each against its pinned sha256, and checks that the verification key, and the key the proving key carries, hash to the ballot VK hash the registry pins. Nothing else is trusted.
 
 ```ts
 const sdk = new DavinciSDK({

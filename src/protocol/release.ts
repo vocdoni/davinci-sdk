@@ -2,7 +2,7 @@
  * @fileoverview Pinned values of the davinci-zkvm release the SDK trusts, from
  * davinci-zkvm `rust-sdk/src/release.rs` (davinci-zkvm v0.1.0, ZisK
  * 1.3.0-alpha). A deployment is only trusted when its registry immutables
- * equal these; `test/protocol/unit/release.test.ts` checks them against a
+ * equal these; `test/protocol/unit/Protocol.test.ts` checks them against a
  * verbatim copy of `release.rs`.
  *
  * The program vks change with the guest source, `ROOT_C_VADCOP_FINAL` and

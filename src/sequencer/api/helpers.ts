@@ -4,13 +4,8 @@ import { VOTE_ID_MIN } from '../../protocol/limits';
 import { NodeMismatchError, SequencerDecodeError } from '../errors';
 import type { ProcessView, SequencerInfo } from './types';
 
-/**
- * Validates that a process ID is a valid 62-character hex string (31 bytes).
- * @param processId - The process ID to validate
- * @returns True if valid, false otherwise
- */
+/** Whether `processId` is 31 bytes of hex (62 digits, `0x` optional). */
 export function validateProcessId(processId: string): boolean {
-  // Check if it's a valid 62-character hex string (31 bytes)
   const cleanId = processId.replace(/^0x/, '');
   return /^[0-9a-fA-F]{62}$/.test(cleanId);
 }

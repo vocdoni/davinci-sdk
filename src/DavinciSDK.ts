@@ -510,10 +510,10 @@ export class DavinciSDK {
   }
 
   /**
-   * Get the process orchestration service for simplified process creation.
-   * Requires `init()` and a signer with a provider for blockchain interactions.
+   * The organizer's side, after `init()`: process creation and the organizer
+   * controls, sent from the signer.
    *
-   * @throws Error if signer does not have a provider
+   * @throws Error if the signer has no provider
    */
   get processOrchestrator(): ProcessOrchestrationService {
     this.requireInit('creating or managing processes');
@@ -556,9 +556,8 @@ export class DavinciSDK {
   }
 
   /**
-   * Gets user-friendly process information from the blockchain.
-   * This method fetches raw contract data and transforms it into a user-friendly format
-   * that matches the ProcessConfig interface used for creation, plus additional runtime data.
+   * A process as the registry stores it, in the shape of the config it was
+   * created with plus its runtime state.
    *
    * The metadata document is downloaded and checked against the registry's
    * `metadataHash`: title, description and questions come from it only when
@@ -569,32 +568,15 @@ export class DavinciSDK {
    *
    * Reads through the SDK's read provider: a voter's bare wallet is enough.
    *
-   * @param processId - The process ID to fetch; it must be one of the network's registry
-   * @returns Promise resolving to user-friendly process information
+   * @param processId - A process id of the network's registry
    * @throws Error for a process id of another registry
    *
    * @example
    * ```typescript
-   * const processInfo = await sdk.getProcess("0x1234567890abcdef...");
-   *
-   * // Access the same fields as ProcessConfig
-   * console.log("Title:", processInfo.title);
-   * console.log("Description:", processInfo.description);
-   * console.log("Questions:", processInfo.questions);
-   * console.log("Metadata verified:", processInfo.metadataVerified);
-   * console.log("Ballot config:", processInfo.ballot);
-   *
-   * // Plus additional runtime information
-   * console.log("Status:", processInfo.status);
-   * console.log("Creator:", processInfo.creator);
-   * console.log("Start date:", processInfo.startDate);
-   * console.log("End date:", processInfo.endDate);
-   * console.log("Duration:", processInfo.duration, "seconds");
-   * console.log("Time remaining:", processInfo.timeRemaining, "seconds");
-   * console.log("Phase:", processInfo.phase); // e.g. 'closing' until processInfo.graceEnd
-   *
-   * // Access raw contract data if needed
-   * console.log("Raw data:", processInfo.raw);
+   * const info = await sdk.getProcess(processId);
+   * if (info.metadataVerified) console.log(info.title, info.questions);
+   * console.log(info.status, info.phase, info.endDate, info.graceEnd); // 'closing' until graceEnd
+   * console.log(info.raw); // the registry's struct
    * ```
    */
   async getProcess(processId: string): Promise<ProcessInfo> {
@@ -626,8 +608,7 @@ export class DavinciSDK {
    *    or `graceError` if only that transaction failed (the process exists).
    *    A value outside the registry's `graceFloor..graceCeil` is refused in
    *    step 1, before anything is created. A live meeting sets the floor
-   *    (150 s on the production registry) so results follow the close within
-   *    minutes.
+   *    (`getGraceParams`) so results follow the close within minutes.
    *
    * The key mode (`keyMode`) decides who can decrypt the results:
    * `'sequencer'` (default) the key node, `'dkg'` a davinci-dkg committee,
@@ -711,7 +692,7 @@ export class DavinciSDK {
    *   timing: { startDate: '2026-12-07T09:00:00Z', endDate: '2026-12-08T18:00:00Z' },
    *   questions,
    *   keyMode: 'dkg-locked',
-   *   grace: 150, // the production floor: results soon after the close
+   *   grace: 150, // seconds, within the registry's graceFloor..graceCeil
    * });
    * ```
    */
@@ -1582,17 +1563,14 @@ export class DavinciSDK {
     return Object.freeze({ ...this.settings });
   }
 
-  /**
-   * Check if the SDK has been initialized
-   */
+  /** Whether `init()` has completed. */
   isInitialized(): boolean {
     return this.initialized;
   }
 
   /**
    * The signer's provider.
-   * @throws Error if the signer does not have a provider
-   * @private
+   * @throws Error if the signer has no provider
    */
   private ensureProvider(): Provider {
     const provider = this.signer.provider;

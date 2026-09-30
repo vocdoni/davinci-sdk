@@ -73,9 +73,7 @@ import { OffchainDynamicCensus } from '../../census/classes/OffchainDynamicCensu
 import { graceEndOf, processPhase, type ProcessPhase } from './lifecycle';
 import { serialized } from './signerLock';
 
-/**
- * Base interface with shared fields between ProcessConfig and ProcessInfo
- */
+/** Fields a process config and a `ProcessInfo` share. */
 export interface BaseProcess {
   /** Process title */
   title: string;
@@ -148,9 +146,7 @@ export interface CensusConfig {
  */
 export type ProcessKeyMode = 'sequencer' | 'dkg' | 'dkg-locked';
 
-/**
- * Base configuration shared by both process creation variants
- */
+/** Fields of both process config variants. */
 interface BaseProcessConfig {
   /**
    * The census: a census object, or its registry form. A Merkle census
@@ -222,8 +218,8 @@ interface BaseProcessConfig {
    * the idle time after the last landing that closes the window and unlocks
    * the results. It must be within `graceFloor..graceCeil` (see
    * `getGraceParams`), checked before anything is created; `setProcessGrace`
-   * sends it right after the creation. A live meeting uses the floor (150 s
-   * on the production registry) so results follow the close within minutes.
+   * sends it right after the creation. A live meeting uses the floor so
+   * results follow the close within minutes.
    */
   grace?: number;
 
@@ -271,14 +267,12 @@ export interface ProcessConfigWithMetadataUri extends BaseProcessConfig {
 }
 
 /**
- * Configuration for creating a process
- * Use either metadata fields (title, questions) or a pre-existing metadataUri
+ * What `createProcess` takes: the metadata fields (title, questions), or the
+ * URL of a metadata document already served.
  */
 export type ProcessConfig = ProcessConfigWithMetadata | ProcessConfigWithMetadataUri;
 
-/**
- * Result of process creation
- */
+/** What `createProcess` returns. */
 export interface ProcessCreationResult {
   /** The created process ID, from the receipt's `ProcessCreated` event */
   processId: string;
@@ -376,9 +370,7 @@ interface PreparedCreation {
   metadata: PublishedMetadata;
 }
 
-/**
- * User-friendly process information that extends the base process with additional runtime data
- */
+/** A process as `getProcess` reads it: its config plus its runtime state. */
 export interface ProcessInfo extends BaseProcess {
   /** The process ID */
   processId: string;
@@ -706,37 +698,31 @@ export class ProcessOrchestrationService {
   }
 
   /**
-   * Gets user-friendly process information by transforming raw contract data.
+   * A process as the registry stores it, with its metadata, timing and phase.
    * The metadata document is downloaded and checked against the registry's
    * `metadataHash`; title, description, questions and preset are read from it
    * only when it matches (`metadataVerified`). The grace window and the phase
    * are computed from the same registry read and the chain head's time.
-   *
-   * @param processId - The process ID to fetch
-   * @returns Promise resolving to the user-friendly process information
    */
   async getProcess(processId: string): Promise<ProcessInfo> {
-    // 1. The process, the chain clock and the grace window cap
     const [rawProcess, now, grace] = await Promise.all([
       this.processRegistry.getProcess(processId),
       this.processRegistry.getChainTime(),
       this.getGraceParams(),
     ]);
 
-    // 2. Fetch the metadata and check it against its on-chain hash
+    // Title, description and questions only from bytes that hash to metadataHash.
     const read = rawProcess.metadataUri
       ? await readMetadata(rawProcess.metadataUri, rawProcess.metadataHash, this.documents)
       : { status: 'unreachable' as const, error: 'the process has no metadata URI' };
     const doc = read.status === 'verified' && isObject(read.document) ? read.document : undefined;
 
-    // 3. Timing, on the chain clock
     const { startTime, duration } = rawProcess;
     const endTime = startTime + duration;
     const timeRemaining =
       now >= endTime ? 0n : now >= startTime ? endTime - now : -(startTime - now);
     const graceEnd = graceEndOf(rawProcess, grace.graceMaxTotal);
 
-    // 4. Transform census information
     const census: ProcessInfo['census'] = {
       type: rawProcess.census.origin,
       root: rawProcess.census.root,
@@ -746,7 +732,6 @@ export class ProcessOrchestrationService {
       }),
     };
 
-    // 5. Transform ballot mode (convert BigInt fields to appropriate types)
     const ballot: BallotMode = {
       numFields: Number(rawProcess.ballotMode.numFields),
       groupSize: Number(rawProcess.ballotMode.groupSize),
@@ -758,12 +743,10 @@ export class ProcessOrchestrationService {
       minValueSum: rawProcess.ballotMode.minValueSum.toString(),
     };
 
-    // 5b. Extract election preset from metadata (if present)
     const electionPreset = parseElectionPresetFromMetadata(
       doc as { meta?: { electionPreset?: unknown } } | undefined
     );
 
-    // 6. Return user-friendly process info
     return {
       processId: rawProcess.processId,
       title: localizedText(doc?.title) ?? '',
@@ -1035,13 +1018,7 @@ export class ProcessOrchestrationService {
     yield { status: TxStatus.Completed, response: { ...created, ...outcome } };
   }
 
-  /**
-   * Resolve the ballot mode for a process config. Enforces mutual
-   * exclusivity between `ballot` and `electionPreset`, and resolves the
-   * preset into a raw `BallotMode` when given.
-   *
-   * @private
-   */
+  // The ballot mode of a config: `ballot`, or `electionPreset` resolved; never both.
   private resolveBallotConfig(config: ProcessConfig): BallotMode {
     const { ballot, electionPreset } = config;
 
@@ -1108,9 +1085,7 @@ export class ProcessOrchestrationService {
     return { startTime, duration: endTime - from };
   }
 
-  /**
-   * Converts various date formats to Unix timestamp
-   */
+  // A Date, ISO string or unix time (seconds, or milliseconds above 1e10) as unix seconds.
   private dateToUnixTimestamp(date: Date | string | number): number {
     if (typeof date === 'number') {
       if (!Number.isFinite(date) || date < 0) {
