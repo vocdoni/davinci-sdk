@@ -37,7 +37,16 @@ export enum TxStatus {
  * @template T - The type of the successful response data
  */
 export type TxStatusEvent<T = unknown> =
-  | { status: TxStatus.Pending; hash: string }
+  | {
+      status: TxStatus.Pending;
+      hash: string;
+      /**
+       * Which transaction this is, in a stream that sends a follow-up one
+       * (`setProcessGrace` after a creation with `grace`); absent for the
+       * stream's main transaction.
+       */
+      step?: string;
+    }
   | { status: TxStatus.Completed; response: T }
   | { status: TxStatus.Reverted; reason?: string; error?: Error }
   | { status: TxStatus.Failed; error: Error };

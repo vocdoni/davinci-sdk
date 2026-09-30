@@ -4,14 +4,19 @@ import type { BaseServiceConfig } from './core/api/BaseService';
 import type { DocumentOptions, Uploader } from './core/types/uploader';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { DeploymentPinError } from './contracts/errors';
-import type { TxStatusEvent } from './contracts/SmartContractService';
+import { SmartContractService, type TxStatusEvent } from './contracts/SmartContractService';
+import type { GraceParams } from './contracts/types';
 import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
   ProcessOrchestrationService,
   ProcessConfig,
   ProcessCreationResult,
   ProcessInfo,
+  type CancelOpenProcessesOptions,
+  type CancelOpenProcessesResult,
   type CensusUpdate,
+  type CloseProcessOptions,
+  type DurationChange,
   type MetadataUpdate,
 } from './core/process';
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
@@ -559,7 +564,10 @@ export class DavinciSDK {
    *
    * The metadata document is downloaded and checked against the registry's
    * `metadataHash`: title, description and questions come from it only when
-   * it matches (`metadataVerified`, `metadataStatus`).
+   * it matches (`metadataVerified`, `metadataStatus`). The key mode, the
+   * grace window (`grace`, `lastVoteAt`, `graceEnd`) and the `phase`
+   * (`upcoming`, `open`, `paused`, `closing`, `ended`, `results`, `canceled`)
+   * come from the same registry read and the chain head's time.
    *
    * Reads through the SDK's read provider: a voter's bare wallet is enough.
    *
@@ -585,6 +593,7 @@ export class DavinciSDK {
    * console.log("End date:", processInfo.endDate);
    * console.log("Duration:", processInfo.duration, "seconds");
    * console.log("Time remaining:", processInfo.timeRemaining, "seconds");
+   * console.log("Phase:", processInfo.phase); // e.g. 'closing' until processInfo.graceEnd
    *
    * // Access raw contract data if needed
    * console.log("Raw data:", processInfo.raw);
@@ -597,152 +606,119 @@ export class DavinciSDK {
   }
 
   /**
-   * Creates a complete voting process and returns an async generator that yields transaction status events.
-   * This method allows you to monitor the transaction progress in real-time, including pending, completed,
-   * failed, and reverted states.
+   * Creates a process and returns an async generator of its transaction's
+   * status events (`pending`, `completed`, `failed`, `reverted`).
    *
-   * Requires a signer with a provider for blockchain interactions.
+   * 1. The config is checked against the registry and the ballot circuit:
+   *    the timing on the chain clock (no `startDate` starts it in the block
+   *    that creates it), the ballot mode (at most 16 fields, values below
+   *    2^48, sums below 2^63), `maxVoters` and the result cap
+   *    (`maxValue * maxVoters <= 1e12`), and for a DKG key that the registry
+   *    has a DKG adapter.
+   * 2. A Merkle census object and the metadata document are published through
+   *    the configured `uploader` and read back as nodes and readers will; a
+   *    census or a document given by URL is checked the same way.
+   * 3. One creation at a time per account: the id the registry assigns next
+   *    is read, a `'sequencer'` key is asked from the key node for that id,
+   *    and `newProcess` is simulated, then sent. A DKG creation is retried
+   *    once when the committee's key pool ran out or the epoch moved (a
+   *    second `pending`). With `paused` the process is created PAUSED.
+   * 4. With `grace`, `setProcessGrace` follows as its own step: a `pending`
+   *    event with `step: 'setProcessGrace'`, then `completed` with `grace`,
+   *    or `graceError` if only that transaction failed (the process exists).
+   *    A value outside the registry's `graceFloor..graceCeil` is refused in
+   *    step 1, before anything is created. A live meeting sets the floor
+   *    (150 s on the production registry) so results follow the close within
+   *    minutes.
    *
-   * @param config - Simplified process configuration
+   * The key mode (`keyMode`) decides who can decrypt the results:
+   * `'sequencer'` (default) the key node, `'dkg'` a davinci-dkg committee,
+   * and `'dkg-locked'` the committee once the organizer reveals the secret
+   * returned in `organizerSecret`. Results come after the grace window that
+   * follows the end.
+   *
+   * Refusals come as `failed` events: a `ProcessCreateError` (with the
+   * registry error in `revertName`), `DkgDisabledError`, a census, metadata or
+   * sequencer error, or `WrongProcessIdError` when another creation from the
+   * same account took the key's id (cancel that process, see
+   * `cancelOpenProcesses`). Requires a signer with a provider on the
+   * network's chain.
+   *
+   * @param config - Process configuration
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, or the signer has no provider or is on another chain.
+   *   Refusals of the creation itself come as `Failed` events.
    *
    * @example
    * ```typescript
+   * const census = new OffchainCensus();
+   * census.add(['0x1111…', '0x2222…']);
    * const stream = sdk.createProcessStream({
-   *   title: "My Election",
-   *   description: "A simple election",
-   *   census: {
-   *     type: CensusOrigin.OffchainStatic,
-   *     root: "0x1234...",
-   *     uri: "https://files.example.org/census.json"
-   *   },
-   *   maxVoters: 100,
-   *   ballot: {
-   *     numFields: 2,
-   *     maxValue: "3",
-   *     minValue: "0",
-   *     uniqueValues: false,
-   *     costExponent: 10000,
-   *     maxValueSum: "6",
-   *     minValueSum: "0"
-   *   },
-   *   timing: {
-   *     startDate: new Date("2024-12-01T10:00:00Z"),
-   *     duration: 3600 * 24
-   *   },
+   *   title: 'My Election',
+   *   description: 'A simple election',
+   *   census,
+   *   electionPreset: { type: 'single_choice' },
+   *   timing: { duration: 3600 * 24 },
    *   questions: [
    *     {
-   *       title: "What is your favorite color?",
+   *       title: 'What is your favorite color?',
    *       choices: [
-   *         { title: "Red", value: 0 },
-   *         { title: "Blue", value: 1 }
-   *       ]
-   *     }
-   *   ]
+   *         { title: 'Red', value: 0 },
+   *         { title: 'Blue', value: 1 },
+   *       ],
+   *     },
+   *   ],
    * });
    *
-   * // Monitor transaction progress
    * for await (const event of stream) {
    *   switch (event.status) {
    *     case TxStatus.Pending:
-   *       console.log("Transaction pending:", event.hash);
-   *       // Update UI to show pending state
+   *       console.log('Transaction pending:', event.hash);
    *       break;
    *     case TxStatus.Completed:
-   *       console.log("Process created:", event.response.processId);
-   *       console.log("Transaction hash:", event.response.transactionHash);
-   *       // Update UI to show success
+   *       console.log('Process created:', event.response.processId);
    *       break;
    *     case TxStatus.Failed:
-   *       console.error("Transaction failed:", event.error);
-   *       // Update UI to show error
-   *       break;
    *     case TxStatus.Reverted:
-   *       console.error("Transaction reverted:", event.reason);
-   *       // Update UI to show revert reason
+   *       console.error('Creation failed:', event.error);
    *       break;
    *   }
    * }
    * ```
    */
-  createProcessStream(config: ProcessConfig) {
-    return this.createProcessStreamInternal(config);
-  }
-
-  private async *createProcessStreamInternal(
-    config: ProcessConfig
-  ): AsyncGenerator<TxStatusEvent<ProcessCreationResult>> {
-    this.requireInit('creating processes');
-    const processOrchestrator = await this.organizer();
-    yield* processOrchestrator.createProcessStream(config);
+  createProcessStream(config: ProcessConfig): AsyncGenerator<TxStatusEvent<ProcessCreationResult>> {
+    return this.organizerStream('creating processes', undefined, o =>
+      o.createProcessStream(config)
+    );
   }
 
   /**
-   * Creates a complete voting process with minimal configuration.
-   * This is the ultra-easy method for end users that handles all the complex orchestration internally.
+   * {@link createProcessStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use createProcessStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * The method automatically:
-   * - Publishes a Merkle census object and the metadata document through
-   *   the configured `uploader`, checking each URL as nodes and readers will
-   * - Gets the encryption key from the key sequencer for the next process id
-   * - Submits the on-chain transaction
-   *
-   * @param config - Simplified process configuration
-   * @returns Promise resolving to the process creation result
-   * @throws Error if signer does not have a provider
+   * @param config - Process configuration
+   * @returns The process id, the transaction hash and, for `'dkg-locked'`,
+   *   the organizer secret: store it, the SDK keeps no copy and the results
+   *   never unlock without it
+   * @throws the stream's failure (see {@link createProcessStream})
    *
    * @example
    * ```typescript
-   * // Option 1: a census object and the metadata fields (needs an uploader)
-   * const census = new OffchainCensus();
-   * census.add(['0x1111…', '0x2222…']);
-   * const result1 = await sdk.createProcess({
-   *   title: "My Election",
-   *   description: "A simple election",
+   * // A committee-held key whose results stay locked until the organizer says so.
+   * const { processId, organizerSecret, graceError } = await sdk.createProcess({
+   *   title: 'Board election',
    *   census,
-   *   ballot: {
-   *     numFields: 2,
-   *     maxValue: "3",
-   *     minValue: "0",
-   *     uniqueValues: false,
-   *     costExponent: 10000,
-   *     maxValueSum: "6",
-   *     minValueSum: "0"
-   *   },
-   *   timing: {
-   *     startDate: new Date("2024-12-01T10:00:00Z"),
-   *     duration: 3600 * 24
-   *   },
-   *   questions: [
-   *     {
-   *       title: "What is your favorite color?",
-   *       choices: [
-   *         { title: "Red", value: 0 },
-   *         { title: "Blue", value: 1 }
-   *       ]
-   *     }
-   *   ]
-   * });
-   *
-   * // Option 2: Using start and end dates
-   * const result2 = await sdk.createProcess({
-   *   title: "Weekend Vote",
-   *   timing: {
-   *     startDate: "2024-12-07T09:00:00Z",
-   *     endDate: "2024-12-08T18:00:00Z"
-   *   }
+   *   electionPreset: { type: 'multiple_choice', maxSelections: 2 },
+   *   timing: { startDate: '2026-12-07T09:00:00Z', endDate: '2026-12-08T18:00:00Z' },
+   *   questions,
+   *   keyMode: 'dkg-locked',
+   *   grace: 150, // the production floor: results soon after the close
    * });
    * ```
    */
   async createProcess(config: ProcessConfig): Promise<ProcessCreationResult> {
-    this.requireInit('creating processes');
-    const processOrchestrator = await this.organizer();
-    return processOrchestrator.createProcess(config);
+    return SmartContractService.executeTx(this.createProcessStream(config));
   }
 
   /**
@@ -985,22 +961,42 @@ export class DavinciSDK {
     );
   }
 
+  // An organizer stream: init, the signer's chain and the process id checked first.
+  private async *organizerStream<T>(
+    what: string,
+    processId: string | undefined,
+    run: (orchestrator: ProcessOrchestrationService) => AsyncGenerator<TxStatusEvent<T>>
+  ): AsyncGenerator<TxStatusEvent<T>> {
+    this.requireInit(what);
+    const orchestrator = await this.organizer(processId);
+    yield* run(orchestrator);
+  }
+
   /**
-   * Ends a voting process by setting its status to ENDED and returns an async generator
-   * that yields transaction status events. This method allows you to monitor the
-   * transaction progress in real-time.
+   * Ends a READY or PAUSED process (`setProcessStatus` ENDED) and returns an
+   * async generator of transaction status events. Only the organizer can,
+   * and only from the start on: before it the registry refuses
+   * (`InvalidTimeBounds`) and `cancelProcess` is the way to void it. Before
+   * the end it moves the end to now; votes already admitted still settle
+   * through the grace window, and the results follow it (`getGraceEnd`).
    *
-   * Requires a signer with a provider for blockchain interactions.
+   * Every organizer control reads the process and the chain clock first and
+   * refuses what the registry would revert as a `Failed` event, whose error
+   * is the operation's class (`ProcessStatusError` here) with the registry
+   * error in `revertName`. The call is then simulated before it is signed.
+   * Requires a signer with a provider on the network's chain.
    *
    * @param processId - The process ID to end
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
-   * const stream = sdk.endProcessStream("0x1234567890abcdef...");
-   *
-   * for await (const event of stream) {
+   * for await (const event of sdk.endProcessStream(processId)) {
    *   switch (event.status) {
    *     case TxStatus.Pending:
    *       console.log("Transaction pending:", event.hash);
@@ -1018,319 +1014,334 @@ export class DavinciSDK {
    * }
    * ```
    */
-  endProcessStream(processId: string) {
-    return this.endProcessStreamInternal(processId);
-  }
-
-  private async *endProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('ending processes');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.endProcessStream(processId);
+  endProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('ending processes', processId, o => o.endProcessStream(processId));
   }
 
   /**
-   * Ends a voting process by setting its status to ENDED.
-   * This is the simplified method that waits for transaction completion.
+   * {@link endProcessStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use endProcessStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @param processId - The process ID to end
-   * @returns Promise resolving when the process is ended
-   * @throws Error if signer does not have a provider
+   * @throws ProcessStatusError (`revertName` `InvalidTimeBounds` before the start,
+   *   `InvalidStatus` unless READY or PAUSED, `Unauthorized` for another account)
    *
    * @example
    * ```typescript
-   * await sdk.endProcess("0x1234567890abcdef...");
-   * console.log("Process ended successfully");
+   * await sdk.endProcess(processId);
    * ```
    */
   async endProcess(processId: string): Promise<void> {
-    this.requireInit('ending processes');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.endProcess(processId);
+    await SmartContractService.executeTx(this.endProcessStream(processId));
   }
 
   /**
-   * Pauses a voting process by setting its status to PAUSED and returns an async generator
-   * that yields transaction status events. This method allows you to monitor the
-   * transaction progress in real-time.
-   *
-   * Requires a signer with a provider for blockchain interactions.
+   * Pauses a READY process (`setProcessStatus` PAUSED) and returns an async
+   * generator of transaction status events. Only before the end: from the
+   * end on the registry refuses (`InvalidTimeBounds`). Nodes still take votes
+   * while it is paused but settle nothing until it resumes; a process still
+   * paused at its end settles through the grace window like an ended one.
    *
    * @param processId - The process ID to pause
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
-   * const stream = sdk.pauseProcessStream("0x1234567890abcdef...");
-   *
-   * for await (const event of stream) {
-   *   switch (event.status) {
-   *     case TxStatus.Pending:
-   *       console.log("Transaction pending:", event.hash);
-   *       break;
-   *     case TxStatus.Completed:
-   *       console.log("Process paused successfully");
-   *       break;
-   *     case TxStatus.Failed:
-   *       console.error("Transaction failed:", event.error);
-   *       break;
-   *     case TxStatus.Reverted:
-   *       console.error("Transaction reverted:", event.reason);
-   *       break;
-   *   }
-   * }
+   * for await (const event of sdk.pauseProcessStream(processId)) console.log(event.status);
    * ```
    */
-  pauseProcessStream(processId: string) {
-    return this.pauseProcessStreamInternal(processId);
-  }
-
-  private async *pauseProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('pausing processes');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.pauseProcessStream(processId);
+  pauseProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('pausing processes', processId, o =>
+      o.pauseProcessStream(processId)
+    );
   }
 
   /**
-   * Pauses a voting process by setting its status to PAUSED.
-   * This is the simplified method that waits for transaction completion.
+   * {@link pauseProcessStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use pauseProcessStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @param processId - The process ID to pause
-   * @returns Promise resolving when the process is paused
-   * @throws Error if signer does not have a provider
-   *
-   * @example
-   * ```typescript
-   * await sdk.pauseProcess("0x1234567890abcdef...");
-   * console.log("Process paused successfully");
-   * ```
+   * @throws ProcessStatusError, with the registry error in `revertName`
    */
   async pauseProcess(processId: string): Promise<void> {
-    this.requireInit('pausing processes');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.pauseProcess(processId);
+    await SmartContractService.executeTx(this.pauseProcessStream(processId));
   }
 
   /**
-   * Cancels a voting process by setting its status to CANCELED and returns an async generator
-   * that yields transaction status events. This method allows you to monitor the
-   * transaction progress in real-time.
-   *
-   * Requires a signer with a provider for blockchain interactions.
+   * Cancels a READY or PAUSED process (`setProcessStatus` CANCELED) and
+   * returns an async generator of transaction status events: no results will
+   * be set. It works at any time, the grace window included, until a DKG
+   * process's decryption was requested (which moves it to ENDED).
    *
    * @param processId - The process ID to cancel
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
-   * const stream = sdk.cancelProcessStream("0x1234567890abcdef...");
-   *
-   * for await (const event of stream) {
-   *   switch (event.status) {
-   *     case TxStatus.Pending:
-   *       console.log("Transaction pending:", event.hash);
-   *       break;
-   *     case TxStatus.Completed:
-   *       console.log("Process canceled successfully");
-   *       break;
-   *     case TxStatus.Failed:
-   *       console.error("Transaction failed:", event.error);
-   *       break;
-   *     case TxStatus.Reverted:
-   *       console.error("Transaction reverted:", event.reason);
-   *       break;
-   *   }
-   * }
+   * for await (const event of sdk.cancelProcessStream(processId)) console.log(event.status);
    * ```
    */
-  cancelProcessStream(processId: string) {
-    return this.cancelProcessStreamInternal(processId);
-  }
-
-  private async *cancelProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('canceling processes');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.cancelProcessStream(processId);
+  cancelProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('canceling processes', processId, o =>
+      o.cancelProcessStream(processId)
+    );
   }
 
   /**
-   * Cancels a voting process by setting its status to CANCELED.
-   * This is the simplified method that waits for transaction completion.
+   * {@link cancelProcessStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use cancelProcessStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @param processId - The process ID to cancel
-   * @returns Promise resolving when the process is canceled
-   * @throws Error if signer does not have a provider
-   *
-   * @example
-   * ```typescript
-   * await sdk.cancelProcess("0x1234567890abcdef...");
-   * console.log("Process canceled successfully");
-   * ```
+   * @throws ProcessStatusError, with the registry error in `revertName`
    */
   async cancelProcess(processId: string): Promise<void> {
-    this.requireInit('canceling processes');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.cancelProcess(processId);
+    await SmartContractService.executeTx(this.cancelProcessStream(processId));
   }
 
   /**
-   * Resumes a voting process by setting its status to READY and returns an async generator
-   * that yields transaction status events. This is typically used to resume a paused process.
-   *
-   * Requires a signer with a provider for blockchain interactions.
+   * Resumes a PAUSED process (`setProcessStatus` READY) and returns an async
+   * generator of transaction status events. Nodes then settle the votes they
+   * took while it was paused.
    *
    * @param processId - The process ID to resume
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
-   * const stream = sdk.resumeProcessStream("0x1234567890abcdef...");
-   *
-   * for await (const event of stream) {
-   *   switch (event.status) {
-   *     case TxStatus.Pending:
-   *       console.log("Transaction pending:", event.hash);
-   *       break;
-   *     case TxStatus.Completed:
-   *       console.log("Process resumed successfully");
-   *       break;
-   *     case TxStatus.Failed:
-   *       console.error("Transaction failed:", event.error);
-   *       break;
-   *     case TxStatus.Reverted:
-   *       console.error("Transaction reverted:", event.reason);
-   *       break;
-   *   }
-   * }
+   * for await (const event of sdk.resumeProcessStream(processId)) console.log(event.status);
    * ```
    */
-  resumeProcessStream(processId: string) {
-    return this.resumeProcessStreamInternal(processId);
-  }
-
-  private async *resumeProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('resuming processes');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.resumeProcessStream(processId);
+  resumeProcessStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('resuming processes', processId, o =>
+      o.resumeProcessStream(processId)
+    );
   }
 
   /**
-   * Resumes a voting process by setting its status to READY.
-   * This is typically used to resume a paused process.
-   * This is the simplified method that waits for transaction completion.
+   * {@link resumeProcessStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use resumeProcessStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @param processId - The process ID to resume
-   * @returns Promise resolving when the process is resumed
-   * @throws Error if signer does not have a provider
-   *
-   * @example
-   * ```typescript
-   * await sdk.resumeProcess("0x1234567890abcdef...");
-   * console.log("Process resumed successfully");
-   * ```
+   * @throws ProcessStatusError, with the registry error in `revertName`
    */
   async resumeProcess(processId: string): Promise<void> {
-    this.requireInit('resuming processes');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.resumeProcess(processId);
+    await SmartContractService.executeTx(this.resumeProcessStream(processId));
   }
 
   /**
-   * Sets the maximum number of voters for a process and returns an async generator
-   * that yields transaction status events. This allows you to change the voter limit
-   * after process creation.
+   * Moves the end of a READY or PAUSED process `seconds` later and returns
+   * an async generator of transaction status events; completion carries the
+   * new duration. Only before the current end: past it the tally may already
+   * be public, so the registry refuses (`InvalidTimeBounds`).
    *
-   * Requires a signer with a provider for blockchain interactions.
+   * @param processId - The process ID
+   * @param seconds - Seconds to add, a positive integer
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
+   *
+   * @example
+   * ```typescript
+   * await sdk.extendProcess(processId, 3600); // one more hour
+   * ```
+   */
+  extendProcessStream(
+    processId: string,
+    seconds: number
+  ): AsyncGenerator<TxStatusEvent<DurationChange>> {
+    return this.organizerStream('changing the process duration', processId, o =>
+      o.extendProcessStream(processId, seconds)
+    );
+  }
+
+  /**
+   * {@link extendProcessStream}, waiting for the transaction.
+   *
+   * @returns The new duration, in seconds from the start
+   * @throws ProcessDurationError, with the registry error in `revertName`
+   */
+  async extendProcess(processId: string, seconds: number): Promise<DurationChange> {
+    return SmartContractService.executeTx(this.extendProcessStream(processId, seconds));
+  }
+
+  /**
+   * Closes a READY or PAUSED process `seconds` from now, with notice, and
+   * returns an async generator of transaction status events. The new end is
+   * the chain head's time plus `max(seconds, noticeMin)` plus `slack` for
+   * the transaction's inclusion (the registry checks the notice when it
+   * lands; default 45 s, a few seconds on a local chain). Nodes flush during
+   * the notice and results follow the grace window: "voting closes in one
+   * minute" at a meeting. Only before the current end, and only to an earlier
+   * end; `endProcess` closes at once instead.
+   *
+   * @param processId - The process ID
+   * @param seconds - Seconds from now; less than `noticeMin` means `noticeMin`
+   * @param options - `slack` in seconds
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
+   *
+   * @example
+   * ```typescript
+   * const { noticeMin, graceFloor } = await sdk.getGraceParams();
+   * await sdk.setProcessGrace(processId, graceFloor); // results soon after the close
+   * await sdk.closeProcessIn(processId, noticeMin);
+   * ```
+   */
+  closeProcessInStream(
+    processId: string,
+    seconds: number,
+    options: CloseProcessOptions = {}
+  ): AsyncGenerator<TxStatusEvent<DurationChange>> {
+    return this.organizerStream('changing the process duration', processId, o =>
+      o.closeProcessInStream(processId, seconds, options)
+    );
+  }
+
+  /**
+   * {@link closeProcessInStream}, waiting for the transaction.
+   *
+   * @returns The new duration, in seconds from the start
+   * @throws ProcessDurationError, with the registry error in `revertName`
+   */
+  async closeProcessIn(
+    processId: string,
+    seconds: number,
+    options: CloseProcessOptions = {}
+  ): Promise<DurationChange> {
+    return SmartContractService.executeTx(this.closeProcessInStream(processId, seconds, options));
+  }
+
+  /**
+   * Sets the grace window of a READY or PAUSED process and returns an async
+   * generator of transaction status events: the idle seconds after the last
+   * landing that close the window and unlock the results. Only before the
+   * end (`InvalidTimeBounds`), and within the registry's
+   * `graceFloor..graceCeil` (`InvalidGrace`, see `getGraceParams`). A live
+   * meeting sets the floor right after creation.
+   *
+   * @param processId - The process ID
+   * @param grace - Seconds
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
+   */
+  setProcessGraceStream(
+    processId: string,
+    grace: number
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('setting the grace window', processId, o =>
+      o.setProcessGraceStream(processId, grace)
+    );
+  }
+
+  /**
+   * {@link setProcessGraceStream}, waiting for the transaction.
+   *
+   * @throws ProcessGraceError, with the registry error in `revertName`
+   */
+  async setProcessGrace(processId: string, grace: number): Promise<void> {
+    await SmartContractService.executeTx(this.setProcessGraceStream(processId, grace));
+  }
+
+  /**
+   * Sets the maximum number of voters of a READY or PAUSED process and
+   * returns an async generator of transaction status events. Only before the
+   * end (`InvalidTimeBounds`), never below the voters already counted
+   * (`InvalidMaxVoters`), and within the result cap: `maxValue` at most
+   * `1e12 / maxVoters` (`MaxPossibleResultCapExceeded`).
    *
    * @param processId - The process ID
    * @param maxVoters - The new maximum number of voters
    * @returns AsyncGenerator yielding transaction status events
-   * @throws Error if signer does not have a provider
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
-   * const stream = sdk.setProcessMaxVotersStream("0x1234567890abcdef...", 500);
-   *
-   * for await (const event of stream) {
-   *   switch (event.status) {
-   *     case TxStatus.Pending:
-   *       console.log("Transaction pending:", event.hash);
-   *       break;
-   *     case TxStatus.Completed:
-   *       console.log("MaxVoters updated successfully");
-   *       break;
-   *     case TxStatus.Failed:
-   *       console.error("Transaction failed:", event.error);
-   *       break;
-   *     case TxStatus.Reverted:
-   *       console.error("Transaction reverted:", event.reason);
-   *       break;
-   *   }
+   * for await (const event of sdk.setProcessMaxVotersStream(processId, 500)) {
+   *   console.log(event.status);
    * }
    * ```
    */
-  setProcessMaxVotersStream(processId: string, maxVoters: number) {
-    return this.setProcessMaxVotersStreamInternal(processId, maxVoters);
-  }
-
-  private async *setProcessMaxVotersStreamInternal(
+  setProcessMaxVotersStream(
     processId: string,
     maxVoters: number
   ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('setting process maxVoters');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
+    return this.organizerStream('setting process maxVoters', processId, o =>
+      o.setProcessMaxVotersStream(processId, maxVoters)
+    );
   }
 
   /**
-   * Sets the maximum number of voters for a process.
-   * This is the simplified method that waits for transaction completion.
+   * {@link setProcessMaxVotersStream}, waiting for the transaction.
    *
-   * For real-time transaction status updates, use setProcessMaxVotersStream() instead.
-   *
-   * Requires a signer with a provider for blockchain interactions.
-   *
-   * @param processId - The process ID
-   * @param maxVoters - The new maximum number of voters
-   * @returns Promise resolving when the maxVoters is updated
-   * @throws Error if signer does not have a provider
+   * @throws ProcessMaxVotersError, with the registry error in `revertName`
    *
    * @example
    * ```typescript
-   * await sdk.setProcessMaxVoters("0x1234567890abcdef...", 500);
-   * console.log("MaxVoters updated successfully");
+   * await sdk.setProcessMaxVoters(processId, 500);
    * ```
    */
   async setProcessMaxVoters(processId: string, maxVoters: number): Promise<void> {
-    this.requireInit('setting process maxVoters');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.setProcessMaxVoters(processId, maxVoters);
+    await SmartContractService.executeTx(this.setProcessMaxVotersStream(processId, maxVoters));
+  }
+
+  /**
+   * Publishes the organizer secret of a `'dkg-locked'` process and returns an
+   * async generator of transaction status events; the committee then
+   * decrypts the tally once the grace window has closed. It works at any
+   * time and needs only the secret, not the organizer's account; revealing
+   * while voting runs drops the process to the `'dkg'` trust model. A wrong
+   * secret is refused by the simulation (`InvalidOrganizerSecret`) before
+   * anything is sent.
+   *
+   * @param processId - The process ID
+   * @param secret - `organizerSecret` from `createProcess`
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
+   *
+   * @example
+   * ```typescript
+   * const { processId, organizerSecret } = await sdk.createProcess({ ...config, keyMode: 'dkg-locked' });
+   * // ... voting, the end, the grace window ...
+   * await sdk.revealProcessKey(processId, organizerSecret!);
+   * ```
+   */
+  revealProcessKeyStream(
+    processId: string,
+    secret: bigint
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('revealing the process key', processId, o =>
+      o.revealProcessKeyStream(processId, secret)
+    );
+  }
+
+  /**
+   * {@link revealProcessKeyStream}, waiting for the transaction.
+   *
+   * @throws ProcessKeyRevealError, with the registry or DKG error in `revertName`
+   */
+  async revealProcessKey(processId: string, secret: bigint): Promise<void> {
+    await SmartContractService.executeTx(this.revealProcessKeyStream(processId, secret));
   }
 
   /**
@@ -1339,7 +1350,8 @@ export class DavinciSDK {
    * not yet published is uploaded first; a census file given by URL is
    * checked as nodes read it. The process is read before anything is
    * uploaded: a census of another origin fails with `CensusNotUpdatable`,
-   * and the process must be READY or PAUSED and the signer its organizer.
+   * and the process must be READY or PAUSED, before its end, with the
+   * signer as its organizer.
    *
    * Nodes load the new census in the background and answer votes 429 while
    * they do; a pending vote whose member was removed or reweighted fails
@@ -1347,6 +1359,11 @@ export class DavinciSDK {
    *
    * @param processId - The process ID
    * @param census - The new census, or `{ root, uri }` of a census file already served
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
    *
    * @example
    * ```typescript
@@ -1356,17 +1373,13 @@ export class DavinciSDK {
    * }
    * ```
    */
-  updateCensusStream(processId: string, census: CensusUpdate) {
-    return this.updateCensusStreamInternal(processId, census);
-  }
-
-  private async *updateCensusStreamInternal(
+  updateCensusStream(
     processId: string,
     census: CensusUpdate
   ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('updating the census');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.updateCensusStream(processId, census);
+    return this.organizerStream('updating the census', processId, o =>
+      o.updateCensusStream(processId, census)
+    );
   }
 
   /**
@@ -1379,9 +1392,7 @@ export class DavinciSDK {
    * ```
    */
   async updateCensus(processId: string, census: CensusUpdate): Promise<void> {
-    this.requireInit('updating the census');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.updateCensus(processId, census);
+    await SmartContractService.executeTx(this.updateCensusStream(processId, census));
   }
 
   /**
@@ -1394,6 +1405,11 @@ export class DavinciSDK {
    * @param processId - The process ID
    * @param metadata - The new document, or where it is served
    *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals of the operation itself
+   *   come as `Failed` events.
+   *
    * @example
    * ```typescript
    * const stream = sdk.updateMetadataStream(processId, {
@@ -1404,17 +1420,13 @@ export class DavinciSDK {
    * for await (const event of stream) console.log(event.status);
    * ```
    */
-  updateMetadataStream(processId: string, metadata: MetadataUpdate) {
-    return this.updateMetadataStreamInternal(processId, metadata);
-  }
-
-  private async *updateMetadataStreamInternal(
+  updateMetadataStream(
     processId: string,
     metadata: MetadataUpdate
   ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
-    this.requireInit('updating the metadata');
-    const processOrchestrator = await this.organizer(processId);
-    yield* processOrchestrator.updateMetadataStream(processId, metadata);
+    return this.organizerStream('updating the metadata', processId, o =>
+      o.updateMetadataStream(processId, metadata)
+    );
   }
 
   /**
@@ -1426,9 +1438,52 @@ export class DavinciSDK {
    * ```
    */
   async updateMetadata(processId: string, metadata: MetadataUpdate): Promise<void> {
-    this.requireInit('updating the metadata');
-    const processOrchestrator = await this.organizer(processId);
-    return processOrchestrator.updateMetadata(processId, metadata);
+    await SmartContractService.executeTx(this.updateMetadataStream(processId, metadata));
+  }
+
+  /**
+   * Cancels the organizer's processes that are still READY or PAUSED: by
+   * default the ones this SDK instance created (a `WrongProcessIdError` one
+   * included), else the `processIds` given, or with `all` every process the
+   * signer created on the registry (one read per process). One transaction
+   * each; it tries them all and reports what it canceled and what failed.
+   *
+   * @example
+   * ```typescript
+   * const { canceled, failed } = await sdk.cancelOpenProcesses();
+   * ```
+   */
+  async cancelOpenProcesses(
+    options: CancelOpenProcessesOptions = {}
+  ): Promise<CancelOpenProcessesResult> {
+    this.requireInit('canceling processes');
+    for (const processId of options.processIds ?? []) this.checkProcessId(processId);
+    const orchestrator = await this.organizer();
+    return orchestrator.cancelOpenProcesses(options);
+  }
+
+  /**
+   * The registry's grace window parameters, in seconds: `defaultGrace` (a new
+   * process's), `graceFloor`..`graceCeil` (what `setProcessGrace` accepts),
+   * `graceMaxTotal` (the window never closes later than the end plus this)
+   * and `noticeMin` (the least notice `closeProcessIn` gives). Read once.
+   */
+  async getGraceParams(): Promise<GraceParams> {
+    this.requireInit('reading the grace parameters');
+    return this.readOrchestrator.getGraceParams();
+  }
+
+  /**
+   * When a process's grace window closes: batches of votes cast before the
+   * end land until then, and results unlock at it. Every landing after the
+   * end pushes it out, up to the end plus `graceMaxTotal`. Null when the
+   * registry holds no such process, or the window never closes (an end
+   * within `graceMaxTotal` of 2^256).
+   */
+  async getGraceEnd(processId: string): Promise<Date | null> {
+    this.requireInit('reading the grace window');
+    this.checkProcessId(processId);
+    return this.readOrchestrator.getGraceEnd(processId);
   }
 
   /**

@@ -19,7 +19,8 @@ export abstract class ContractServiceError extends Error {
    *
    * @param message - The error message describing what went wrong
    * @param operation - The operation that was being performed when the error occurred
-   * @param revert - The custom error the call reverted with, when it decodes
+   * @param revert - The custom error the call reverted with, when it decodes; for a
+   *   rule the SDK checks before sending, the error the registry would revert with
    * @param cause - The underlying error
    */
   constructor(
@@ -32,7 +33,10 @@ export abstract class ContractServiceError extends Error {
     this.name = this.constructor.name;
   }
 
-  /** Name of the custom error the call reverted with (`InvalidStatus`, `GraceOpen`, ...). */
+  /**
+   * Name of the custom error the call reverted with, or would have
+   * (`InvalidStatus`, `GraceOpen`, ...).
+   */
   get revertName(): string | undefined {
     return this.revert?.name;
   }

@@ -189,6 +189,28 @@ export function processIdPrefixOf(processId: string): string {
   return `0x${h.slice(40, 48).toLowerCase()}`;
 }
 
+/**
+ * The id a registry assigns the `nonce`-th process of `creator`
+ * (davinci-contracts `ProcessIdLib.computeProcessId`): the creator's address,
+ * the registry prefix and the nonce as a big-endian `uint56`.
+ *
+ * @param prefix - {@link processIdPrefix} of the registry
+ * @returns `0x` + 62 lowercase hex digits
+ *
+ * @example
+ * ```typescript
+ * // The first process an organizer creates on Gnosis.
+ * computeProcessId(organizer, resolveNetwork('gnosis').processIdPrefix, 0);
+ * ```
+ */
+export function computeProcessId(creator: string, prefix: string, nonce: number | bigint): string {
+  const n = BigInt(nonce);
+  if (n < 0n || n >= 1n << 56n) throw new RangeError(`nonce ${n} does not fit in uint56`);
+  if (!/^0x[0-9a-fA-F]{8}$/.test(prefix)) throw new TypeError(`${prefix} is not a 4-byte prefix`);
+  const address = getAddress(creator).slice(2).toLowerCase();
+  return `0x${address}${prefix.slice(2).toLowerCase()}${n.toString(16).padStart(14, '0')}`;
+}
+
 /** `User-Agent` of RPC requests from Node: some public RPCs answer 403 without one. */
 const RPC_USER_AGENT = 'davinci-sdk';
 /** Tries of a rate-limited (429) request on an RPC before the next one is asked. */

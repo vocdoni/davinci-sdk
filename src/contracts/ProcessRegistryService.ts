@@ -129,6 +129,29 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// A uint256 argument given as a JS number or bigint; a negative one would only
+// fail at ABI encoding, with no hint of which argument.
+function unsigned(v: bigint | number, what: string): bigint {
+  const n = BigInt(v);
+  if (n < 0n) throw new RangeError(`${what} ${n} is negative`);
+  return n;
+}
+
+// Whole seconds, for the arithmetic of a shortened end.
+function wholeSeconds(v: number, what: string): bigint {
+  if (!Number.isSafeInteger(v) || v < 0) {
+    throw new RangeError(`${what} ${String(v)} is not a whole number of seconds`);
+  }
+  return BigInt(v);
+}
+
+// A unix time for messages.
+function when(seconds: bigint): string {
+  return seconds < 8_640_000_000_000n
+    ? new Date(Number(seconds) * 1000).toISOString()
+    : `${seconds} (unix)`;
+}
+
 function bytesHex(v: unknown, what: string): string {
   return text(v, what).toLowerCase();
 }
@@ -475,6 +498,13 @@ export class ProcessRegistryService extends SmartContractService {
     return decodeProcess(pid, tuple(await this.read('getProcess', pid), 'process'));
   }
 
+  /** The latest block's time, unix seconds: the clock the registry's time rules run on. */
+  async getChainTime(): Promise<bigint> {
+    const head = await this.provider().getBlock('latest');
+    if (!head) throw new Error('no latest block');
+    return BigInt(head.timestamp);
+  }
+
   /** Processes created on this registry. */
   async getProcessCount(): Promise<number> {
     return small(await this.read('processCount'), 'processCount');
@@ -739,9 +769,9 @@ export class ProcessRegistryService extends SmartContractService {
       const key = params.encryptionKey ?? { x: 0n, y: 0n };
       return [
         params.status ?? ProcessStatus.READY,
-        BigInt(params.startTime),
-        BigInt(params.duration),
-        BigInt(params.maxVoters),
+        unsigned(params.startTime, 'startTime'),
+        unsigned(params.duration, 'duration'),
+        unsigned(params.maxVoters, 'maxVoters'),
         ballotMode(params.ballotMode),
         census(params.census),
         params.metadataUri,
@@ -931,7 +961,7 @@ export class ProcessRegistryService extends SmartContractService {
   setProcessDuration(processId: string, duration: bigint | number) {
     return this.writeDone(
       'setProcessDuration',
-      () => [normalizePid(processId), BigInt(duration)],
+      () => [normalizePid(processId), unsigned(duration, 'duration')],
       ProcessDurationError
     );
   }
@@ -940,7 +970,9 @@ export class ProcessRegistryService extends SmartContractService {
    * Shortens a running process so it ends `seconds` from the chain head,
    * never sooner than the registry's `noticeMin`, plus `slack` for the
    * transaction's own inclusion (the notice is checked at inclusion time).
-   * Nodes flush during the notice; results follow the grace window.
+   * Nodes flush during the notice; results follow the grace window. The new
+   * end must fall between the start and the current end: a process that
+   * would close before it starts is refused (cancel it instead).
    *
    * @param options - `slack` in seconds (default {@link SHORTEN_SLACK_SECONDS})
    */
@@ -959,10 +991,18 @@ export class ProcessRegistryService extends SmartContractService {
         this.provider().getBlock('latest'),
       ]);
       if (!head) throw new Error('no latest block');
-      const notice = BigInt(Math.max(seconds, grace.noticeMin));
-      const end = BigInt(head.timestamp) + notice + BigInt(options.slack ?? SHORTEN_SLACK_SECONDS);
+      const asked = wholeSeconds(seconds, 'seconds');
+      const notice = asked > BigInt(grace.noticeMin) ? asked : BigInt(grace.noticeMin);
+      const slack = wholeSeconds(options.slack ?? SHORTEN_SLACK_SECONDS, 'slack');
+      const end = BigInt(head.timestamp) + notice + slack;
       if (end >= process.startTime + process.duration) {
         throw new Error('the process already ends by then');
+      }
+      if (end <= process.startTime) {
+        throw new Error(
+          `process ${pid} starts at ${when(process.startTime)} and cannot close before it ` +
+            'starts; cancel it, or close it later'
+        );
       }
       duration = end - process.startTime;
     } catch (err) {

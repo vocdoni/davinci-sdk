@@ -10,6 +10,15 @@ import { type DkgParams, KeyMode } from './types';
 
 const ZERO_EPOCH = zeroPadValue('0x', 12);
 
+/**
+ * The registry's bound on a process's largest possible tally
+ * (`ProcessRegistry.MAX_POSSIBLE_RESULT_CAP`, which keeps the results within
+ * the decryption search): `maxValue` may not exceed `RESULT_CAP / maxVoters`
+ * (integer division), at creation and on every `setProcessMaxVoters`, else
+ * `MaxPossibleResultCapExceeded`.
+ */
+export const RESULT_CAP = 1_000_000_000_000n;
+
 /** `DKGParams` of a SEQUENCER-key process: every field zero. */
 export function sequencerKeyParams(): DkgParams {
   return {

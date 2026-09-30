@@ -775,6 +775,57 @@ describe('ProcessRegistryService.closeProcessIn', () => {
     expect(err.message).toContain('already ends by then');
     expect(chain.sent).toHaveLength(0);
   });
+
+  it('refuses to close a process before it starts, and bad seconds, before any send', async () => {
+    const { registry, chain, state } = setup();
+    chain.headTime = 1_700_000_000;
+    // Starts tomorrow: the shortened end would come before the start.
+    state.process = process({ startTime: 1_700_086_400n, duration: 3600n });
+    const early = failure(await drain(registry.closeProcessIn(PID, 60)));
+    expect(early).toBeInstanceOf(ProcessDurationError);
+    expect(early.message).toBe(
+      `closeProcessIn: process ${PID} starts at 2023-11-15T22:13:20.000Z and cannot close ` +
+        'before it starts; cancel it, or close it later'
+    );
+    // An end exactly at the start would be a zero duration: refused too.
+    state.process = process({ startTime: 1_700_000_105n, duration: 3600n });
+    expect(failure(await drain(registry.closeProcessIn(PID, 60))).message).toContain(
+      'cannot close before it starts'
+    );
+    for (const [seconds, slack] of [
+      [-1, undefined],
+      [1.5, undefined],
+      [Number.NaN, undefined],
+      [60, -1],
+      [60, 0.5],
+    ] as const) {
+      const err = failure(await drain(registry.closeProcessIn(PID, seconds, { slack })));
+      expect(err).toBeInstanceOf(ProcessDurationError);
+      expect(err.message).toContain('is not a whole number of seconds');
+    }
+    // Starting soon, a close that still falls after the start goes through.
+    state.process = process({ startTime: 1_700_000_010n, duration: 3600n });
+    await drain(registry.closeProcessIn(PID, 60));
+    expect(iface.decodeFunctionData('setProcessDuration', chain.sent[0].data)[1]).toBe(95n);
+    expect(chain.sent).toHaveLength(1);
+  });
+
+  it('refuses negative durations, starts and caps before encoding them', async () => {
+    const { registry, chain } = setup();
+    const duration = failure(await drain(registry.setProcessDuration(PID, -5n)));
+    expect(duration).toBeInstanceOf(ProcessDurationError);
+    expect(duration.message).toBe('setProcessDuration: duration -5 is negative');
+    for (const [field, value] of [
+      ['startTime', -1],
+      ['duration', -3600],
+      ['maxVoters', -2n],
+    ] as const) {
+      const err = failure(await drain(registry.newProcess({ ...baseParams(), [field]: value })));
+      expect(err).toBeInstanceOf(ProcessCreateError);
+      expect(err.message).toBe(`newProcess: ${field} ${value} is negative`);
+    }
+    expect(chain.sent).toHaveLength(0);
+  });
 });
 
 describe('ProcessRegistryService.verifyDeployment', () => {

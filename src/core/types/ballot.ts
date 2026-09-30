@@ -1,4 +1,119 @@
 import { BallotMode } from './common';
+import { type BallotModeValues, packBallotMode } from '../../crypto/ballot';
+import { MAX_VALUE_BITS, NUM_FIELDS, VALUE_SUM_BITS } from '../../protocol/limits';
+
+/**
+ * A ballot mode the registry or the `BallotProof(16)` circuit refuses.
+ * `registryError` names the registry's revert for the same rule, when it has one.
+ */
+export class BallotModeError extends RangeError {
+  constructor(
+    message: string,
+    public readonly registryError?: string
+  ) {
+    super(message);
+    this.name = 'BallotModeError';
+  }
+}
+
+// A bound of a ballot mode: a decimal string, a safe integer or a bigint.
+function modeBound(v: unknown, what: string): bigint {
+  if (typeof v === 'bigint' && v >= 0n) return v;
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
+  if (typeof v === 'string' && /^[0-9]+$/.test(v)) return BigInt(v);
+  throw new BallotModeError(`ballot mode: ${what} ${String(v)} is not a non-negative integer`);
+}
+
+function modeByte(v: unknown, what: string): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 255) {
+    throw new BallotModeError(`ballot mode: ${what} ${String(v)} is not an integer in 0..255`);
+  }
+  return v;
+}
+
+/**
+ * The registry form of a ballot mode (integer bounds, `groupSize` defaulting
+ * to `numFields`), checked against what the registry and the ballot circuit
+ * accept: 1 to 16 fields, `groupSize <= numFields`, value bounds below 2^48,
+ * sum bounds below 2^63, `minValue <= maxValue` and
+ * `minValueSum <= maxValueSum`. A `maxValueSum` of 0 makes each voter's census
+ * weight the budget, so `minValueSum` must be 0 too.
+ *
+ * @throws BallotModeError naming the rule, and the registry's revert for it
+ *
+ * @example
+ * ```typescript
+ * const mode = ballotModeValues(resolveElectionPreset({ type: 'approval' }, questions));
+ * ```
+ */
+export function ballotModeValues(mode: BallotMode): BallotModeValues {
+  const numFields = mode.numFields;
+  if (!Number.isInteger(numFields) || numFields < 1 || numFields > NUM_FIELDS) {
+    throw new BallotModeError(
+      `ballot mode: numFields ${String(numFields)} is not in 1..${NUM_FIELDS} ` +
+        `(the ballot circuit has ${NUM_FIELDS} fields)`,
+      'InvalidMaxCount'
+    );
+  }
+  const groupSize = modeByte(mode.groupSize ?? numFields, 'groupSize');
+  if (groupSize > numFields) {
+    throw new BallotModeError(
+      `ballot mode: groupSize ${groupSize} exceeds numFields ${numFields}`,
+      'InvalidGroupSize'
+    );
+  }
+  if (typeof mode.uniqueValues !== 'boolean') {
+    throw new BallotModeError(
+      `ballot mode: uniqueValues ${String(mode.uniqueValues)} is not a boolean`
+    );
+  }
+  const values: BallotModeValues = {
+    numFields,
+    groupSize,
+    uniqueValues: mode.uniqueValues,
+    costExponent: modeByte(mode.costExponent, 'costExponent'),
+    maxValue: modeBound(mode.maxValue, 'maxValue'),
+    minValue: modeBound(mode.minValue, 'minValue'),
+    maxValueSum: modeBound(mode.maxValueSum, 'maxValueSum'),
+    minValueSum: modeBound(mode.minValueSum, 'minValueSum'),
+  };
+  const tooLarge: [bigint, number, string, string][] = [
+    [values.maxValue, MAX_VALUE_BITS, 'maxValue', 'BallotModeMaxValueTooLarge'],
+    [values.minValue, MAX_VALUE_BITS, 'minValue', 'BallotModeMinValueTooLarge'],
+    [values.maxValueSum, VALUE_SUM_BITS, 'maxValueSum', 'BallotModeMaxValueSumTooLarge'],
+    [values.minValueSum, VALUE_SUM_BITS, 'minValueSum', 'BallotModeMinValueSumTooLarge'],
+  ];
+  for (const [v, bits, what, revert] of tooLarge) {
+    if (v >> BigInt(bits) !== 0n) {
+      throw new BallotModeError(`ballot mode: ${what} ${v} does not fit in ${bits} bits`, revert);
+    }
+  }
+  if (values.minValue > values.maxValue) {
+    throw new BallotModeError(
+      `ballot mode: minValue ${values.minValue} exceeds maxValue ${values.maxValue}`,
+      'InvalidMaxMinValueBounds'
+    );
+  }
+  if (values.minValueSum > values.maxValueSum) {
+    throw new BallotModeError(
+      `ballot mode: minValueSum ${values.minValueSum} exceeds maxValueSum ${values.maxValueSum}` +
+        (values.maxValueSum === 0n ? ' (a zero maxValueSum makes the weight the budget)' : ''),
+      'InvalidValueSumBounds'
+    );
+  }
+  packBallotMode(values);
+  return values;
+}
+
+// A preset parameter: a non-negative safe integer.
+function presetInt(preset: string, what: string, v: unknown): number {
+  if (typeof v !== 'number' || !Number.isSafeInteger(v)) {
+    throw new BallotModeError(
+      `electionPreset '${preset}': ${what} (${String(v)}) must be an integer`
+    );
+  }
+  return v;
+}
 
 /**
  * Discriminator strings for {@link ElectionPreset}.
@@ -79,9 +194,13 @@ export type ElectionPreset =
 /**
  * Resolve an {@link ElectionPreset} into a complete {@link BallotMode}.
  *
- * `numFields` is derived from `questions[0].choices.length`. Throws if
- * the preset's invariants are violated (e.g., `maxSelections` exceeds
- * `numFields`, `rating.maxValue` not greater than `minValue`).
+ * `numFields` is derived from `questions[0].choices.length`, at most 16 (the
+ * ballot circuit's fields). Throws if the preset's invariants are violated
+ * (e.g., `maxSelections` exceeds `numFields`, `rating.maxValue` not greater
+ * than `minValue`), if a parameter is not an integer, or if the mode falls
+ * outside what the registry and the circuit accept ({@link ballotModeValues}:
+ * values below 2^48, so a `rating.maxValue` or a quadratic `budget` of 2^48
+ * or more is refused).
  *
  * Exposed for callers who need to compute the ballot mode separately
  * from process creation (e.g., to inspect it before submitting).
@@ -99,6 +218,20 @@ export function resolveElectionPreset(
       `electionPreset '${preset.type}' requires questions[0].choices to be non-empty`
     );
   }
+  if (numFields > NUM_FIELDS) {
+    throw new BallotModeError(
+      `electionPreset '${preset.type}': questions[0] has ${numFields} choices; ` +
+        `the ballot circuit has ${NUM_FIELDS} fields`,
+      'InvalidMaxCount'
+    );
+  }
+  const mode = presetMode(preset, numFields);
+  ballotModeValues(mode);
+  return mode;
+}
+
+function presetMode(preset: ElectionPreset, numFields: number): BallotMode {
+  const int = (what: string, v: unknown) => presetInt(preset.type, what, v);
 
   switch (preset.type) {
     case 'single_choice': {
@@ -106,8 +239,8 @@ export function resolveElectionPreset(
       return makeBallotMode(numFields, 0, 1, false, 1, minSum, 1);
     }
     case 'multiple_choice': {
-      const min = preset.minSelections ?? 0;
-      const max = preset.maxSelections;
+      const min = int('minSelections', preset.minSelections ?? 0);
+      const max = int('maxSelections', preset.maxSelections);
       if (max < 1) {
         throw new Error("electionPreset 'multiple_choice': maxSelections must be >= 1");
       }
@@ -132,8 +265,11 @@ export function resolveElectionPreset(
       return makeBallotMode(numFields, 0, 1, false, 1, 0, numFields);
     }
     case 'rating': {
-      const minVal = preset.minValue ?? 0;
-      const maxVal = preset.maxValue;
+      const minVal = int('minValue', preset.minValue ?? 0);
+      const maxVal = int('maxValue', preset.maxValue);
+      if (minVal < 0) {
+        throw new Error(`electionPreset 'rating': minValue (${minVal}) must be >= 0`);
+      }
       if (maxVal <= minVal) {
         throw new Error(
           `electionPreset 'rating': maxValue (${maxVal}) must be greater than minValue (${minVal})`
@@ -154,11 +290,11 @@ export function resolveElectionPreset(
       return makeBallotMode(numFields, 1, numFields, true, 1, sum, sum);
     }
     case 'quadratic': {
-      const budget = preset.budget;
+      const budget = int('budget', preset.budget);
       if (budget <= 0) {
         throw new Error(`electionPreset 'quadratic': budget (${budget}) must be > 0`);
       }
-      const minSum = preset.minValueSum ?? 0;
+      const minSum = int('minValueSum', preset.minValueSum ?? 0);
       if (minSum < 0) {
         throw new Error(`electionPreset 'quadratic': minValueSum (${minSum}) must be >= 0`);
       }

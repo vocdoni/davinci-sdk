@@ -1,6 +1,7 @@
 import {
   FetchRequest,
   Interface,
+  getAddress,
   toUtf8Bytes,
   toUtf8String,
   type FetchGetUrlFunc,
@@ -10,7 +11,9 @@ import {
 import {
   FailoverRpcProvider,
   GNOSIS,
+  computeProcessId,
   networkOfProcessId,
+  processIdPrefix,
   processIdPrefixOf,
   resolveNetwork,
 } from '../../../src/networks';
@@ -79,6 +82,26 @@ describe('process id prefixes', () => {
     expect(networkOfProcessId(GNOSIS_PID)).toBe(GNOSIS);
     expect(networkOfProcessId(pidWith('0xdeadbeef'))).toBeUndefined();
     expect(() => processIdPrefixOf('0x1234')).toThrow(TypeError);
+  });
+
+  it('computes the id a registry assigns an organizer', () => {
+    // A process of an earlier Gnosis registry, 0x3CDE…daf3 (davinci-explorer's vector).
+    const registry = '0x3CDE68c39E26ecf94bD029b6ED3b9F945441daf3';
+    const organizer = getAddress('0x42fc20654efd78c6887ff0bd1cc50c9ec1dab589');
+    const prefix = processIdPrefix(100, registry);
+    expect(prefix).toBe('0x80c5bb93');
+    expect(computeProcessId(organizer, prefix, 1)).toBe(
+      '0x42fc20654efd78c6887ff0bd1cc50c9ec1dab58980c5bb9300000000000001'
+    );
+    expect(computeProcessId(organizer.toLowerCase(), '0x80C5BB93', 0n)).toBe(
+      '0x42fc20654efd78c6887ff0bd1cc50c9ec1dab58980c5bb9300000000000000'
+    );
+    expect(computeProcessId(organizer, prefix, (1n << 56n) - 1n).endsWith('ff'.repeat(7))).toBe(
+      true
+    );
+    expect(() => computeProcessId(organizer, prefix, 1n << 56n)).toThrow(RangeError);
+    expect(() => computeProcessId(organizer, prefix, -1)).toThrow(RangeError);
+    expect(() => computeProcessId(organizer, '0xf58480', 0)).toThrow(TypeError);
   });
 });
 

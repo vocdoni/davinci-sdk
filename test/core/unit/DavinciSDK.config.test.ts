@@ -1,5 +1,6 @@
 import {
   FetchRequest,
+  Interface,
   Wallet,
   ZeroAddress,
   keccak256,
@@ -13,10 +14,18 @@ import {
   DAVINCI_DKG_ADAPTER_ABI,
   DeploymentPinError,
   PROCESS_REGISTRY_ABI,
+  ProcessStatus,
+  TxStatus,
   ZISK_VERIFIER_ABI,
 } from '../../../src/contracts';
+import { CensusOrigin, PublishedCensus } from '../../../src/census';
 import { bjjMulBase } from '../../../src/crypto';
-import { FailoverRpcProvider, GNOSIS, processIdPrefix } from '../../../src/networks';
+import {
+  FailoverRpcProvider,
+  GNOSIS,
+  computeProcessId,
+  processIdPrefix,
+} from '../../../src/networks';
 import { RELEASE_PINS } from '../../../src/protocol';
 import { ArtifactError, BALLOT_ARTIFACTS } from '../../../src/prover';
 import {
@@ -105,6 +114,11 @@ function deploy(
     ziskVerifier: () => [VERIFIER],
     dkgAdapter: () => [ADAPTER],
     getProcess: () => [onchainProcess()],
+    defaultGrace: () => [180],
+    graceFloor: () => [150],
+    graceCeil: () => [600],
+    graceMaxTotal: () => [1800],
+    noticeMin: () => [60],
     ...calls,
   });
   chain.contract(ADAPTER, DAVINCI_DKG_ADAPTER_ABI, { registry: () => [registry] });
@@ -411,7 +425,9 @@ describe('DavinciSDK.init', () => {
   });
 
   it('succeeds with every node down; calls that need a node name them', async () => {
+    const organizer = new Wallet(KEY).address;
     const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+      getProcess: () => [{ ...onchainProcess(), organizationId: organizer }],
       setProcessStatus: () => [],
     });
     const { sdk } = sdkWith(
@@ -699,5 +715,151 @@ describe('DavinciSDK ballot proving', () => {
           documents: { timeoutMs: -1 },
         })
     ).toThrow('documents.timeoutMs -1 is not a positive number');
+  });
+});
+
+describe('DavinciSDK organizer controls', () => {
+  const EPOCH = `0x${'0e'.repeat(12)}`;
+  const registryIface = new Interface(PROCESS_REGISTRY_ABI);
+
+  // A Gnosis registry whose processes belong to the SDK's signer, and which
+  // creates the ids `processIdPrefix` and a nonce give.
+  function organizerSdk() {
+    const organizer = new Wallet(KEY).address;
+    const prefix = processIdPrefix(100, GNOSIS.processRegistry);
+    const state = { nonce: 0, status: 0 };
+    const pidOf = (n: number) => computeProcessId(organizer, prefix, n);
+    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+      getProcess: () => [
+        { ...onchainProcess(), organizationId: organizer, status: state.status, keyMode: 2 },
+      ],
+      getNextProcessId: () => [pidOf(state.nonce)],
+      newProcess: () => [pidOf(state.nonce)],
+      aidFor: () => [`0x${'0d'.repeat(32)}`],
+      processNonce: () => [BigInt(state.nonce)],
+      pidPrefix: () => [Number(prefix)],
+      getProcessGraceEnd: () => [1_700_003_780n],
+      setProcessStatus: () => [],
+      setProcessDuration: () => [],
+      setProcessGrace: () => [],
+      revealProcessKey: () => [],
+    });
+    chain.contract(ADAPTER, DAVINCI_DKG_ADAPTER_ABI, {
+      registry: () => [GNOSIS.processRegistry],
+      registrationEpoch: () => [EPOCH],
+    });
+    chain.onMine = tx => {
+      const parsed = registryIface.parseTransaction({ data: tx.data });
+      if (parsed?.name !== 'newProcess') return { status: 1 };
+      const { topics, data } = registryIface.encodeEventLog('ProcessCreated', [
+        pidOf(state.nonce++),
+        tx.from,
+      ]);
+      return { status: 1, logs: [{ address: GNOSIS.processRegistry, topics, data }] };
+    };
+    const { sdk } = sdkWith({ signer: new Wallet(KEY, chain) });
+    const sent = () =>
+      chain.sent
+        .map(tx => registryIface.parseTransaction({ data: tx.data }))
+        .map(p => [p?.name, ...(p?.args ?? [])] as unknown[]);
+    return { sdk, chain, state, pidOf, sent };
+  }
+
+  it('needs init(), a process of the network and the signer on its chain', async () => {
+    const { sdk } = organizerSdk();
+    const calls: [() => Promise<unknown>, string][] = [
+      [() => sdk.extendProcess(PID, 60), 'changing the process duration'],
+      [() => sdk.closeProcessIn(PID, 60), 'changing the process duration'],
+      [() => sdk.setProcessGrace(PID, 150), 'setting the grace window'],
+      [() => sdk.revealProcessKey(PID, 1n), 'revealing the process key'],
+      [() => sdk.cancelOpenProcesses(), 'canceling processes'],
+      [() => sdk.getGraceParams(), 'reading the grace parameters'],
+      [() => sdk.getGraceEnd(PID), 'reading the grace window'],
+    ];
+    for (const [call, what] of calls) {
+      await expect(call()).rejects.toThrow(`SDK must be initialized before ${what}.`);
+    }
+    await sdk.init();
+    const foreign = pidWith('0x01020304');
+    for (const call of [
+      () => sdk.extendProcess(foreign, 60),
+      () => sdk.closeProcessIn(foreign, 60),
+      () => sdk.setProcessGrace(foreign, 150),
+      () => sdk.revealProcessKey(foreign, 1n),
+      () => sdk.getGraceEnd(foreign),
+      () => sdk.cancelOpenProcesses({ processIds: [foreign] }),
+    ]) {
+      await expect(call()).rejects.toThrow('was not created by the gnosis registry');
+    }
+
+    const rpc = organizerSdk().chain;
+    rpcRoutes({ 'rpc.test': rpc });
+    const elsewhere = sdkWith({
+      signer: new Wallet(KEY, new MockChain(1n)),
+      rpcUrls: ['https://rpc.test'],
+    });
+    await elsewhere.sdk.init();
+    await expect(elsewhere.sdk.closeProcessIn(PID, 60)).rejects.toThrow(
+      'The signer is on chain 1; the gnosis registry is on chain 100.'
+    );
+    // Reads go through the read provider.
+    expect((await elsewhere.sdk.getGraceParams()).noticeMin).toBe(60);
+    expect(await elsewhere.sdk.getGraceEnd(PID)).toEqual(new Date(1_700_003_780_000));
+  });
+
+  it('creates a locked process, runs its controls and cleans up', async () => {
+    const { sdk, state, pidOf, sent } = organizerSdk();
+    await sdk.init();
+    const created = await sdk.createProcess({
+      census: new PublishedCensus(CensusOrigin.CSP, `0x${'01'.repeat(20)}`, 'https://csp.test'),
+      ballot: {
+        numFields: 2,
+        maxValue: '1',
+        minValue: '0',
+        uniqueValues: false,
+        costExponent: 1,
+        maxValueSum: '1',
+        minValueSum: '0',
+      },
+      timing: { duration: 3600 },
+      maxVoters: 10,
+      metadataUri: 'https://files.example/m.json',
+      metadataHash: `0x${'ab'.repeat(32)}`,
+      keyMode: 'dkg-locked',
+      grace: 150,
+      paused: true,
+    });
+    expect(created.processId).toBe(pidOf(0));
+    expect(typeof created.organizerSecret).toBe('bigint');
+    expect(created.grace?.seconds).toBe(150);
+
+    const pid = created.processId;
+    expect(await sdk.extendProcess(pid, 60)).toEqual({ success: true, duration: 3660n });
+    expect(await sdk.closeProcessIn(pid, 60, { slack: 6 })).toEqual({
+      success: true,
+      duration: 1_700_000_066n - 1_700_000_000n,
+    });
+    await sdk.setProcessGrace(pid, 150);
+    await sdk.revealProcessKey(pid, created.organizerSecret as bigint);
+    expect(await sdk.cancelOpenProcesses()).toEqual({ canceled: [pid], failed: [] });
+    state.status = ProcessStatus.CANCELED;
+    expect(await sdk.cancelOpenProcesses({ all: true })).toEqual({ canceled: [], failed: [] });
+    expect(sent().map(t => t[0])).toEqual([
+      'newProcess',
+      'setProcessGrace',
+      'setProcessDuration',
+      'setProcessDuration',
+      'setProcessGrace',
+      'revealProcessKey',
+      'setProcessStatus',
+    ]);
+    expect(sent()[0][1]).toBe(BigInt(ProcessStatus.PAUSED));
+    expect(sent()[1]).toEqual(['setProcessGrace', pid, 150n]);
+    expect(sent()[5]).toEqual(['revealProcessKey', pid, created.organizerSecret]);
+    // A refusal comes as a Failed event of the stream.
+    const events = [];
+    for await (const e of sdk.setProcessGraceStream(pid, 10)) events.push(e);
+    expect(events).toHaveLength(1);
+    expect(events[0].status).toBe(TxStatus.Failed);
   });
 });
