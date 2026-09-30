@@ -1,73 +1,62 @@
 /**
  * recipes/read-results.ts
  *
- * End a process and read its final tally.
+ * Wait for a process's results and print them per question:
  *
- *   - (optionally) wait until all expected votes are counted on-chain
- *   - endProcess (triggers tally decryption + on-chain results)
- *   - await the ProcessResultsSet contract event
- *   - print result[] mapped back to the question's options
+ *   - getResultsStatus: where the process stands (voting, grace, awaiting the
+ *     key holder, the DKG committee's states, locked, results, canceled)
+ *   - waitForResults: polls the chain until the tally is on it, and decodes it
+ *     with the verified metadata's titles
  *
- * Needs an organizer signer WITH a provider (reading the contract + ending the
- * process are on-chain operations).
+ * Results come after the end and the grace window, from the key holder: the
+ * key node (sequencer key) within a couple of minutes, or the DKG committee
+ * within a few more. Reading needs no provider: a bare wallet is enough.
+ *
+ * Environment: DAVINCI_NODES
  *
  * Usage:
- *   tsx read-results.ts <processId> [expectedVoteCount]
+ *   tsx read-results.ts <processId>
  */
 
-import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK, TxStatus } from "@vocdoni/davinci-sdk";
+import { DavinciSDK, ResultsError } from '@vocdoni/davinci-sdk';
+import { Wallet } from 'ethers';
 
-const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+const nodes = (process.env.DAVINCI_NODES ?? '').split(',').filter(Boolean);
 const processId = process.argv[2];
-const expected = process.argv[3] ? Number(process.argv[3]) : undefined;
 
 async function main() {
-  if (!processId) throw new Error("usage: tsx read-results.ts <processId> [expectedVoteCount]");
-
-  const sdk = new DavinciSDK({
-    signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
-    sequencerUrl: SEQUENCER_API_URL,
-    censusUrl: CENSUS_API_URL,
-  });
+  if (!processId) throw new Error('usage: tsx read-results.ts <processId>');
+  const sdk = new DavinciSDK({ signer: Wallet.createRandom(), sequencerUrls: nodes });
   await sdk.init();
 
-  // 1. Optionally wait for the on-chain vote count to reach the expected number.
-  if (expected !== undefined) {
-    while (true) {
-      const info = await sdk.getProcess(processId);
-      if (Number(info.votersCount) >= expected) break;
-      console.log(`counted ${info.votersCount}/${expected}…`);
-      await new Promise((r) => setTimeout(r, 10_000));
-    }
-  }
+  const status = await sdk.getResultsStatus(processId);
+  console.log(`state ${status.state}, grace window closes ${status.graceEnd?.toISOString()}`);
 
-  // 2. End the process (stops voting; triggers tally). Stream the tx.
-  for await (const event of sdk.endProcessStream(processId)) {
-    if (event.status === TxStatus.Completed) console.log("Process ended");
-    else if (event.status === TxStatus.Failed) throw event.error;
-    else if (event.status === TxStatus.Reverted) throw new Error(`Reverted: ${event.reason}`);
-  }
-
-  // 3. Wait for results to be set on-chain (escape-hatch contract event).
-  await new Promise<void>((resolve) => {
-    sdk.processes.onProcessResultsSet((id, _sender, _result) => {
-      if (id.toLowerCase() === processId.toLowerCase()) resolve();
+  try {
+    const results = await sdk.waitForResults(processId, {
+      onStatus: s => console.log(new Date().toISOString(), s.state),
     });
-  });
-
-  // 4. Read and display the tally. result[] is one bigint per ballot field.
-  const info = await sdk.getProcess(processId);
-  console.log(`\nResults for: ${info.title}`);
-  info.questions[0].choices.forEach((choice, i) => {
-    console.log(`  ${choice.title}: ${info.result[i]?.toString() ?? "0"}`);
-  });
+    console.log(`${results.kind} ballot, ${results.voters} ballots counted`);
+    for (const [q, question] of results.questions.entries()) {
+      console.log(question.title ?? `question ${q + 1}`);
+      for (const c of question.choices) {
+        const mean = c.mean === null ? '' : ` (mean ${c.mean.toFixed(2)})`;
+        console.log(`  ${c.title ?? `field ${c.field}`}: ${c.total}${mean}`);
+      }
+    }
+  } catch (err) {
+    if (err instanceof ResultsError && err.reason === 'locked') {
+      console.log('the organizer has not revealed the DKG-locked key yet (revealProcessKey)');
+      return;
+    }
+    throw err; // ResultsError canceled or timeout: its message says what was missing
+  }
 }
 
 main().then(
   () => process.exit(0),
-  (err) => {
+  err => {
     console.error(err);
     process.exit(1);
-  },
+  }
 );

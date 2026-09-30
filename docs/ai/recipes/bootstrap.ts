@@ -1,61 +1,58 @@
 /**
  * recipes/bootstrap.ts
  *
- * Wire up the Davinci SDK and verify the connection. This is the foundation
- * every other recipe builds on.
+ * Configure the SDK for a deployment, initialize it and report what it found:
  *
- *   - construct a DavinciSDK with an ethers v6 signer + sequencer/census URLs
- *   - init() (mandatory — resolves contract addresses from the sequencer)
- *   - sanity-check that the RPC chain matches what the sequencer serves
+ *   - the network (Gnosis by default) and the registry it points at
+ *   - the registry pins, checked by init() against this SDK release
+ *   - every sequencer node's /info, checked against the registry
+ *   - the grace window parameters
+ *
+ * Environment:
+ *   DAVINCI_NODES  comma-separated sequencer node URLs of the deployment
+ *   RPC_URL        optional JSON-RPC of the network (default: the preset's public RPCs)
+ *   PRIVATE_KEY    optional; a random wallet is enough to read
  *
  * Usage:
  *   npm install @vocdoni/davinci-sdk ethers
- *   # set env vars (see references/setup.md), then:
  *   tsx bootstrap.ts
  */
 
-import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK } from "@vocdoni/davinci-sdk";
+import { DavinciSDK } from '@vocdoni/davinci-sdk';
+import { Wallet } from 'ethers';
 
-const SEQUENCER_API_URL = process.env.SEQUENCER_API_URL!; // e.g. https://sequencer-dev.davinci.vote
-const CENSUS_API_URL = process.env.CENSUS_API_URL!;       // e.g. https://c3-dev.davinci.vote
-const RPC_URL = process.env.RPC_URL!;
-const PRIVATE_KEY = process.env.PRIVATE_KEY!;
+const nodes = (process.env.DAVINCI_NODES ?? '').split(',').filter(Boolean);
+const rpcUrls = process.env.RPC_URL ? [process.env.RPC_URL] : undefined;
 
 async function main() {
-  // An organizer signer needs a provider (on-chain ops). A voting-only signer would not.
-  const signer = new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL));
+  if (nodes.length === 0) throw new Error('set DAVINCI_NODES to the sequencer node URLs');
+  const signer = process.env.PRIVATE_KEY
+    ? new Wallet(process.env.PRIVATE_KEY)
+    : Wallet.createRandom();
 
-  const sdk = new DavinciSDK({
-    signer,
-    sequencerUrl: SEQUENCER_API_URL,
-    censusUrl: CENSUS_API_URL, // only needed to publish Merkle censuses / fetch census proofs
-  });
+  const sdk = new DavinciSDK({ signer, sequencerUrls: nodes, rpcUrls });
+  await sdk.init(); // throws DeploymentPinError or NodeMismatchError when something does not match
 
-  await sdk.init(); // REQUIRED before any other method
-  console.log("SDK initialized");
+  const { name, chainId, processRegistry, processIdPrefix } = sdk.network;
+  console.log(
+    `network ${name} (chain ${chainId}), registry ${processRegistry}, prefix ${processIdPrefix}`
+  );
+  console.log('ballot VK hash', await sdk.registry.getBallotVKHash());
+  console.log('grace window', await sdk.getGraceParams());
 
-  // Sanity check: does the sequencer serve our RPC's chain?
-  const info = await sdk.api.sequencer.getInfo();
-  const net = await signer.provider!.getNetwork();
-  const chainId = Number(net.chainId);
-
-  const supported = Object.values(info.networks).some((n) => n.chainID === chainId);
-  if (!supported) {
-    const available = Object.values(info.networks)
-      .map((n) => `${n.shortName}(${n.chainID})`)
-      .join(", ");
-    throw new Error(`RPC chain ${chainId} not served by this sequencer. Available: ${available}`);
+  for (const node of sdk.nodeChecks) {
+    const settled = node.info ? `, settled ${node.info.settledBySelf} batches` : '';
+    console.log(
+      `node ${node.url}: ${node.status}${node.reason ? ` (${node.reason})` : ''}${settled}`
+    );
   }
-
-  console.log(`Connected. chainId=${chainId}, sequencer=${info.sequencerAddress}`);
-  console.log(`Ballot-proof circuit: ${info.circuitUrl}`);
+  console.log('processes the nodes know:', (await sdk.listProcesses()).length);
 }
 
 main().then(
   () => process.exit(0),
-  (err) => {
+  err => {
     console.error(err);
     process.exit(1);
-  },
+  }
 );

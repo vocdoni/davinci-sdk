@@ -1,135 +1,130 @@
-# `references/sequencer.md` — The sequencer REST client (`sdk.api.sequencer`)
+# `references/sequencer.md` — The sequencer node client
 
-Companion to the [[davinci-sdk]] skill. The sequencer is the off-chain service that collects encrypted ballots, verifies their zk proofs, aggregates them, and drives the on-chain state. Its REST client is `VocdoniSequencerService`, reachable as **`sdk.api.sequencer`** (and `sdk.api.census` for the census service — see `references/census.md`). The `DavinciSDK` facade calls these for you; reach here when you need a lightweight, provider-free read or a call the facade doesn't wrap.
+Companion to the [[davinci-sdk]] skill. A sequencer node takes votes, batches and proves them, settles the batches on the registry and serves what it knows over HTTP. The facade calls the nodes for you; this client is for reads and calls it does not wrap. Nothing a node says replaces the registry: voters take the election key, ballot mode and census root from the contract (`sdk.registry`).
 
 ```ts
-const seq = sdk.api.sequencer;   // VocdoniSequencerService, base URL = config.sequencerUrl
+const keyNode = sdk.api.sequencer; // VocdoniSequencerService: the key node
+const nodes = sdk.api.nodes; // SequencerNodes: every usable node, with vote routing
+const first = nodes.nodes[0]; // one node's client
 ```
 
-## Methods (exact signatures)
+Both getters need `init()`, and throw `SequencerUnavailableError` when their role has no usable node. A client can also be built directly: `new VocdoniSequencerService(url, { timeoutMs, headers, fetchImpl, maxResponseBytes })`.
 
-```ts
-// Health / discovery
-seq.ping(): Promise<void>
-seq.getInfo(): Promise<InfoResponse>          // circuit URLs+hashes, networks, sequencer addr
+## Methods
 
-// Processes (lightweight, no provider needed)
-seq.getProcess(processId: string): Promise<GetProcessResponse>
-seq.getProcessKeys(processId: string): Promise<{ encryptionPubKey: [string, string] }>
-seq.listProcesses(chainId?: number): Promise<string[]>
+| Method | Route | Returns |
+| --- | --- | --- |
+| `ping()` | `GET /ping` | |
+| `getInfo()` | `GET /info` | `SequencerInfo` |
+| `listProcesses()` | `GET /processes` | process ids the node knows |
+| `getProcess(pid)` | `GET /processes/{pid}` | `ProcessView` |
+| `getEncryptionKey(pid)` | `POST /processes/keys` | the node's election key for that (future) id; the identity and points outside the subgroup are refused |
+| `getParticipant(pid, address)` | `GET /processes/{pid}/participants/{address}` | `{ address, weight, censusProof }`: the proof must be the address's own leaf and verify |
+| `getAddressWeight(pid, address)` | same | `bigint` |
+| `isAddressAbleToVote(pid, address)` | same | false on 40401 |
+| `getTransitions(pid)` | `GET /processes/{pid}/transitions` | settled transitions: roots, transaction, block, sender, counts, blob count |
+| `getTransitionBlobs(pid, index)` | `GET /processes/{pid}/transitions/{i}/blobs` | the blobs, `0x` hex |
+| `submitVote(vote)` | `POST /votes` | the exact body of a `VoteRequest`; the vote id echo is checked |
+| `getVoteStatus(pid, voteId)` | `GET /votes/{pid}/voteId/{vid}` | `{ status, error? }` |
+| `getVoteIdProof(pid, voteId)` | `GET /votes/{pid}/voteId/{vid}/proof` | `TrackerProof`, checked to be for that vote |
+| `getBallot(pid, address)` | `GET /votes/{pid}/address/{address}` | the re-encrypted ballot in the voter's slot |
+| `hasAddressVoted(pid, address)` | same | false on 40401 |
 
-// Votes
-seq.submitVote(vote: VoteRequest): Promise<void>            // facade builds the VoteRequest
-seq.getVoteStatus(processId, voteId): Promise<{ status: VoteStatus }>
-seq.hasAddressVoted(processId, address): Promise<boolean>
-seq.isAddressAbleToVote(processId, address): Promise<boolean>
-seq.getAddressWeight(processId, address): Promise<string>   // "0" if not in census
+Process ids go out lowercase with `0x` (either form is accepted); vote ids are `0x` + 16 hex digits and at least 2^63.
 
-// Metadata (used by createProcess)
-seq.pushMetadata(metadata: ElectionMetadata): Promise<string>   // → content hash
-seq.getMetadata(hashOrUrl: string): Promise<ElectionMetadata>
-seq.getMetadataUrl(hash: string): string
+### `SequencerInfo`
 
-// Stats
-seq.getStats(): Promise<SequencerStats>
-seq.getWorkers(): Promise<WorkersResponse>
-```
-
-No network call on construction. The base URL comes from the SDK config.
-
-## `getInfo` — the source of circuit artifacts & chains
-
-```ts
-interface InfoResponse {
-  circuitUrl: string;        circuitHash: string;          // ballot-proof WASM
-  provingKeyUrl: string;     provingKeyHash: string;        // zkey
-  verificationKeyUrl: string; verificationKeyHash: string;  // vkey (JSON)
-  networks: Record<string /* chainId */, {
-    chainID: number;
-    shortName: string;
-    processRegistryContract: string;   // contract address per chain
-    processIDVersion: string;          // 4-byte version embedded in process IDs
-  }>;
-  sequencerAddress: string;
+```ts nocheck
+interface SequencerInfo {
+  sequencerAddress: string | null; // null for an observer
+  chainId: number;
+  processRegistry: string;
+  ballotVkHash: string;
+  batchProgramVk: string;
+  resultsProgramVk: string;
+  observer: boolean; // follows the chain; takes no votes, issues no keys
+  settledBySelf: number;
+  syncedFromOthers: number;
+  lostRaces: number;
 }
 ```
 
-`init()` uses `networks[chainId].processRegistryContract` to wire the contract service. The vote flow downloads `circuitUrl`/`provingKeyUrl`/`verificationKeyUrl` (multi-MB; the SDK caches them in memory) and verifies their SHA-256 against the `*Hash` fields when `verifyCircuitFiles` is on.
+`init()` checks the first five fields against the registry (`references/nodes.md`); `checkNodeInfo(info, expected, url)` does the same by hand.
 
-## `getProcess` (REST) vs `sdk.getProcess` (contract)
+### `ProcessView`
 
-`seq.getProcess` is the **lightweight, provider-free** view straight from the sequencer; `sdk.getProcess` reads the contract + metadata and returns the richer `ProcessInfo` (and needs a provider). Use the REST one for status/readiness polling.
-
-```ts
-interface GetProcessResponse {
-  id: string;
-  status: number;                       // ProcessStatus as a number
-  organizationId: string;               // creator address
-  encryptionKey: { x: string; y: string };
-  stateRoot: string;
-  result: string[] | null;              // decimal strings once tallied
-  startTime: string;
-  duration: number;
-  metadataURI: string;
-  ballotMode: BallotMode;               // string-bounded shape
-  census: { censusOrigin: number; censusRoot: string; censusURI: string; /* … */ };
-  votersCount: string;
-  maxVoters: string;
-  overwrittenVotesCount: string;
-  isAcceptingVotes: boolean;            // ← poll this for readiness
-  sequencerStats: { /* per-process processing counters */ };
-}
-```
-
-The canonical readiness check before voting:
+The registry's parameters plus the node's own view: `status` (`'ready' | 'ended' | 'canceled' | 'paused' | 'results' | 'unknown'`), `isAcceptingVotes` (false before the start and from the end on), `encryptionKey`, `ballotMode`, `census`, `stateRoot`, `localStateRoot` (the node's committed root), `synced`, the counters, `startTime`, `duration`, `result` once on-chain, and `ignored` with a `note` when the node refused to serve the process (a census it could not load, a key that is not a subgroup point).
 
 ```ts
-const p = await sdk.api.sequencer.getProcess(processId);
-if (p.isAcceptingVotes) { /* safe to submitVote */ }
+const view = await sdk.api.nodes.firstAnswer(n => n.getProcess(processId));
+if (view.ignored) console.warn('the nodes ignore this process:', view.note);
+checkProcessView(view, await sdk.registry.getProcess(processId)); // throws naming a field that differs
 ```
 
-## `VoteRequest` (the wire payload — the facade builds it)
+A node's view may trail the registry for a block or two (an updated census root, for instance).
 
-You normally never construct this; `sdk.submitVote` does. Shown for debugging:
+## Routing helpers
 
 ```ts
-interface VoteRequest {
-  processId: string;
-  censusProof?: CensusProof;   // only for CSP; omitted for Merkle
-  ballot: { curveType: string; ciphertexts: { c1: [string,string]; c2: [string,string] }[] };
-  ballotProof: { pi_a; pi_b; pi_c; protocol };   // groth16
-  ballotInputsHash: string;
-  address: string;
-  signature: string;           // EdDSA over the 32-byte voteId
-  voteId: string;
-}
+import { pickNode, SequencerNodes } from '@vocdoni/davinci-sdk';
+
+const order = pickNode(voterAddress, processId, nodeUrls); // the voter's node order
+const cluster = new SequencerNodes(nodeUrls);
+const status = await cluster.getVoteStatus(processId, voteId); // the vote's node first
 ```
 
-`submitVote` returns `void`; the sequencer assigns/echoes the `voteId` you computed. Track the `voteId` from `sdk.submitVote`'s `VoteResult` and poll `getVoteStatus`.
+`SequencerNodes.submitVote(vote, node?)` implements the failover rules of `references/nodes.md`, and `firstAnswer(call, order?)` moves to the next node after any node error except a malformed request (40001).
+
+## Wire format
+
+On the wire, field names are camelCase, field elements decimal strings, bytes `0x` hex, points twisted Edwards `{ x, y }`, and a ballot exactly 16 ciphertexts. The node decodes strictly: no unknown fields, exact lengths, every value in range. The SDK's types hold bigints and checked points; `encodeVoteRequest`/`decodeVoteRequest` and `encodeCensusFile`/`decodeCensusFile` convert. A vote body carries `weight` (decimal) and, for a CSP census, `censusProof: { type: 'csp', r, s, recid, index }`; for a Merkle census the node derives the proof and the SDK sends none.
 
 ## Errors
 
-REST errors throw with a numeric `code` you can switch on. Common ones:
+| Class | When |
+| --- | --- |
+| `SequencerApiError { status, code?, node }` | the node answered with an error |
+| `SequencerNetworkError { timedOut, cause, node }` | no usable answer: network failure, timeout (60 s by default), abort |
+| `SequencerDecodeError` | an answer that does not decode or does not check out |
+| `NodeMismatchError { field, expected, got, node }` | `/info` names another deployment or release |
+| `SequencerUnavailableError { nodes }` | no usable node for the role |
 
-- **`40007`** — process not found / not yet indexed (right after `createProcess`; retry with backoff).
-- **`40001`** — address not in census (surfaces from `hasAddressVoted`/`isAddressAbleToVote`).
+All extend `SequencerError`. The node's `code` is the HTTP status times 100 plus a discriminator (`SequencerErrorCode`):
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| 40001 | `MalformedRequest` | malformed request; for a vote also an address outside the census or a missing CSP proof |
+| 40002 | `InvalidVote` | the vote failed a protocol check (proof, signature, inputs hash, census binding, ballot, weight) |
+| 40401 | `NotFound` | not found |
+| 40402 | `UnknownProcess` | a process this node does not know or serve |
+| 40801 | `RequestTimeout` | the node's 60 s deadline; a vote may still have been admitted |
+| 40901 | `DuplicateVote` | the vote id is already queued or settled |
+| 40902 | `SlotBusy` | the voter's slot holds the most queued votes; retry once one settles |
+| 41201 | `NotAcceptingVotes` | ended, canceled or past the end |
+| 41202 | `MaxVotersReached` | the voter cap is reached |
+| 41203 | `ObserverNode` | an observer: no votes, no keys |
+| 41204 | `NotStarted` | before the start |
+| 41301 | `BodyTooLarge` | body over 256 KiB |
+| 42901 | `KeyRateLimit` | the per-minute limit of `POST /processes/keys` |
+| 42903 | `Busy` | at capacity or loading a census; retry shortly |
+| 50001 | `Internal` | internal error |
 
 ```ts
-try { await sdk.api.sequencer.getProcess(id); }
-catch (e: any) { if (e.code === 40007) { /* not indexed yet, wait & retry */ } else throw e; }
+import { hasSequencerErrorCode, SequencerErrorCode } from '@vocdoni/davinci-sdk';
+
+try {
+  await sdk.api.nodes.nodes[0].getProcess(processId);
+} catch (err) {
+  if (hasSequencerErrorCode(err, SequencerErrorCode.UnknownProcess)) {
+    // not bootstrapped on that node yet: a new process takes a few blocks
+  } else throw err;
+}
 ```
 
-See `references/errors.md` for the full catalogue.
-
-## Gotchas
-
-- **Decimal strings, not numbers.** `votersCount`, `maxValue`, weights, results are strings over the wire — `BigInt(...)` / `Number(...)` before arithmetic.
-- **Encryption-key points are `[string,string]` / `{x,y}` decimal coordinate pairs** (BabyJubJub), not hex.
-- **The sequencer doesn't bundle circuits** — `getInfo()` gives URLs you download at proof time.
-- **`isAcceptingVotes` can be false right after creation** until the start time passes and the sequencer indexes the process.
+`submitVote` on the facade maps these to `VoteError` reasons (`references/voting.md`).
 
 ## Cross-references
 
-- `references/voting.md` — how these calls compose into the vote flow.
-- `references/census.md` — `sdk.api.census` (the other REST service).
-- `references/contracts.md` — the on-chain side (`sdk.processes`).
+- `references/nodes.md`: node checks, routing and failover.
+- `references/voting.md`: the vote flow built on this client.
+- `references/receipts.md`: tracker proofs.

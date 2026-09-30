@@ -66,10 +66,15 @@ Before you begin, ensure you have the following installed:
 ```
 davinci-sdk/
 ├── src/                    # Source code
-│   ├── core/              # Core SDK functionality
-│   ├── contracts/         # Smart contract interfaces
-│   ├── sequencer/         # Sequencer API and crypto
-│   └── census/            # Census management
+│   ├── DavinciSDK.ts      # The facade
+│   ├── networks.ts        # Network presets and the RPC failover provider
+│   ├── core/              # Orchestration: processes, votes, results, metadata, HTTP base
+│   ├── contracts/         # ProcessRegistry and census contract services, vendored ABIs (abi/)
+│   ├── sequencer/         # Sequencer node client, wire codecs, routing
+│   ├── census/            # Census classes, publishing, CSP signer, witnesses
+│   ├── crypto/            # Protocol primitives: ballot, BabyJubJub, ElGamal, Poseidon, lean-IMT, ECDSA, tracker, DKG
+│   ├── prover/            # Ballot circuit files and the snarkjs prover
+│   └── protocol/          # Limits and release pins mirrored from davinci-zkvm
 ├── test/                  # Test files
 │   ├── <domain>/unit/     # Unit tests
 │   ├── anvil/             # The contracts on a local anvil chain
@@ -77,8 +82,10 @@ davinci-sdk/
 │   ├── fixtures/          # Test vectors
 │   ├── helpers/           # Shared test utilities
 │   └── setup/             # Vitest setup files
-├── examples/              # Usage examples
-├── docs/                  # Documentation
+├── scripts/               # ABI sync, documentation build and checks, live suite runner
+├── examples/script/       # Runnable elections on a configured deployment
+├── docs/ai/               # Guides: SKILL.md, references/, recipes/
+├── llms.txt, llms-full.txt # Documentation index and bundle, built from docs/ai
 └── dist/                  # Built files (generated)
 ```
 
@@ -107,8 +114,13 @@ yarn lint:fix              # Fix ESLint issues
 yarn format                # Format code with Prettier
 yarn format:check          # Check code formatting
 
-# Git Hooks
-yarn lint-staged           # Run pre-commit checks
+# Documentation and vendored data
+yarn docs:build            # Rebuild llms.txt and llms-full.txt from docs/ai
+yarn docs:check            # Check they are up to date and type-check every code block of the docs
+yarn sync:abis <checkout>  # Vendor the contract ABIs from a davinci-contracts checkout
+
+# Before committing (no hook installs it)
+yarn lint-staged           # Format and lint the staged files
 ```
 
 ### Environment Setup
@@ -130,6 +142,41 @@ DAVINCI_CENSUS_CONTRACT_DIR=../davinci-onchain-census-contract
 The live suite (`yarn test:e2e`, run through `scripts/e2e-live.sh`) creates
 elections on the Gnosis deployment through real sequencer nodes; its phases,
 settings and costs are in `test/e2e/README.md`.
+
+A few unit tests prove real ballots with the circuit files. They are skipped
+unless `DAVINCI_CIRCUIT_ARTIFACTS` names a directory holding
+`ballot_proof.wasm`, `ballot_proof_pkey.zkey` and `ballot_proof_vkey.json` (a
+davinci-circom checkout's `artifacts/` at the pinned commit):
+
+```bash
+DAVINCI_CIRCUIT_ARTIFACTS=../davinci-circom/artifacts yarn test:unit
+```
+
+### Vectors, ABIs and pins
+
+The SDK mirrors the Rust implementation byte for byte, and its tests replay
+vectors produced by that implementation. Never edit a vector by hand.
+
+- **Protocol vectors** (`test/fixtures/zkvm/`): verbatim copies from
+  davinci-zkvm's `rust-sdk/testdata/`, `rust-sdk/assets/` and
+  `rust-sdk/src/{limits,release}.rs`. To refresh, copy the files from a newer
+  davinci-zkvm, update the commit and the checksums in the folder's README, and
+  run `yarn test:unit`. A change of `limits.rs` or `release.rs` must be followed
+  in `src/protocol/`; a new ballot VK hash needs its circuit files in the table
+  of `src/prover/artifacts.ts`.
+- **Sequencer vectors** (`test/fixtures/sequencer/`): `networks.rs` is a copy
+  of davinci-sequencer's `client/src/networks.rs`; `tracker.json`, `wire.json`
+  and `census-files.json` are written by the Rust programs next to them
+  (`tracker-gen/`, `wire-gen/`, `census-gen/`) against a davinci-sequencer
+  checkout. The folder's README says how to run each and records the checksums.
+- **Contract ABIs** (`src/contracts/abi/`): `yarn sync:abis <davinci-contracts
+  checkout>` copies the ABIs from its forge build and records the commit and
+  the file hashes in `source.json`; `--census <checkout>` does the same for
+  davinci-onchain-census-contract (`abi/census/`) and the creation code the live
+  suite deploys. The script refuses a checkout with uncommitted changes or a
+  build of other sources. `test/contracts/unit/abi.test.ts` pins every selector,
+  topic, error and struct layout the SDK relies on, so a contract change shows up
+  as a failing test; the anvil suite deploys the same commits.
 
 ## 🤝 How to Contribute
 
@@ -167,9 +214,11 @@ We welcome various types of contributions:
 
 5. **Test your changes**:
    ```bash
-   yarn test
+   yarn test:unit
    yarn lint
    yarn format:check
+   yarn docs:check
+   yarn test:anvil   # when contracts or organizer flows change (needs Foundry)
    ```
 
 6. **Commit your changes** with a clear message:
@@ -219,7 +268,8 @@ Brief description of the changes made.
 
 ## Testing
 - [ ] Unit tests pass
-- [ ] Integration tests pass
+- [ ] The anvil suite passes (contracts or organizer flows changed)
+- [ ] Documentation checks pass (`yarn docs:check`)
 - [ ] Manual testing completed
 
 ## Checklist
@@ -245,8 +295,8 @@ Brief description of the changes made.
 // Good
 interface VoteConfig {
   processId: string;
-  choices: number[];
-  randomness?: string;
+  choices: readonly (number | bigint)[];
+  k?: bigint;
 }
 
 async function submitVote(config: VoteConfig): Promise<VoteResult> {
@@ -254,7 +304,7 @@ async function submitVote(config: VoteConfig): Promise<VoteResult> {
 }
 
 // Avoid
-function vote(p: string, c: number[], r?: string): Promise<any> {
+function vote(p: string, c: number[], k?: any): Promise<any> {
   // Implementation
 }
 ```
@@ -289,7 +339,7 @@ if (choices.length !== expectedLength) {
 
 ### Documentation
 
-- **Use JSDoc comments** for public APIs
+- **Use JSDoc comments** for every public export
 - **Include examples** in documentation
 - **Document complex algorithms**
 - **Keep comments up to date**
@@ -318,8 +368,12 @@ async submitVote(config: VoteConfig): Promise<VoteResult> {
 
 ### Test Structure
 
-- **Unit tests**: Test individual functions and classes in isolation
-- **Integration tests**: Test complete workflows and API interactions
+- **Unit tests** (`test/<domain>/unit/`): individual functions and classes, offline, with the
+  chain (`test/helpers/mockChain.ts`) and the nodes mocked. Protocol code is tested against the
+  vectors in `test/fixtures/`.
+- **The anvil suite** (`test/anvil/`): every organizer flow against the real contracts on a
+  local chain, with a stand-in node.
+- **The live suite** (`test/e2e/`): whole elections on Gnosis through real nodes, run on demand.
 - **Use descriptive test names** that explain what is being tested
 
 ### Writing Tests
@@ -355,23 +409,27 @@ describe('VoteOrchestrationService', () => {
 - **Aim for high test coverage** (>80%)
 - **Test error conditions** as well as success cases
 - **Mock external dependencies** in unit tests
-- **Use real services** in integration tests when possible
+- **Use the real contracts** in the anvil suite rather than mocks
 
 ## 📖 Documentation
 
 ### Types of Documentation
 
 - **API Documentation**: JSDoc comments in code
-- **Usage Examples**: In `examples/` directory
+- **Guides**: `docs/ai/SKILL.md`, `docs/ai/references/*.md` and the runnable `docs/ai/recipes/*.ts`
+- **Bundles**: `llms.txt` and `llms-full.txt`, built from `docs/ai` by `scripts/build-llms.mjs`
+- **Usage Examples**: `examples/script/`
 - **README**: High-level overview and quick start
+- **CHANGELOG**: every user-visible change, under `[Unreleased]`, with migration notes for breaking ones
 - **Contributing Guide**: This document
 
 ### Documentation Standards
 
-- **Keep it up to date** with code changes
+- **Keep it up to date** with code changes: a change of the public API updates the guides in the same pull request
 - **Use clear, simple language**
-- **Include practical examples**
-- **Test code examples** to ensure they work
+- **Include practical examples**, with placeholders for node URLs and hosting: never a hosted instance's URL or other data that changes
+- **Rebuild the bundles** after editing `docs/ai` (`yarn docs:build`)
+- **Test code examples**: `yarn docs:check` type-checks every ```ts block of the README, the guides and this major's CHANGELOG entry, the recipes and `examples/script` against the SDK source. A block that is not code is marked ```ts nocheck
 
 ## 🐛 Issue Reporting
 

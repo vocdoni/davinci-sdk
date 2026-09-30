@@ -110,6 +110,10 @@ export class DkgDisabledError extends ContractServiceError {}
  * holds that process's key: cancel it with `setProcessStatus(CANCELED)`.
  */
 export class WrongProcessIdError extends ContractServiceError {
+  /**
+   * @param created - The process id the registry assigned
+   * @param expected - The id the sequencer key was issued for
+   */
   constructor(
     public readonly created: string,
     public readonly expected: string
@@ -126,6 +130,11 @@ export class WrongProcessIdError extends ContractServiceError {
  * (see `ProcessRegistryService.verifyDeployment`).
  */
 export class DeploymentPinError extends ContractServiceError {
+  /**
+   * @param field - The registry getter (or check) that differs, e.g. `ballotVKHash`
+   * @param expected - What this release pins
+   * @param got - What the deployment reports
+   */
   constructor(
     public readonly field: string,
     public readonly expected: string,

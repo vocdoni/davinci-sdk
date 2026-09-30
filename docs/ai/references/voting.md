@@ -1,128 +1,150 @@
-# `references/voting.md` — Casting an encrypted vote
+# `references/voting.md` — Casting a vote
 
-Companion to the [[davinci-sdk]] skill. Casting a vote is the part most likely to confuse, but the `DavinciSDK` facade hides all the cryptography: you supply `choices`, it builds the ballot, ElGamal-encrypts it, generates the zk-SNARK proof, signs, and submits. None of `submitVote`'s methods need a provider — a bare `Wallet` is enough.
+Companion to the [[davinci-sdk]] skill. The facade hides the cryptography: you give `choices`, and `submitVote` reads the election from the registry, gets the voter's census witness, builds the 16-field encrypted ballot, proves it, signs its vote id and sends it to a node. None of it needs a provider: a bare `Wallet` votes.
 
 ## Act as the voter
 
-The SDK votes **as its `signer`**. To cast a voter's ballot, construct a `DavinciSDK` with that voter's wallet:
+The SDK votes as its `signer`, so each voter has its own `DavinciSDK`:
 
 ```ts
-import { DavinciSDK, VoteStatus } from "@vocdoni/davinci-sdk";
-import { Wallet } from "ethers";
+import { DavinciSDK } from '@vocdoni/davinci-sdk';
+import { Wallet } from 'ethers';
 
 const voter = new DavinciSDK({
-  signer: new Wallet(VOTER_PRIVATE_KEY),    // no provider needed for voting
-  sequencerUrl: SEQUENCER_API_URL,
-  censusUrl: CENSUS_API_URL,                // needed so the SDK can fetch the census proof
+  signer: new Wallet(process.env.VOTER_KEY!), // no provider needed
+  sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
 });
-await voter.init();
+await voter.init(); // reads Gnosis through its public RPCs, or `rpcUrls`
 ```
 
-(`censusUrl` is required for voting on Merkle censuses unless you pass a custom `censusProviders`. CSP censuses need a `censusProviders.csp` — see `references/census.md`.)
+In a browser, pass the wallet's signer (`await new BrowserProvider(window.ethereum).getSigner()`); the vote only asks it to sign a message.
 
 ## Submit
 
 ```ts
-const result = await voter.submitVote({
-  processId,
-  choices: [1, 0],          // length MUST equal the process's ballot.numFields
-  // randomness?: string    // optional; auto-generated if omitted
-});
+const vote = await voter.submitVote({ processId, choices: [0, 1, 0] });
+// { voteId, signature, voterAddress, processId, status: 'pending', node, weight, k }
 ```
 
-### `VoteConfig` / `VoteResult`
+What happens:
+
+1. **The election, from the registry** (never from a node): it must take votes, from its start to its end, READY or PAUSED. A paused process's votes settle once it resumes. The first node of the voter's order that serves the process is cross-checked against the registry (key, ballot mode, census).
+2. **The census witness:** the voter's weight and proof from the nodes (origins 1 and 2), the census contract (origin 3) or `censusProviders.csp` (origin 4). See `references/census.md`.
+3. **The ballot:** the choices are checked against the ballot mode, the 16-field ballot is encrypted under the registry's key (unused fields hold the identity), proved with the circuit files the registry pins, and its vote id signed.
+4. **The node:** the voter's own node (`references/nodes.md`), with failover only when it is safe.
+
+### `VoteConfig` and `VoteResult`
+
+| `VoteConfig` | |
+| --- | --- |
+| `processId` | the process |
+| `choices` | one integer (number or bigint) per ballot field, in field order; at most `numFields`, missing ones are 0 |
+| `node?` | the node that took the voter's previous ballot, so a revote queues behind it |
+| `k?` | the ballot secret; random by default. A given one must be a random field element (one below 2^128 is refused) |
+
+| `VoteResult` | |
+| --- | --- |
+| `voteId` | `0x` + 16 hex digits; track the vote with it |
+| `node` | the node that took it: store it with the vote, and pass it back for a revote |
+| `weight` | the census weight the vote carries |
+| `k` | the ballot secret. With the election key it opens the ballot and links the vote id to the voter: keep it private |
+| `status` | `pending` |
+
+### The `choices` model
+
+`choices[i]` is the value of ballot field `i`, and field `i` is the choice whose metadata `value` is `i`.
+
+- **Single choice, N options:** one-hot. `[0, 0, 1, 0]` picks option 2.
+- **Multiple choice, approval:** a 1 for each chosen option.
+- **Rating:** the rating of each option.
+- **Ranking:** the rank of each option, 1 to N, all different.
+- **Quadratic:** the votes put on each option; the sum of their squares stays within the budget.
+- **Several questions:** each question's fields one after the other, as the metadata `value`s say.
+
+A choice outside the ballot mode fails with `VoteError('invalid')` before anything is proved. See `references/ballot-modes.md`.
+
+## Status
 
 ```ts
-interface VoteConfig {
-  processId: string;
-  choices: number[];        // one integer per ballot field
-  randomness?: string;      // optional hex/decimal entropy for encryption (the "k")
+import { VoteStatus } from '@vocdoni/davinci-sdk';
+
+const { status, error, node } = await voter.getVoteStatus(processId, voteId);
+
+for await (const s of voter.watchVoteStatus(processId, voteId)) {
+  console.log(s.status, s.error ?? ''); // yields each change
 }
 
-interface VoteResult {
-  voteId: string;           // track this
-  signature: string;
-  voterAddress: string;
-  processId: string;
-  status: VoteStatus;       // initial status, usually "pending"
-}
+const final = await voter.waitForVoteStatus(processId, voteId); // default target: settled
+if (final.status === VoteStatus.Error) console.error(final.error);
 ```
 
-### The `choices` model (read this before guessing)
+| `VoteStatus` | |
+| --- | --- |
+| `pending` | queued on the node |
+| `aggregated` | in a batch being proved |
+| `processed` | proved; its settlement transaction is on the way |
+| `settled` | on-chain: it counts |
+| `error` | refused, with the node's reason in `error` |
 
-`choices` is a flat array of integers, **one per ballot field**, and `choices.length` must equal `ballot.numFields`. Each integer must lie in `[ballot.minValue, ballot.maxValue]` (the SDK validates this and throws "Choice X is out of range" otherwise).
+- Nodes batch votes: with default node settings a vote can stay `pending` for up to a quarter of an hour (longer for a lone vote), and everything is flushed from a few minutes before the end. A lost race or a pause puts votes back to `pending`.
+- `error` reasons include `process closed` (still queued when the grace window closed, or the process was canceled), `census changed, recast` (the member was removed or reweighted by a census update) and a batch check.
+- By default the wait follows the process: it lasts until the grace window closes plus 5 minutes (`VOTE_STATUS_MARGIN_MS`), re-reading the end if it moves, and fails with `VoteError('timeout')` after that. `timeoutMs` and `pollIntervalMs` (5 s) override it; a later status than the target counts as reached.
+- The node that took the vote is asked first; any node that has settled it answers `settled` too.
 
-- **Single-choice question, N options** → encoded one-hot as N fields. To pick option *j*, send an array of N zeros with a 1 at index *j*: `[0,0,1,0]` picks option 2.
-- **Weighted voting** → put the voter's weight at the chosen index instead of 1: `[0, 5, 0, 0]`.
-- **Multiple questions** → concatenate each question's fields: two 4-option questions → `numFields: 8`, `choices: [...q1(4), ...q2(4)]`.
-- **Approval / ranked / quadratic / budget** → the field meaning changes per ballot mode; see `references/ballot-modes.md`.
+## Revotes
 
-`submitVote` internally fetches the live process (must be `isAcceptingVotes` or it throws *"Process is not currently accepting votes"*), gets the voter's census weight/proof, encrypts, proves, and submits.
+A voter may vote again while the process takes votes; its latest ballot replaces the earlier one in the tally. Every batch also re-randomizes a sample of the ballots already stored, so nobody can tell a revote from a routine refresh.
 
-## The two-phase status flow
-
-`submitVote` returns as soon as the sequencer accepts the payload — the vote is **not yet counted**. It progresses through `VoteStatus`:
+Send the revote to the node that took the earlier ballot: one node settles a voter's ballots in the order they were cast, two nodes do not. The SDK remembers that node in memory (per voter, for the latest 1,000 voters). An app that reloads, or revotes from another device, stores `vote.node` and passes it back:
 
 ```ts
-enum VoteStatus {
-  Pending    = "pending",     // received by sequencer
-  Verified   = "verified",    // proof + signature checked
-  Aggregated = "aggregated",  // included in a batch
-  Processed  = "processed",   // state transition applied
-  Settled    = "settled",     // finalized on-chain — it counts
-  Error      = "error",       // rejected
-}
+const first = await voter.submitVote({ processId, choices: [1, 0, 0] });
+localStorage.setItem(`davinci-node:${processId}`, first.node);
+// ...later, maybe after a reload:
+const node = localStorage.getItem(`davinci-node:${processId}`) ?? undefined;
+await voter.submitVote({ processId, choices: [0, 0, 1], node });
 ```
 
-Always wait for it to settle:
+A revote while earlier ballots are still queued may fail with `VoteError('slot-busy')`: try again once they settle.
+
+## Errors
+
+`submitVote` throws `VoteError` with a `reason` (and the node's `code` and `node` when a node refused):
+
+| `reason` | Meaning | What to do |
+| --- | --- | --- |
+| `not-in-census` | the voter is not a member | nothing: it cannot vote |
+| `not-started` | before the start | wait for `startDate` |
+| `closed` | ended, canceled, or past the end | nothing |
+| `invalid` | choices outside the ballot mode, or a protocol check at the node | fix the ballot |
+| `duplicate` | this vote id is already queued or settled (the same `k` twice) | nothing: it is in |
+| `slot-busy` | the voter's earlier ballots fill the node's queue | retry later, on the same node |
+| `max-voters` | the process has as many voters as it allows | nothing |
+| `busy` | the node is at capacity or loading a census | retry shortly, on the same node |
+| `unavailable` | no node took it, or none serves the process yet | retry; a new process takes a few blocks to reach the nodes |
+| `timeout` | a status wait ran out | check again later |
+
+It can also throw `CensusWitnessError` (a CSP census without `censusProviders.csp`, or an attestation for someone else), `ArtifactError` (the circuit files cannot be loaded or are not the pinned ones), `BallotProofError`, and `RangeError` for a weak `k`. See `references/errors.md`.
+
+## Eligibility and past votes
 
 ```ts
-const final = await voter.waitForVoteStatus(
-  processId, result.voteId,
-  VoteStatus.Settled,   // target (default: Settled)
-  300_000,              // timeout ms (default 300_000 = 5 min) — settlement can take minutes
-  5_000,                // poll interval ms (default 5_000)
-);
-// final: VoteStatusInfo { voteId, status, processId }
+await voter.isAddressAbleToVote(processId, address); // a member of the census?
+await voter.getAddressWeight(processId, address); // bigint; 0 for a non-member
+await voter.hasAddressVoted(processId, address); // a ballot settled in the address's slot?
 ```
 
-> Settlement depends on the sequencer batching and submitting a state transition; under light load it can take several minutes. For many votes, bump the timeout (the SDK's own demo uses ~800_000ms per vote).
+- For a CSP census these ask `censusProviders.csp`; its errors propagate.
+- `hasAddressVoted` asks every node. For a CSP census only the nodes that took the ballot know its slot, so every node must answer.
+- A voter "has voted" once a ballot settled; a revote is still allowed.
 
-### Stream status changes (for UI)
+## Proving a vote was recorded
 
-```ts
-for await (const s of voter.watchVoteStatus(processId, voteId, {
-  targetStatus: VoteStatus.Settled, timeoutMs: 800_000, pollIntervalMs: 5_000,
-})) {
-  console.log(s.status);                       // yields only on change
-  if (s.status === VoteStatus.Error) throw new Error("vote rejected");
-}
-```
-
-`waitForVoteStatus` is `watchVoteStatus` consumed for you, returning the final status. A one-off poll: `await voter.getVoteStatus(processId, voteId)` → `{ voteId, status, processId }`.
-
-## Eligibility & dedup checks (no provider needed)
-
-```ts
-await sdk.isAddressAbleToVote(processId, address);  // boolean — in the census?
-await sdk.hasAddressVoted(processId, address);      // boolean — already voted?
-await sdk.getAddressWeight(processId, address);     // string — voting weight ("0" if none)
-```
-
-Use `isAddressAbleToVote` before submitting to give a clean "not eligible" message instead of a thrown error. Voters may **overwrite** their vote during the voting period (last-vote-wins) — `hasAddressVoted` true doesn't prevent re-voting.
-
-## Custom randomness
-
-`randomness` seeds the ElGamal encryption nonce (`k`) and the vote-id derivation. Omit it (recommended) to let the SDK sample fresh entropy. Supply it only for reproducible tests; reusing the same `k` across votes is unsafe.
-
-## Verification toggles (from SDK config)
-
-`verifyCircuitFiles` (default true) checks the SHA-256 of downloaded circuit artifacts against the hashes in the sequencer's `/info`; `verifyProof` (default true) verifies the generated proof locally before submitting. Leave both on unless profiling shows a need.
+Once settled, `getVoteReceipt(processId, voteId)` returns a tracker proof checked against the registry: see `references/receipts.md`.
 
 ## Cross-references
 
-- `references/ballot-modes.md` — what `choices` means under each voting system.
-- `references/census.md` — CSP voting providers; how the census proof is fetched.
-- `references/sequencer.md` — the REST calls underneath (`submitVote`, `getVoteStatus`, `getProcess`).
-- `references/errors.md` — "not accepting votes", out-of-range, proof failures.
+- `references/ballot-modes.md`: what `choices` means per voting system.
+- `references/nodes.md`: routing, failover and the revote rule.
+- `references/errors.md`: the full catalogue.
 - `recipes/cast-vote.ts`.

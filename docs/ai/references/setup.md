@@ -1,123 +1,178 @@
-# `references/setup.md` — Install, construct, `init()`, environment
+# `references/setup.md` — Install, configure, `init()`
 
-Companion to the [[davinci-sdk]] skill. Read this first when starting a Davinci project.
+Companion to the [[davinci-sdk]] skill. Read this first when starting a DAVINCI project.
 
 ## Install
 
 ```sh
 npm install @vocdoni/davinci-sdk ethers
-# bundled runtime deps: @noble/curves, @noble/hashes, circomlibjs, snarkjs
 ```
 
-Node ≥ 18 (for global `fetch`) or a modern browser. `ethers` v6 is a peer you import yourself.
+Node 18 or newer, or a current browser. The package ships ESM (`import`), CommonJS (`require`) and a UMD bundle; ethers v6 is the chain library, and you import it yourself for wallets and providers.
 
-## Single root import — there are no subpaths
+In Node, snarkjs keeps worker threads alive after proving or verifying. A script that votes calls `BallotProver.terminate()` once done, or it will not exit.
+
+## Single root import
 
 ```ts
 import {
   DavinciSDK,
-  OffchainCensus, OffchainDynamicCensus, CspCensus, OnchainCensus, PublishedCensus,
-  CensusOrigin, VoteStatus, TxStatus,
-} from "@vocdoni/davinci-sdk";
+  OffchainCensus,
+  OffchainDynamicCensus,
+  OnchainCensus,
+  CspCensus,
+  PublishedCensus,
+  CensusOrigin,
+  VoteStatus,
+  TxStatus,
+} from '@vocdoni/davinci-sdk';
 ```
 
-`@vocdoni/davinci-sdk` exports **only** the package root (its `package.json` `exports` map has a single `"."` entry). Do **not** write `@vocdoni/davinci-sdk/sequencer`, `/contracts`, or `/core` — those paths do not exist.
+The package exports only its root. `@vocdoni/davinci-sdk/sequencer`, `/contracts` and `/core` do not exist.
 
-## Construct the facade
+## Construct and initialize
 
 ```ts
-import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK } from "@vocdoni/davinci-sdk";
+import { DavinciSDK } from '@vocdoni/davinci-sdk';
+import { JsonRpcProvider, Wallet } from 'ethers';
 
 const sdk = new DavinciSDK({
-  signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
-  sequencerUrl: SEQUENCER_API_URL,   // required
-  censusUrl: CENSUS_API_URL,         // optional — only to publish Merkle censuses
+  signer: new Wallet(process.env.PRIVATE_KEY!, new JsonRpcProvider(rpcUrl)),
+  network: 'gnosis', // the default
+  sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
+  uploader, // to create elections: publishes census files and metadata
 });
-await sdk.init();                    // REQUIRED before any other method
+await sdk.init(); // required before anything else
 ```
+
+Node URLs are always configuration: the SDK embeds none, and they belong to whoever runs the nodes of the deployment you target.
 
 ### `DavinciSDKConfig`
 
-```ts
-interface DavinciSDKConfig {
-  signer: Signer;                    // ethers v6 Signer (required)
-  sequencerUrl: string;              // sequencer REST base URL (required)
-  censusUrl?: string;                // census service base URL (optional)
-  addresses?: { processRegistry?: string };  // override; else fetched from sequencer /info
-  censusProviders?: CensusProviders; // custom proof providers (CSP voting needs one)
-  verifyCircuitFiles?: boolean;      // verify downloaded circuit hashes (default: true)
-  verifyProof?: boolean;             // verify generated proof before submit (default: true)
-}
-```
+| Field | Default | What it is |
+| --- | --- | --- |
+| `signer` | required | ethers `Signer`. It signs votes, and transactions for organizer work. |
+| `network` | `'gnosis'` | A known network by name, or `{ chainId, processRegistry, startBlock?, rpcUrls?, name? }` for another deployment. |
+| `sequencerUrls` | required | Base URLs of the deployment's sequencer nodes. Votes are routed among them per voter; reads ask them in order. |
+| `keySequencerUrl` | first usable node | The node that issues sequencer election keys, and later publishes those elections' results. |
+| `rpcUrls` | see below | JSON-RPCs for chain reads, in order of preference. |
+| `uploader` | none | Publishes census files and metadata documents (`references/census.md`, `references/metadata.md`). |
+| `documents` | | How documents are downloaded and checked: `fetchImpl`, `timeoutMs` (30 s stall), `verify` (read back what is published, default true), `allowPrivateHosts` (local development). |
+| `artifacts` | pinned table | Where the ballot circuit files come from (below). |
+| `verifyDeployment` | `true` | Check the registry pins at `init()`. `{ pins }` checks other pins (a local deployment); `false` skips it. |
+| `verifyProof` | `true` | Verify every ballot proof locally before sending it. |
+| `sequencerConfig` | | Headers, `fetchImpl`, `timeoutMs` (60 s) and `maxResponseBytes` (16 MiB) of the node clients. |
+| `censusProviders` | | Census witnesses for voting: `csp` (required to vote in a CSP census) and `merkle` (replaces the nodes' proofs). |
 
-- **`censusUrl`** is needed only when you build and publish a Merkle census (`OffchainCensus` / `OffchainDynamicCensus`) — i.e. on the *organizer* who calls `createProcess`, and on a *voter* who needs the sequencer to fetch its census proof. It is **not** needed for an organizer using a pre-published / on-chain / CSP census, and you can omit it for voting if you supply a custom `censusProviders`.
-- **Contract addresses are auto-resolved.** Leave `addresses` unset and `init()` reads `processRegistry` for the signer's chain from the sequencer's `/info`. Only set `addresses.processRegistry` to pin a custom deployment.
-- **Keep `verifyCircuitFiles` / `verifyProof` on** (the defaults) unless you have a measured reason: they protect against tampered circuit downloads and malformed proofs.
+Deprecated and still accepted: `sequencerUrl` (added to `sequencerUrls`), `addresses.processRegistry` (use `network: { chainId, processRegistry }`), `censusUrl` and `verifyCircuitFiles` (both ignored).
 
-## The signer-vs-provider rule (the #1 setup gotcha)
+### What `init()` does
 
-| Operation                                                | Needs `signer.provider`? |
-| -------------------------------------------------------- | ------------------------ |
-| `createProcess`, `createProcessStream`                   | **Yes** (on-chain tx)    |
-| `getProcess` (rich `ProcessInfo` from the contract)      | **Yes**                  |
-| `endProcess`/`pauseProcess`/`cancelProcess`/`resumeProcess`/`setProcessMaxVoters` | **Yes** |
-| `submitVote`                                             | No — bare `Wallet` is fine |
-| `getVoteStatus`/`watchVoteStatus`/`waitForVoteStatus`    | No                       |
-| `hasAddressVoted`/`isAddressAbleToVote`/`getAddressWeight`| No                       |
-| `sdk.api.sequencer.getProcess` (lightweight, REST)       | No                       |
+1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads Gnosis through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
+2. **Registry.** Its `chainID()` must be the network's (`DeploymentPinError('chainID')`).
+3. **Pins** (unless `verifyDeployment: false`): the batch and results program vks, the vadcop root and the ballot VK hash must be the ones this release carries, the verifier's code must hash to the pinned code hash, and the DKG adapter must point back at the registry. A mismatch throws `DeploymentPinError` naming the field.
+4. **Nodes.** Every node's `/info` must report the network's chain, registry, ballot VK hash and program vks, or `init()` throws `NodeMismatchError`. A URL that answers but is not a sequencer fails too. Observers and nodes that do not answer are recorded in `sdk.nodeChecks` and left out for the session; a call that needs a node then fails with `SequencerUnavailableError` naming them.
 
-So an **organizer** wallet must be `new Wallet(pk, provider)`; a **voter** wallet can be `new Wallet(pk)`. Calling an on-chain method without a provider throws: *"Provider required for blockchain operations…"*. To act as two different people in one script, build two `DavinciSDK` instances.
+Concurrent `init()` calls share one run, and a failed `init()` can be retried.
 
 ```ts
-// organizer (on-chain) — provider required
-const organizer = new DavinciSDK({ signer: new Wallet(pk, provider), sequencerUrl, censusUrl });
-// voter (voting only) — no provider
-const voter = new DavinciSDK({ signer: new Wallet(voterPk), sequencerUrl, censusUrl });
-await organizer.init(); await voter.init();
+await sdk.init();
+for (const node of sdk.nodeChecks) console.log(node.url, node.status, node.reason ?? '');
+console.log(sdk.network.name, sdk.network.chainId, sdk.network.processRegistry);
 ```
 
-## Environment variables (from the SDK's example `.env`)
+## Signer and provider
 
+| Operation | Needs `signer.provider` on the network's chain |
+| --- | --- |
+| `createProcess`, every organizer control (`endProcess`, `closeProcessIn`, `setProcessGrace`, `revealProcessKey`, …), `finalizeResults` | yes |
+| `submitVote`, vote status, receipts, `getProcess`, `getResultsStatus`, `waitForResults`, eligibility reads | no |
+
+An organizer uses `new Wallet(key, provider)` or a browser signer; a voter can use `new Wallet(key)`. A write from a signer without a provider throws "Provider required for blockchain operations", and one from a signer on another chain throws "The signer is on chain X; the gnosis registry is on chain 100.". Both are thrown when a stream is first read, before any event.
+
+## Networks
+
+```ts
+import { GNOSIS, NETWORKS, getNetwork, resolveNetwork } from '@vocdoni/davinci-sdk';
+
+GNOSIS.chainId; // 100
+getNetwork('gnosis')?.processRegistry;
+resolveNetwork('gnosis').processIdPrefix; // bytes 20..23 of every process id the registry assigns
 ```
-SEQUENCER_API_URL=https://sequencer-dev.davinci.vote   # sequencer REST base URL
-CENSUS_API_URL=https://c3-dev.davinci.vote             # census service base URL
-RPC_URL=https://...                                     # ethers JsonRpcProvider endpoint
-PRIVATE_KEY=...                                         # organizer/voter EOA key (no 0x ok)
+
+A preset carries the chain id, the registry address, its deployment block and public RPCs; the grace settings, the verifier and the DKG adapter are read from the registry. A process id names its registry (bytes 20..23), so the facade refuses an id of another deployment before any request.
+
+Another deployment, such as a local chain:
+
+```ts
+const local = new DavinciSDK({
+  signer,
+  network: {
+    name: 'local',
+    chainId: 31337,
+    processRegistry: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    startBlock: 0,
+    rpcUrls: ['http://127.0.0.1:8545'],
+  },
+  sequencerUrls: ['http://127.0.0.1:9090'],
+  verifyDeployment: false, // or { pins } for a deployment that pins other values
+  documents: { allowPrivateHosts: true },
+});
 ```
 
-Known endpoints (verify against current docs / the sequencer's `/info`):
+## The uploader
 
-| Env      | Sequencer                              | Census                       |
-| -------- | -------------------------------------- | ---------------------------- |
-| Dev      | `https://sequencer-dev.davinci.vote`   | `https://c3-dev.davinci.vote`|
-| Staging  | `https://sequencer1.davinci.vote`      | (per docs)                   |
+The SDK ships no hosting. Creating an election publishes the census file (Merkle censuses) and the metadata document through `uploader`, and reads each back as nodes and readers will before anything is sent:
 
-The **chain is determined by the sequencer**, not by you — the RPC must point at the chain the sequencer expects. The voter/organizer needs testnet gas on that chain to create/end processes (voting itself is gasless for the voter — it goes to the sequencer, not on-chain).
+```ts
+import type { Uploader } from '@vocdoni/davinci-sdk';
 
-## ethers v6 (this SDK is v6, not v5)
+const uploader: Uploader = {
+  async upload({ kind, data, contentType, sha256 }) {
+    // kind: 'census' | 'metadata'; data: the exact bytes to serve
+    const key = `davinci/${kind}/${sha256.slice(2)}.json`;
+    await bucket.put(key, data, { contentType });
+    return `https://files.example.org/${key}`;
+  },
+};
+```
 
-| v5 (legacy `@vocdoni/sdk`)                  | v6 (Davinci SDK)                          |
-| ------------------------------------------- | ----------------------------------------- |
-| `new ethers.providers.JsonRpcProvider(url)` | `new ethers.JsonRpcProvider(url)`         |
-| `ethers.utils.parseUnits(...)`              | `ethers.parseUnits(...)`                  |
-| `BigNumber`                                 | native `bigint`                           |
-| `provider.getNetwork()` → `{chainId: number}` | → `{chainId: bigint}` (use `Number(...)`)|
+The URL must serve the bytes unchanged over public `http(s)`, with no redirect: nodes refuse private hosts and redirects for a census, and a census they cannot load leaves the process ignored. Any object store, static site or gateway that serves a file at a stable URL works.
+
+## Circuit files
+
+Voters prove their ballot with the `BallotProof(16)` circuit (a 44 MB proving key). The SDK downloads the files once per prover, checks each against its pinned sha256, and checks that the verification key, and the key the proving key carries, hash to the ballot VK hash the registry pins. Nothing else is trusted.
+
+```ts
+const sdk = new DavinciSDK({
+  signer,
+  sequencerUrls: nodeUrls,
+  artifacts: {
+    baseUrl: 'https://mirror.example.org/davinci-circom', // a mirror serving the same files
+    // or dir: '/srv/davinci/artifacts' (Node), or per file: wasm, zkey, vkey
+    // cache: new MemoryArtifactCache() shares checked files across provers
+  },
+});
+```
+
+Precedence: a per-file source, then `dir`, then `baseUrl`, then the table URL. `table` adds entries for a ballot VK hash this release does not know (a local deployment); the hash checks apply to them too.
 
 ## Sanity check after `init()`
 
 ```ts
-const info = await sdk.api.sequencer.getInfo();   // reachable? which chains/circuits?
-const net  = await provider.getNetwork();
-const supported = Object.values(info.networks).some(n => n.chainID === Number(net.chainId));
-console.assert(supported, "RPC chain not supported by this sequencer");
+await sdk.init();
+const pins = {
+  ballotVkHash: await sdk.registry.getBallotVKHash(),
+  graceParams: await sdk.getGraceParams(),
+};
+console.log(sdk.network.name, pins, sdk.nodeChecks.map(n => `${n.url}: ${n.status}`));
 ```
 
-A chain mismatch here is the root cause of most later "process not found" / proof-verification failures.
+`sdk.registry` is the read-only registry through the read provider; `sdk.processes` is the same registry with the signer, for raw writes (`references/contracts.md`).
 
 ## Cross-references
 
-- `references/process.md` — `createProcess` and lifecycle.
-- `references/census.md` — which census class, and the `maxVoters` rule.
-- `references/voting.md` — the encrypted-vote flow.
-- `recipes/bootstrap.ts` — this wiring as a runnable file.
+- `references/process.md`: creating and running an election.
+- `references/nodes.md`: node checks, routing and failover.
+- `references/census.md` and `references/metadata.md`: what the uploader publishes.
+- `recipes/bootstrap.ts`: this wiring as a runnable file.

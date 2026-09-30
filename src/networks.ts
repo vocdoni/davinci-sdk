@@ -232,9 +232,9 @@ function rateLimited(answer: JsonRpcResult | JsonRpcError): boolean {
 
 /**
  * A provider over several JSON-RPC endpoints of one chain, for reads and for
- * a signer's transactions. Each request goes to the endpoints in order and the first answer is taken; an endpoint
- * that does not answer, answers with an HTTP error or rate-limits the request
- * hands it to the next. A 429 is retried a few times on the same endpoint
+ * a signer's transactions. Each request goes to the endpoints in order and
+ * the first answer is taken; an endpoint that does not answer, answers with
+ * an HTTP error or rate-limits the request hands it to the next. A 429 is retried a few times on the same endpoint
  * first (ethers' backoff), and more times on the last one. Requests from
  * Node carry a `User-Agent`.
  *

@@ -1,149 +1,158 @@
-# `references/ballot-modes.md` — Configuring voting systems via the ballot mode
+# `references/ballot-modes.md` — Voting systems and the ballot mode
 
-Companion to the [[davinci-sdk]] skill. Davinci uses **one parametric ballot circuit** for every voting system. A ballot is a fixed-length array of integers (`choices`), and a small set of parameters — the **ballot mode** — constrains what's valid. Approval, ranking, quadratic, multiple-choice, budget, and plain single-choice are all special cases of the same parameters. This file maps each voting system to a concrete `BallotMode`.
+Companion to the [[davinci-sdk]] skill. DAVINCI uses one parametric ballot circuit, `BallotProof(16)`, for every voting system. A ballot is up to 16 integers, one per **field**, and a handful of parameters, the **ballot mode**, say which ballots are valid. Single choice, approval, rating, ranking and quadratic voting are all settings of the same parameters.
 
-## Preset election types (v1.0.0+)
+## Presets
 
-Most voting modes don't require manually computing a `BallotMode`. Pass an `electionPreset` discriminated union on `ProcessConfig` instead:
+Pass an `electionPreset` instead of computing a ballot mode:
 
-```typescript
-import type { ElectionPreset } from '@vocdoni/davinci-sdk';
-
-const preset: ElectionPreset = { type: 'quadratic', budget: 100 };
-
+```ts
 await sdk.createProcess({
-  electionPreset: preset,
-  questions: [{ title: 'Q', choices: [/* ... */] }],
-  /* census, timing, ... */
+  ...config,
+  electionPreset: { type: 'quadratic', budget: 100 },
+  questions: [
+    {
+      title: 'Fund these projects',
+      choices: [
+        { title: 'Park', value: 0 },
+        { title: 'Library', value: 1 },
+        { title: 'Bike lanes', value: 2 },
+      ],
+    },
+  ],
 });
 ```
 
-Six presets are available — `single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic` — each derived from the DAVINCI ballot protocol. The SDK uses `questions[0].choices.length` as the field count. Raw `BallotMode` remains supported as the escape hatch; `ballot` and `electionPreset` are mutually exclusive.
+The field count is `questions[0].choices.length`, at most 16. `electionPreset` and `ballot` exclude each other, and a preset needs the `questions` form (not `metadataUri`). The preset is stored in the metadata (`meta.electionPreset`); `getProcess` reads it back as `info.electionPreset`, and results use it to name the ballot kind.
 
-For the exact `BallotMode` mapping per preset, see the JSDoc on `ElectionPreset` in `src/core/types/ballot.ts`, or read the README "Election presets" section.
+| Preset | Options | Ballot mode (`numFields` = N) | A ballot |
+| --- | --- | --- | --- |
+| `single_choice` | `allowAbstain?` | values 0..1, sum 1 (0..1 with `allowAbstain`) | `[0, 1, 0]` |
+| `multiple_choice` | `maxSelections`, `minSelections?` (0) | values 0..1, sum `minSelections..maxSelections` | `[1, 0, 1]` |
+| `approval` | | values 0..1, sum 0..N | `[1, 1, 0]` |
+| `rating` | `maxValue`, `minValue?` (0) | values `minValue..maxValue` | `[5, 2, 4]` |
+| `ranking` | | values 1..N, all different, sum N(N+1)/2 | `[2, 1, 3]` (option 1 first) |
+| `quadratic` | `budget`, `minValueSum?` (0) | values 0..budget, sum of squares `minValueSum..budget` | `[3, 0, 1]` costs 10 |
 
-Presets round-trip through metadata: created with `electionPreset` → stored at `metadata.meta.electionPreset` (off-chain) → re-emerged as `info.electionPreset` on `getProcess()`. Raw-`BallotMode` processes have no preset on the way out; only `info.ballot` is populated. The top-level `metadata.type` field is reserved by the sequencer for its own use, which is why the preset lives inside `meta` instead. The `parseElectionPresetFromMetadata` helper used internally rejects any shape that doesn't match the current `ElectionPreset` discriminator.
+`resolveElectionPreset(preset, questions)` returns the raw ballot mode, to inspect it before creating.
 
----
+## The ballot mode
 
-## The parameters (recap from `references/process.md`)
-
-```ts
+```ts nocheck
 interface BallotMode {
-  numFields: number;     // number of fields in the ballot (= choices.length)
-  minValue: string;      // min value any field may take
-  maxValue: string;      // max value any field may take
-  uniqueValues: boolean; // if true, all field values must be distinct
-  costExponent: number;  // exponent e in the cost sum below
-  minValueSum: string;   // floor on Σ vᵢ^e
-  maxValueSum: string;   // ceiling on Σ vᵢ^e
-  groupSize?: number;    // optional; advanced grouping
+  numFields: number; // 1..16: the fields a voter fills
+  minValue: string; // smallest value of a field
+  maxValue: string; // largest value of a field, below 2^48
+  uniqueValues: boolean; // every field holds a different value
+  costExponent: number; // each value is raised to this in the sum below
+  minValueSum: string; // least the sum may be
+  maxValueSum: string; // most the sum may be, below 2^63; 0 makes the voter's weight the budget
+  groupSize?: number; // at most numFields; defaults to numFields
 }
 ```
 
-A ballot `v = [v₁ … v_numFields]` is **valid** iff:
+A ballot `v[0..numFields)` is valid when every `minValue <= v[i] <= maxValue`, the values differ if `uniqueValues`, and `minValueSum <= Σ v[i]^costExponent <= maxValueSum`. Bounds are decimal strings; `numFields` and `costExponent` are numbers.
 
-- `minValue ≤ vᵢ ≤ maxValue` for every field, and
-- if `uniqueValues`, all `vᵢ` are distinct, and
-- `minValueSum ≤ Σ vᵢ^costExponent ≤ maxValueSum`.
+`createProcess` checks a mode before anything is sent (`ballotModeValues`), and refuses with `BallotModeError`, whose `registryError` names the registry's revert:
 
-Invalid ballots are rejected by the circuit and never reach the tally. Results are accumulated field-by-field: `result[i]` is the weighted sum of `vᵢ` across all voters. (Bounds are strings; remember `choices` are `number`s within `[minValue, maxValue]`.)
+- `numFields` outside 1..16 (`InvalidMaxCount`), `groupSize` above `numFields` (`InvalidGroupSize`);
+- a value bound of 2^48 or more, a sum bound of 2^63 or more (`BallotModeMaxValueTooLarge`, …);
+- `minValue > maxValue` (`InvalidMaxMinValueBounds`), `minValueSum > maxValueSum` (`InvalidValueSumBounds`).
 
-## Encoding questions as fields
+The registry also caps `maxValue * maxVoters` at 1e12 (`RESULT_CAP`): a mode with large values limits `maxVoters`.
 
-There are two idioms:
-
-1. **One-hot options** (single/multiple/approval): one field per *option*; the value marks selection (`1`) or magnitude (weight / credits). Tally `result[i]` = total received by option *i*. This is what the SDK's examples use.
-2. **Positional** (ranking): one field per *rank slot* or per *option*, the value is the rank.
-
-For multi-question elections, concatenate the fields of each question and set `numFields` to the total.
-
-## Recipes per voting system
-
-### Single-choice, N options (one-hot)
-
-Exactly one option gets `1`, the rest `0`.
+## Raw modes per voting system
 
 ```ts
-ballot = { numFields: N, minValue: "0", maxValue: "1",
-           uniqueValues: false, costExponent: 1, minValueSum: "1", maxValueSum: "1" };
-// pick option j:  choices = one-hot(N, j)   e.g. N=4, j=2 → [0,0,1,0]
+import type { BallotMode } from '@vocdoni/davinci-sdk';
+
+const N = 4; // options, one field each
+
+// Single choice: exactly one option. minValueSum '0' allows a blank ballot.
+const singleChoice: BallotMode = {
+  numFields: N,
+  minValue: '0',
+  maxValue: '1',
+  uniqueValues: false,
+  costExponent: 1,
+  minValueSum: '1',
+  maxValueSum: '1',
+};
+
+// Approval, capped: approve up to 3 options.
+const approveUpTo3: BallotMode = { ...singleChoice, minValueSum: '0', maxValueSum: '3' };
+
+// Ranking: a permutation of 1..N.
+const ranking: BallotMode = {
+  numFields: N,
+  minValue: '1',
+  maxValue: String(N),
+  uniqueValues: true,
+  costExponent: 1,
+  minValueSum: String((N * (N + 1)) / 2),
+  maxValueSum: String((N * (N + 1)) / 2),
+};
+
+// Quadratic: v votes on an option cost v²; 100 credits.
+const quadratic: BallotMode = {
+  numFields: N,
+  minValue: '0',
+  maxValue: '10',
+  uniqueValues: false,
+  costExponent: 2,
+  minValueSum: '0',
+  maxValueSum: '100',
+};
+
+// Budget: split 1,000 linearly, at most 500 on one option.
+const budget: BallotMode = { ...quadratic, costExponent: 1, maxValue: '500', maxValueSum: '1000' };
 ```
 
-`maxValueSum: "1"` forces exactly one selection. Use `minValueSum:"0"` to allow abstaining (all zeros).
+Several questions share one ballot: give each question its own fields (the metadata choices' `value`s) and set the bounds for the whole ballot. The presets describe one question.
 
-### Approval voting (pick any subset of N)
+## Weights
 
-Each option is binary; approve as many as you like.
+The tally adds ballots up; census weights are **not** multiplied in. A weight changes a ballot only when the mode makes it the budget: with `maxValueSum: '0'` (and `minValueSum: '0'`), each voter's sum `Σ v[i]^costExponent` may reach its census weight.
 
 ```ts
-ballot = { numFields: N, minValue: "0", maxValue: "1",
-           uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: String(N) };
-// approve options 0 and 2 of 4:  choices = [1,0,1,0]
+import type { BallotMode } from '@vocdoni/davinci-sdk';
+
+// Token-weighted: each voter spreads its weight over 3 options; a weight-40
+// voter may send [40, 0, 0] or [25, 15, 0].
+const weighted: BallotMode = {
+  numFields: 3,
+  minValue: '0',
+  maxValue: '1000000', // at least the largest weight, to put it all on one option
+  uniqueValues: false,
+  costExponent: 1,
+  minValueSum: '0',
+  maxValueSum: '0',
+};
 ```
 
-Cap approvals with a smaller `maxValueSum` (e.g. "pick up to 3" → `maxValueSum: "3"`).
+- Size `maxValue` to the largest weight; with the result cap, `maxVoters` must stay at most `1e12 / maxValue`.
+- The circuit compares the sum with the weight in 63 bits: a weight of 2^63 or more cannot vote. `createProcess` refuses such a Merkle census object.
+- `sdk.getAddressWeight(processId, address)` tells a voter its budget.
 
-### Multiple-choice (pick between min and max of N)
+With any other `maxValueSum`, every voter has the same bounds whatever its weight.
+
+## Checking a ballot before voting
+
+`submitVote` refuses choices outside the mode (`VoteError('invalid')`) before proving. To check in a UI:
 
 ```ts
-ballot = { numFields: N, minValue: "0", maxValue: "1", uniqueValues: false,
-           costExponent: 1, minValueSum: String(min), maxValueSum: String(max) };
+import { ballotModeValues, checkBallot } from '@vocdoni/davinci-sdk';
+
+const info = await sdk.getProcess(processId);
+const { valid, error } = checkBallot([1n, 0n, 0n], ballotModeValues(info.ballot), 1n); // fields, mode, weight
 ```
 
-### Ranked voting (rank N options 1..N)
+## Reading results per kind
 
-Fields hold a permutation of `1..N`; `uniqueValues` forbids ties.
-
-```ts
-ballot = { numFields: N, minValue: "1", maxValue: String(N), uniqueValues: true,
-           costExponent: 1, minValueSum: String(N*(N+1)/2), maxValueSum: String(N*(N+1)/2) };
-// rank: option0=2nd, option1=1st, option2=3rd → choices = [2,1,3]
-```
-
-The sum of `1..N` is fixed (`N(N+1)/2`), so pinning `min/maxValueSum` to it rejects partial rankings.
-
-### Quadratic voting (allocate credits, quadratic cost)
-
-`costExponent: 2` makes a field of value `v` cost `v²`; `maxValueSum` is the credit budget.
-
-```ts
-ballot = { numFields: N, minValue: "0", maxValue: String(maxCreditsPerOption),
-           uniqueValues: false, costExponent: 2, minValueSum: "0", maxValueSum: String(budget) };
-// spend on options: choices = [2,0,1,0] costs 2²+0+1²+0 = 5 credits
-```
-
-### Budget voting (allocate a budget linearly)
-
-Like quadratic but `costExponent: 1` — the budget is the sum of allocations.
-
-```ts
-ballot = { numFields: N, minValue: "0", maxValue: String(maxPerOption),
-           uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: String(budget) };
-```
-
-## Weighted voting
-
-When the census assigns per-voter weights, the voter's weight scales their contribution. The SDK examples model this by putting the **weight** (not `1`) into the chosen one-hot field, and sizing the bounds accordingly:
-
-```ts
-const maxValue = String(maxOption * maxWeight);   // headroom for weight-scaled values
-ballot = { numFields: N, minValue: "0", maxValue, uniqueValues: false,
-           costExponent: 1, minValueSum: "0", maxValueSum: maxValue };
-// a weight-5 voter picking option 1:  choices = [0,5,0,0]
-```
-
-The census provides the weight (`sdk.getAddressWeight`); the ballot/verifier circuits enforce that the value used matches the voter's authenticated weight. Size `maxValue`/`maxValueSum` to the largest weight you expect or the circuit will reject high-weight ballots.
-
-## Practical defaults
-
-- Start from single-choice or approval; reach for quadratic/ranked only when the user explicitly asks.
-- `numFields` must equal `choices.length` at vote time — keep them in lockstep.
-- Bounds are **strings**; `costExponent`/`numFields` are **numbers**.
-- The tally `result[i]` is per **field**. For one-hot encodings that's per option; map back to your `questions[].choices` by index.
+See `references/results.md`: the totals of a rating are sums of ratings, of a ranking sums of ranks (lower is preferred), of a quadratic ballot the votes each option got.
 
 ## Cross-references
 
-- `references/process.md` — where `ballot` lives in `ProcessConfig`; reading `result`.
-- `references/voting.md` — the `choices` array and range validation.
-- `references/protocol.md` — the formal ballot-protocol definition this is drawn from.
+- `references/process.md`: where `ballot` and `electionPreset` go.
+- `references/voting.md`: the `choices` array.
+- `references/results.md`: decoding the tally.

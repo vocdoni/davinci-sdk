@@ -3,6 +3,7 @@ import { SequencerNodes } from '../../sequencer/SequencerNodes';
 import { VocdoniSequencerService } from '../../sequencer/SequencerService';
 import type { BaseServiceConfig } from './BaseService';
 
+/** The sequencer nodes of a {@link VocdoniApiService}, by role. */
 export interface VocdoniApiServiceConfig {
   /** Sequencer nodes that take votes and answer reads. */
   sequencerURLs?: readonly string[];

@@ -7,6 +7,10 @@ import { MAX_VALUE_BITS, NUM_FIELDS, VALUE_SUM_BITS } from '../../protocol/limit
  * `registryError` names the registry's revert for the same rule, when it has one.
  */
 export class BallotModeError extends RangeError {
+  /**
+   * @param message - The rule the mode breaks
+   * @param registryError - The registry's revert for the same rule, e.g. `InvalidMaxCount`
+   */
   constructor(
     message: string,
     public readonly registryError?: string

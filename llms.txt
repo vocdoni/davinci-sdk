@@ -1,38 +1,50 @@
-# Vocdoni DaVinci SDK — AI documentation index
+# Vocdoni DaVinci SDK — documentation index
 
-TypeScript SDK for the Vocdoni DaVinci voting protocol. Triggers on imports
-of `@vocdoni/davinci-sdk` or work involving zk-encrypted voting, census
-classes, ballot modes, sequencer/contracts services.
+TypeScript SDK for the Vocdoni DAVINCI voting protocol: private, verifiable
+elections on an Ethereum registry, with ballots proved in the voter's browser
+or process and batched by sequencer nodes into zkVM proofs. Covers imports of
+`@vocdoni/davinci-sdk`: the `DavinciSDK` facade, censuses, ballot modes, key
+modes, the grace window, results, receipts and the node and contract layers.
 
 ## Entry point
 
-- [SKILL.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/SKILL.md) — start here. Mental model, package shape, common gotchas, 25-line minimal example, routing table to deeper references.
+- [SKILL.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/SKILL.md) — start here. What DAVINCI is, the package shape, the mental model, a short end-to-end example and a table from task to reference.
 
 ## Topic references
 
-- [setup.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/setup.md) — SDK construction, signer rules, init() lifecycle, environment URLs.
-- [process.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/process.md) — createProcess / createProcessStream, lifecycle (end/pause/cancel/resume), maxVoters, timing.
-- [census.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/census.md) — OffchainCensus, OffchainDynamicCensus, CspCensus, PublishedCensus, OnchainCensus, weight handling.
-- [voting.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/voting.md) — submitVote, status polling, eligibility checks, the two-phase encrypted flow.
-- [ballot-modes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/ballot-modes.md) — yes/no, approval, ranked, quadratic, budget — concrete BallotMode shapes.
-- [sequencer.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/sequencer.md) — REST surface, /info endpoint, circuit downloads, status polling.
-- [contracts.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/contracts.md) — ProcessRegistryService, TxStatus state machine, event subscriptions.
-- [errors.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/errors.md) — error catalog, message discrimination, common debugging steps.
-- [protocol.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/protocol.md) — ElGamal encryption, zk-SNARK proof composition, Ethereum anchoring.
+- [setup.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/setup.md) — install, configuration, networks and node URLs, `init()`, the read provider, the uploader and the circuit files.
+- [process.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/process.md) — `createProcess` and its config, timing, `maxVoters`, the organizer controls and their windows, `getProcess`.
+- [key-modes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/key-modes.md) — sequencer, `dkg` and `dkg-locked` election keys, the organizer secret and `revealProcessKey`.
+- [grace.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/grace.md) — the grace window after the end, the phases, `closeProcessIn`, the grace floor and running a live meeting.
+- [census.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/census.md) — the four census origins: local Merkle censuses and publishing them, updates, the on-chain census contract, CSP attestations.
+- [metadata.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/metadata.md) — the metadata document, its exact bytes and on-chain hash, publishing, verification on read, updates.
+- [voting.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/voting.md) — `submitVote`, the `choices` model, statuses and their timing, vote errors, eligibility reads.
+- [nodes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/nodes.md) — several nodes: node checks at init, per-voter routing, failover and the revote-on-the-same-node rule.
+- [receipts.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/receipts.md) — vote receipts: tracker proofs checked against the registry state roots.
+- [results.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/results.md) — when results come for each key mode, `waitForResults`, the results states and decoding tallies.
+- [ballot-modes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/ballot-modes.md) — presets and raw ballot modes: single and multiple choice, approval, rating, ranking, quadratic, budget.
+- [sequencer.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/sequencer.md) — the node HTTP API client, its routes, wire types and error codes.
+- [contracts.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/contracts.md) — `ProcessRegistryService`, transaction status streams, events, revert decoding, deployment pins.
+- [errors.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/errors.md) — the error classes, sequencer codes, registry revert names and what to do about each.
+- [protocol.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/protocol.md) — how DAVINCI works: the zkVM batches, the ballot, slots and silent revoting, the grace window, results.
 
 ## Recipes (runnable TypeScript)
 
-- [bootstrap.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/bootstrap.ts) — minimal SDK init.
-- [create-process.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/create-process.ts) — organizer flow.
-- [cast-vote.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/cast-vote.ts) — voter flow.
-- [full-election.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/full-election.ts) — end-to-end happy path.
-- [read-results.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/read-results.ts) — fetch and decode tallies.
-- [token-census.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/token-census.ts) — ERC-20/721 token-gated voting.
+- [bootstrap.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/bootstrap.ts) — configure the SDK, `init()` and report what it found.
+- [create-process.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/create-process.ts) — create an election with a local census, streaming the transaction.
+- [cast-vote.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/cast-vote.ts) — vote as a voter and follow the vote to `settled`.
+- [full-election.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/full-election.ts) — an election end to end: census, creation, votes, early close, results.
+- [read-results.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/read-results.ts) — wait for a process's results and print them.
+- [onchain-census.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/onchain-census.ts) — an election on an append-only census contract.
+- [dkg-locked.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/dkg-locked.ts) — a committee key locked by the organizer, and the reveal.
+- [close-early.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/close-early.ts) — close a running election with notice and the grace at the floor.
+- [receipt.ts](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/recipes/receipt.ts) — a vote receipt checked against the registry.
 
 ## Bundles
 
-- [llms-full.txt](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms-full.txt) — everything above concatenated into one file. Use when an agent benefits from full context in one fetch.
+- [llms-full.txt](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms-full.txt) — everything above in one file.
 
 ## Source
 
-These docs are mirrored from [vocdoni/skills](https://github.com/vocdoni/skills/tree/main/plugins/davinci-sdk/skills/davinci-sdk) (AGPL-3.0-or-later). The SDK itself is at https://github.com/vocdoni/davinci-sdk.
+Built from `docs/ai/` by `scripts/build-llms.mjs`. The SDK is at
+https://github.com/vocdoni/davinci-sdk (AGPL-3.0).

@@ -1,3 +1,4 @@
+/** The error body a sequencer node answers with. */
 export interface ApiError {
   error: string;
   code: number;
@@ -7,6 +8,7 @@ type QueryParamValue = string | number | boolean | null | undefined;
 type ErrorCode = string | number;
 type ErrorWithCode = Error & { code?: ErrorCode };
 
+/** One HTTP request of a {@link BaseService}. */
 export interface RequestConfig {
   method?: string;
   url: string;
@@ -17,14 +19,19 @@ export interface RequestConfig {
   timeoutMs?: number;
 }
 
+/** How a {@link BaseService} talks HTTP. */
 export interface BaseServiceConfig {
+  /** Headers sent with every request. */
   headers?: Record<string, string>;
+  /** Longest wait for a response, in ms; none by default. */
   timeoutMs?: number;
+  /** Replaces the global `fetch`. */
   fetchImpl?: typeof fetch;
   /** Largest response body read, in bytes; a longer one fails the request. Unbounded by default. */
   maxResponseBytes?: number;
 }
 
+/** A JSON-over-HTTP client of one base URL, the base of the sequencer client. */
 export class BaseService {
   private readonly fetchImpl: typeof fetch;
   private readonly defaultHeaders: Record<string, string>;
@@ -48,6 +55,7 @@ export class BaseService {
     this.maxResponseBytes = config?.maxResponseBytes;
   }
 
+  /** The base URL requests are resolved against. */
   public getBaseUrl(): string {
     return this.baseURL;
   }

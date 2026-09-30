@@ -1,227 +1,198 @@
-# `references/process.md` — Creating & managing a process, reading results
+# `references/process.md` — Creating and running an election
 
-Companion to the [[davinci-sdk]] skill. A **process** is one election. This file covers `createProcess`, its config shape, the lifecycle methods, and `getProcess` / result reading — all on the `DavinciSDK` facade. All of these require a **signer with a provider** (see `references/setup.md`).
+Companion to the [[davinci-sdk]] skill. A **process** is one election. This file covers `createProcess`, its config, the organizer controls and `getProcess`. Creation and every control need a signer with a provider on the network's chain; `getProcess` does not.
 
 ## Create a process
 
 ```ts
-const result = await sdk.createProcess(config);  // Promise<ProcessCreationResult>
-// result = { processId: string, transactionHash: string }
+const created = await sdk.createProcess(config);
+// { processId, transactionHash, organizerSecret?, grace?, graceError? }
 ```
 
-The facade does everything: validates timing, computes the next `processId`, auto-publishes the census if needed, uploads metadata, fetches the per-process encryption key from the sequencer, and sends the on-chain create transaction.
+The facade does the whole creation, in this order:
+
+1. **Checks, before anything is uploaded or sent.** The timing on the chain clock, the ballot mode against the registry and the circuit, `maxVoters` and the result cap, the grace value, and for a DKG key that the registry has a DKG adapter. A refusal names the registry error it avoids (`err.revertName`, e.g. `InvalidStartTime`).
+2. **Documents.** A Merkle census object and the metadata document are published through the `uploader` and read back as nodes and readers will. A census or a document given by URL is checked the same way.
+3. **One creation at a time per account.** It reads the id the registry assigns next, asks the key node for that id's key (sequencer key only), simulates `newProcess` and sends it. The process id comes from the receipt's `ProcessCreated` log.
+4. **Grace** (with `grace`): `setProcessGrace` follows as its own transaction.
 
 ### `ProcessConfig`
 
-```ts
+```ts nocheck
 interface ProcessConfig {
-  // Census: a Census object (recommended) OR manual { type, root, size, uri }.
-  census: Census | { type: CensusOrigin; root: string; size: number; uri: string };
-
-  ballot: BallotMode;                 // the voting rules — see references/ballot-modes.md
-
+  census: Census | CensusConfig; // a census object, or { type, root, uri, contractAddress? }
+  ballot?: BallotMode; // raw ballot mode, or:
+  electionPreset?: ElectionPreset; // { type: 'single_choice' } etc. (references/ballot-modes.md)
   timing: {
-    startDate?: Date | string | number;  // default: now + 60s
-    duration?: number;                    // seconds — use this OR endDate, not both
-    endDate?: Date | string | number;     // alternative to duration
+    startDate?: Date | string | number; // omitted or 0: the creation block
+    duration?: number; // seconds; or:
+    endDate?: Date | string | number;
   };
+  maxVoters?: number; // default: the member count of a Merkle census object
+  keyMode?: 'sequencer' | 'dkg' | 'dkg-locked'; // default 'sequencer' (references/key-modes.md)
+  grace?: number; // seconds, within the registry's graceFloor..graceCeil (references/grace.md)
+  paused?: boolean; // create it PAUSED
 
-  maxVoters?: number;                 // see "the maxVoters rule" below
-
-  // EITHER inline metadata (uploaded for you) …
-  title?: string;
-  description?: string;
-  questions?: [ProcessQuestion, ...ProcessQuestion[]];   // ≥1 required in this form
-  // … OR a pre-uploaded metadata URI:
-  metadataUri?: string;
-}
-
-type ProcessQuestion = {
-  title: string;
-  description?: string;
-  choices: Array<{ title: string; value: number }>;
-};
-```
-
-`ProcessConfig` is a union: provide **either** `title`+`questions` (the SDK builds & uploads `ElectionMetadata` for you) **or** a `metadataUri` you uploaded yourself. You cannot mix `duration` and `endDate`.
-
-### `BallotMode` (the `ballot` field)
-
-```ts
-interface BallotMode {
-  numFields: number;        // number of ballot fields; choices.length must equal this
-  groupSize?: number;       // optional grouping (advanced)
-  minValue: string;         // min value per field (decimal STRING)
-  maxValue: string;         // max value per field (decimal STRING)
-  uniqueValues: boolean;    // all field values must differ (ranking)
-  costExponent: number;     // exponent in the cost sum (2 = quadratic)
-  minValueSum: string;      // floor on Σ value^costExponent (decimal STRING)
-  maxValueSum: string;      // ceiling on Σ value^costExponent (decimal STRING)
+  // EITHER the metadata, which the SDK builds and publishes:
+  title: LocalizedText; // 'text' or { default: 'text', en: 'text', es: 'texto' }
+  description?: LocalizedText;
+  questions: [QuestionConfig, ...QuestionConfig[]]; // { title, description?, choices: [{ title, value }] }
+  media?: { header?: string; logo?: string };
+  // OR a document you serve yourself:
+  metadataUri: string;
+  metadataHash?: string; // sha256 of the exact bytes; downloaded and hashed when omitted
 }
 ```
 
-> Bounds are **decimal strings**, not numbers — bigint-safe JSON. `numFields`/`costExponent` are plain `number`. How to set these for approval/ranked/quadratic/budget/single/multiple choice is in `references/ballot-modes.md`.
+`ballot` and `electionPreset` exclude each other; a preset takes its field count from `questions[0].choices.length` and needs the `questions` form. Choice `value`s are ballot field indexes, from 0.
 
-### The `maxVoters` rule
+### Timing
 
-`maxVoters` caps how many voters the process accepts. When you can omit it vs must supply it:
+- Times are checked against the **chain head's** time, which is what the registry uses.
+- No `startDate` (or 0): the process starts in the block that creates it, so voters can vote as soon as the nodes have seen it (a few blocks).
+- An explicit `startDate` must be after the chain head, with room for the transaction to land (`InvalidStartTime`).
+- Give `duration` in seconds or an `endDate`, not both. With no `startDate` the duration runs from the head.
+- Dates accept a `Date`, an ISO string or a unix timestamp (seconds; values above 1e10 are read as milliseconds).
 
-| Census you pass                              | `maxVoters` |
-| -------------------------------------------- | ----------- |
-| Published `OffchainCensus`/`OffchainDynamicCensus` (Merkle) | **Optional** — defaults to the participant count |
-| `OnchainCensus` (token / on-chain)           | **Required** |
-| `CspCensus`                                  | **Required** |
-| `PublishedCensus`                            | **Required** |
-| Manual `{ type, root, size, uri }`           | **Required** |
+### `maxVoters` and the result cap
 
-Omitting it when required throws: *"maxVoters is required…"*. See `references/census.md`.
+| Census | `maxVoters` |
+| --- | --- |
+| `OffchainCensus`, `OffchainDynamicCensus` object | optional: the member count |
+| `OnchainCensus`, `CspCensus`, `PublishedCensus`, a `CensusConfig` | required |
 
-### Timing notes
+The registry caps `maxValue * maxVoters` at `RESULT_CAP` (1e12): a ballot mode with `maxValue` 10 allows up to 1e11 voters. Beyond it the creation is refused as `MaxPossibleResultCapExceeded`.
 
-- `startDate` defaults to **now + 60 seconds**; a start date more than 30s in the past throws.
-- Accepts `Date`, ISO string, or Unix timestamp (seconds; values > 1e10 are treated as ms and divided).
-- Give `duration` (seconds) **or** `endDate`, never both. `endDate` must be after `startDate`.
-
-### Minimal example
+### Example
 
 ```ts
-import { OffchainCensus } from "@vocdoni/davinci-sdk";
+import { OffchainCensus } from '@vocdoni/davinci-sdk';
 
 const census = new OffchainCensus();
-census.add(["0xAaa…", "0xBbb…", "0xCcc…"]);
+census.add([
+  '0x1111111111111111111111111111111111111111',
+  { key: '0x2222222222222222222222222222222222222222', weight: 3 },
+]);
 
-const { processId, transactionHash } = await sdk.createProcess({
-  title: "Community Decision",
-  description: "What should we build next?",
-  census,                                            // auto-published; maxVoters auto
-  ballot: {
-    numFields: 3, minValue: "0", maxValue: "1",
-    uniqueValues: false, costExponent: 1, minValueSum: "0", maxValueSum: "1",
-  },
-  timing: { startDate: new Date(Date.now() + 60_000), duration: 3600 * 24 },
-  questions: [{
-    title: "Which initiative?",
-    choices: [
-      { title: "Garden",   value: 0 },
-      { title: "Workshop", value: 1 },
-      { title: "Gallery",  value: 2 },
-    ],
-  }],
+const { processId } = await sdk.createProcess({
+  title: { default: 'Community decision', es: 'Decisión comunitaria' },
+  description: 'What should we build next?',
+  census,
+  electionPreset: { type: 'single_choice' },
+  timing: { duration: 7 * 24 * 3600 },
+  questions: [
+    {
+      title: 'Which initiative?',
+      choices: [
+        { title: 'Garden', value: 0 },
+        { title: 'Workshop', value: 1 },
+        { title: 'Gallery', value: 2 },
+      ],
+    },
+  ],
 });
 ```
 
-## Real-time creation: `createProcessStream`
+## Streaming the creation
 
-For UIs that show transaction progress, use the streaming variant. It yields `TxStatusEvent`s:
+`createProcessStream(config)` yields `TxStatusEvent`s for UIs:
 
 ```ts
-import { TxStatus } from "@vocdoni/davinci-sdk";
+import { TxStatus } from '@vocdoni/davinci-sdk';
 
-let processId = "";
-for await (const event of sdk.createProcessStream(config)) {
+for await (const event of sdk.createProcessStream({ ...config, grace: 150 })) {
   switch (event.status) {
-    case TxStatus.Pending:   console.log("submitted:", event.hash); break;
-    case TxStatus.Completed: processId = event.response.processId;   // + event.response.transactionHash
-                             break;
-    case TxStatus.Failed:    throw event.error;
-    case TxStatus.Reverted:  throw new Error(`reverted: ${event.reason}`);
+    case TxStatus.Pending:
+      // event.step is 'setProcessGrace' for the follow-up transaction
+      console.log(event.step ?? 'newProcess', 'sent:', event.hash);
+      break;
+    case TxStatus.Completed:
+      console.log('created', event.response.processId, event.response.grace);
+      if (event.response.graceError) console.warn('grace not set:', event.response.graceError);
+      break;
+    case TxStatus.Failed:
+      throw event.error; // refused before or while sending: nothing was mined
+    case TxStatus.Reverted:
+      throw event.error ?? new Error(event.reason); // mined and reverted, named by replaying it
   }
 }
 ```
 
-`createProcess(config)` is exactly this loop consumed for you, returning `{ processId, transactionHash }`. Use the plain method for scripts; the stream for progress UX.
+- A refusal of the config itself is a single `Failed` event whose `error` is a `ProcessCreateError` (or a census, metadata, ballot mode or node error) with the registry error in `revertName`.
+- A DKG creation is retried once when the committee's key pool ran out or its epoch moved: a second `Pending`.
+- With `grace`, a failed `setProcessGrace` still completes, with `graceError` set: the process exists with the registry's default window. Retry with `setProcessGrace`.
+- The stream throws, before any event, when the SDK is not initialized or the signer has no provider or is on another chain.
 
-## Lifecycle
+`createProcess(config)` consumes the stream and throws the `Failed` or `Reverted` error.
 
-Every lifecycle method has a plain (`Promise<void>`) form and a `…Stream` form yielding `TxStatusEvent`s. All require a signer with a provider, and revert if you're not the process organizer or the transition is invalid.
+## Organizer controls
 
-```ts
-await sdk.endProcess(processId);        // → status ENDED (stops accepting votes; triggers tally)
-await sdk.pauseProcess(processId);      // → status PAUSED
-await sdk.resumeProcess(processId);     // PAUSED → READY (resume a paused process)
-await sdk.cancelProcess(processId);     // → status CANCELED (abandon; no results)
-await sdk.setProcessMaxVoters(processId, 750);   // change the voter cap
+Each control reads the process and the chain clock first and refuses what the registry would revert, with the operation's error class and the registry error in `revertName`; the call is then simulated before it is signed. Each has a plain form (throws) and a `…Stream` form (yields `TxStatusEvent`s). Only the organizer may call them, except `revealProcessKey`.
 
-// streaming equivalents: endProcessStream, pauseProcessStream, resumeProcessStream,
-// cancelProcessStream, setProcessMaxVotersStream — same TxStatusEvent shape as above.
-```
-
-`ProcessStatus` (contract enum — note the values):
-
-```ts
-enum ProcessStatus { READY = 0, ENDED = 1, CANCELED = 2, PAUSED = 3, RESULTS = 4 }
-```
-
-A process becomes accepting-votes once it is `READY` **and** its `startDate` has passed; check `sdk.api.sequencer.getProcess(id).isAcceptingVotes` (see `references/sequencer.md`). After `endProcess`, the sequencer computes the final tally and the contract moves to `RESULTS`.
-
-## Read a process & results: `getProcess`
+| Method | Allowed | Effect | Error class |
+| --- | --- | --- | --- |
+| `endProcess(pid)` | READY or PAUSED, from the start (before it: `cancelProcess`) | ENDED; the end moves to now; admitted votes still settle through the grace window | `ProcessStatusError` |
+| `pauseProcess(pid)` | READY, before the end | PAUSED; nodes take votes but settle none until resumed | `ProcessStatusError` |
+| `resumeProcess(pid)` | PAUSED | READY; the queued votes settle | `ProcessStatusError` |
+| `cancelProcess(pid)` | READY or PAUSED, any time, the grace window included (a DKG process is ENDED once its decryption is requested) | CANCELED; no results | `ProcessStatusError` |
+| `extendProcess(pid, seconds)` | READY or PAUSED, before the end | the end moves later; returns `{ duration }` | `ProcessDurationError` |
+| `closeProcessIn(pid, seconds, { slack? })` | READY or PAUSED, before the end | the end moves earlier, with notice (`references/grace.md`) | `ProcessDurationError` |
+| `setProcessGrace(pid, seconds)` | READY or PAUSED, before the end, within `graceFloor..graceCeil` | the grace window | `ProcessGraceError` |
+| `setProcessMaxVoters(pid, n)` | READY or PAUSED, before the end, at least the votes counted, within the result cap | the voter cap | `ProcessMaxVotersError` |
+| `updateCensus(pid, census)` | origin 2 only, READY or PAUSED, before the end | a new census version (`references/census.md`) | `ProcessCensusError`, `CensusNotUpdatable` |
+| `updateMetadata(pid, metadata)` | READY or PAUSED, before the end | a new metadata document (`references/metadata.md`) | `ProcessMetadataError` |
+| `revealProcessKey(pid, secret)` | `dkg-locked` processes, any time, anyone with the secret | the committee may decrypt (`references/key-modes.md`) | `ProcessKeyRevealError` |
 
 ```ts
-const info = await sdk.getProcess(processId);   // Promise<ProcessInfo>
-```
+import { ProcessStatusError } from '@vocdoni/davinci-sdk';
 
-```ts
-interface ProcessInfo {
-  processId: string;
-  title: string;
-  description?: string;
-  census: { type: CensusOrigin; root: string; uri: string };
-  ballot: BallotMode;
-  questions: ProcessQuestion[];
-
-  status: ProcessStatus;          // READY/ENDED/CANCELED/PAUSED/RESULTS
-  creator: string;                // the organizer's address
-  startDate: Date;
-  endDate: Date;
-  duration: number;               // seconds
-  timeRemaining: number;          // seconds (0 if ended, negative if not started)
-  maxVoters: number;
-
-  result: bigint[];               // tally — one entry per ballot field
-  votersCount: number;            // votes cast
-  overwrittenVotesCount: number;  // overwrites (last-vote-wins)
-  metadataURI: string;
-  raw?: any;                      // raw contract struct, for advanced use
-
-  electionPreset?: ElectionPreset; // preset used at creation, if any (round-tripped via metadata.meta.electionPreset)
+try {
+  await sdk.endProcess(processId);
+} catch (err) {
+  if (err instanceof ProcessStatusError && err.revertName === 'InvalidTimeBounds') {
+    await sdk.cancelProcess(processId); // it has not started: cancel it instead
+  } else throw err;
 }
 ```
 
-`getProcess` reads the contract and fetches metadata, so it needs a provider. For a lightweight, provider-free read (status, `isAcceptingVotes`, `votersCount`, encryption key), use `sdk.api.sequencer.getProcess(processId)` — see `references/sequencer.md`.
+`ProcessStatus` is the registry's enum: `READY = 0`, `ENDED = 1`, `CANCELED = 2`, `PAUSED = 3`, `RESULTS = 4`.
 
-### Reading the tally
+### Cleaning up
 
-`result` is a `bigint[]`, **one entry per ballot field** (not per question, not per choice — though for one-hot single-choice questions each field *is* a choice). Each entry is the weighted sum of that field's values across all voters.
+`cancelOpenProcesses()` cancels the processes this SDK instance created that are still READY or PAUSED; `{ processIds }` cancels those instead, and `{ all: true }` every process the signer ever created on the registry. It tries them all and reports `{ canceled, failed }`.
+
+## Read a process: `getProcess`
 
 ```ts
 const info = await sdk.getProcess(processId);
-// e.g. one question "favourite colour" encoded as 4 one-hot fields:
-info.questions[0].choices.forEach((c, i) => {
-  console.log(`${c.title}: ${info.result[i].toString()}`);
-});
+console.log(info.phase, info.status, info.endDate, info.graceEnd, info.votersCount);
+if (info.metadataVerified) console.log(info.title, info.questions);
 ```
 
-Results are meaningful only once the process is `ENDED`/`RESULTS` and the sequencer has settled all votes and set results on-chain. To be notified the instant results land, subscribe to the contract event (escape hatch, needs `sdk.processes`):
+It reads the registry through the read provider (a voter's bare wallet is enough), downloads the metadata document and checks its hash. `ProcessInfo` holds:
 
-```ts
-sdk.processes.onProcessResultsSet((id, sender, result /* bigint[] */) => {
-  if (id.toLowerCase() === processId.toLowerCase()) console.log("results:", result);
-});
-```
+| Field | |
+| --- | --- |
+| `processId`, `creator`, `status`, `phase` | `phase` is `upcoming`, `open`, `paused`, `closing`, `ended`, `results` or `canceled` (`references/grace.md`) |
+| `title`, `description`, `questions`, `electionPreset`, `metadata` | from the metadata document, only when it is verified |
+| `metadataURI`, `metadataHash`, `metadataVerified`, `metadataStatus`, `metadataError` | `metadataStatus`: `verified`, `mismatch`, `unreachable` or `refused` |
+| `census` | `{ type, root, uri, contractAddress? }` |
+| `ballot` | the registry's ballot mode, bounds as decimal strings |
+| `keyMode`, `dkg` | the key mode; the DKG application of a DKG process |
+| `startDate`, `endDate`, `duration`, `timeRemaining` | `timeRemaining`: seconds to the end, 0 after it, negative (minus the seconds to the start) before the start |
+| `grace`, `lastVoteAt`, `graceEnd`, `chainTime` | the grace window, computed from the same read; `graceEnd` is null when it never closes |
+| `maxVoters`, `votersCount`, `overwrittenVotesCount`, `stateRoot` | counters and the latest state root |
+| `result` | one `bigint` per ballot field once the status is RESULTS, else empty |
+| `raw` | the registry struct (`OnchainProcess`) |
 
-See `recipes/read-results.ts` for the full "wait for all votes counted → end → await results" pattern.
+For results use `waitForResults` or `decodeResults(info)` (`references/results.md`); `result` alone is per ballot field.
 
-## Listing processes
-
-```ts
-const ids: string[] = await sdk.listProcesses();          // uses signer's chain
-const ids2 = await sdk.listProcesses(chainId /* number */); // explicit chain
-```
+`sdk.listProcesses()` lists the process ids the nodes know.
 
 ## Cross-references
 
-- `references/census.md` — building the `census` you pass in.
-- `references/ballot-modes.md` — configuring `ballot` for a voting system.
-- `references/voting.md` — casting votes once the process is live.
-- `references/contracts.md` — the raw `ProcessRegistryService` behind these methods.
-- `recipes/create-process.ts`, `recipes/read-results.ts`, `recipes/full-election.ts`.
+- `references/census.md`: the `census` you pass in.
+- `references/ballot-modes.md`: `ballot` and `electionPreset`.
+- `references/key-modes.md`, `references/grace.md`: `keyMode` and `grace`.
+- `references/results.md`: what happens after the end.
+- `recipes/create-process.ts`, `recipes/close-early.ts`.

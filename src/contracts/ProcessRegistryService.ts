@@ -1166,12 +1166,18 @@ export class ProcessRegistryService extends SmartContractService {
 
   // ─── EVENT LISTENERS ───────────────────────────────────────────────────────
 
+  // Listeners subscribe in the background (with `eth_newFilter`, or by
+  // polling `eth_getLogs` where the RPC keeps no filters) and receive exactly
+  // the event's arguments; `removeAllListeners` stops them.
+
+  /** Calls `cb(processId, creator)` for every `ProcessCreated`. */
   onProcessCreated(cb: ProcessCreatedCallback): void {
     this.setupEventListener<[string, string]>(this.contract, 'ProcessCreated', cb).catch(err =>
       console.error('Error setting up ProcessCreated listener:', err)
     );
   }
 
+  /** Calls `cb(processId, oldStatus, newStatus)` for every `ProcessStatusChanged`. */
   onProcessStatusChanged(cb: ProcessStatusChangedCallback): void {
     this.setupEventListener<[string, bigint, bigint]>(
       this.contract,
@@ -1180,12 +1186,14 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ProcessStatusChanged listener:', err));
   }
 
+  /** Calls `cb(processId, censusRoot, censusUri)` for every `CensusUpdated`. */
   onCensusUpdated(cb: ProcessCensusUpdatedCallback): void {
     this.setupEventListener<[string, string, string]>(this.contract, 'CensusUpdated', cb).catch(
       err => console.error('Error setting up CensusUpdated listener:', err)
     );
   }
 
+  /** Calls `cb(processId, metadataUri, metadataHash)` for every `ProcessMetadataUpdated`. */
   onProcessMetadataUpdated(cb: ProcessMetadataUpdatedCallback): void {
     this.setupEventListener<[string, string, string]>(
       this.contract,
@@ -1194,18 +1202,22 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ProcessMetadataUpdated listener:', err));
   }
 
+  /** Calls `cb(processId, duration)` for every `ProcessDurationChanged`. */
   onProcessDurationChanged(cb: ProcessDurationChangedCallback): void {
     this.setupEventListener<[string, bigint]>(this.contract, 'ProcessDurationChanged', cb).catch(
       err => console.error('Error setting up ProcessDurationChanged listener:', err)
     );
   }
 
+  /** Calls `cb(processId, grace)` for every `ProcessGraceChanged`. */
   onProcessGraceChanged(cb: ProcessGraceChangedCallback): void {
     this.setupEventListener<[string, bigint]>(this.contract, 'ProcessGraceChanged', cb).catch(err =>
       console.error('Error setting up ProcessGraceChanged listener:', err)
     );
   }
 
+  /** Calls `cb(processId, sender, oldStateRoot, newStateRoot, votersCount,
+   * overwrittenVotesCount, nBlobs)` for every `ProcessStateTransitioned`. */
   onStateTransitioned(cb: ProcessStateTransitionedCallback): void {
     this.setupEventListener<[string, string, string, string, bigint, bigint, bigint]>(
       this.contract,
@@ -1214,6 +1226,7 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ProcessStateTransitioned listener:', err));
   }
 
+  /** Calls `cb(processId, sender, result)` for every `ProcessResultsSet`. */
   onProcessResultsSet(cb: ProcessResultsSetCallback): void {
     this.setupEventListener<[string, string, bigint[]]>(
       this.contract,
@@ -1222,6 +1235,8 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ProcessResultsSet listener:', err));
   }
 
+  /** Calls `cb(processId, epochId, aid, firstIndex, count)` for every
+   * `ResultsDecryptionRequested`. */
   onResultsDecryptionRequested(cb: ResultsDecryptionRequestedCallback): void {
     this.setupEventListener<[string, string, string, bigint, bigint]>(
       this.contract,
@@ -1230,12 +1245,14 @@ export class ProcessRegistryService extends SmartContractService {
     ).catch(err => console.error('Error setting up ResultsDecryptionRequested listener:', err));
   }
 
+  /** Calls `cb(processId, maxVoters)` for every `ProcessMaxVotersChanged`. */
   onProcessMaxVotersChanged(cb: ProcessMaxVotersChangedCallback): void {
     this.setupEventListener<[string, bigint]>(this.contract, 'ProcessMaxVotersChanged', cb).catch(
       err => console.error('Error setting up ProcessMaxVotersChanged listener:', err)
     );
   }
 
+  /** Stops every listener this service started, polling ones included. */
   removeAllListeners(): void {
     void this.contract.removeAllListeners();
     this.clearPollingIntervals();

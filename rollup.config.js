@@ -63,8 +63,10 @@ const createBundle = (config, options) => ({
   }
 });
 
+// The package is `"type": "module"`, so the CommonJS build must be `.cjs`:
+// Node would load a `.js` file as ESM and `require()` would see no exports.
 const createOutput = (name, options) => [
-  { file: `dist/${name}.js`, format: 'cjs', sourcemap: true },
+  { file: `dist/${name}.cjs`, format: 'cjs', sourcemap: true },
   { file: `dist/${name}.mjs`, format: 'es', sourcemap: true },
   {
     name: options.umdName,
@@ -106,11 +108,14 @@ export default [
     }
   ),
 
-  // Main types bundle
+  // Main types bundle, once for `import` and once for `require` (`.d.cts`)
   createBundle(
     {
       plugins: [dts()],
-      output: { file: 'dist/index.d.ts', format: 'es' }
+      output: [
+        { file: 'dist/index.d.ts', format: 'es' },
+        { file: 'dist/index.d.cts', format: 'es' }
+      ]
     },
     {
       input: 'src/index.ts',

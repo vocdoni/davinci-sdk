@@ -1,102 +1,104 @@
 /**
  * recipes/create-process.ts
  *
- * Create a voting process with a locally-built Merkle census, watching the
- * on-chain transaction in real time.
+ * Create an election with a local Merkle census, following its transaction:
  *
- *   - build an OffchainCensus (auto-published by createProcess)
- *   - one single-choice question with 4 options, encoded as 4 one-hot fields
- *   - stream TxStatus events so a UI can show progress
+ *   - an OffchainCensus of addresses (weight 1 each), published by createProcess
+ *   - the metadata document built from the title and questions, published too
+ *   - a single-choice preset over 4 options
+ *   - the TxStatus stream a UI would show
  *
- * The organizer signer MUST have a provider (process creation is on-chain).
+ * The organizer's signer needs a provider on the network's chain (Gnosis by
+ * default) and gas. Census files and metadata documents are published with an
+ * HTTP PUT to UPLOAD_URL and must then be served, unchanged, at PUBLIC_URL over
+ * public https: replace `uploader` with your own store.
+ *
+ * Environment: DAVINCI_NODES, RPC_URL, PRIVATE_KEY, UPLOAD_URL, PUBLIC_URL
  *
  * Usage:
- *   tsx create-process.ts
+ *   tsx create-process.ts 0xVoter1,0xVoter2,0xVoter3
  */
 
-import { JsonRpcProvider, Wallet } from "ethers";
-import { DavinciSDK, OffchainCensus, TxStatus } from "@vocdoni/davinci-sdk";
+import { DavinciSDK, OffchainCensus, TxStatus, type Uploader } from '@vocdoni/davinci-sdk';
+import { JsonRpcProvider, Wallet } from 'ethers';
 
-const { SEQUENCER_API_URL, CENSUS_API_URL, RPC_URL, PRIVATE_KEY } = process.env as Record<string, string>;
+const { RPC_URL, PRIVATE_KEY, UPLOAD_URL, PUBLIC_URL } = process.env as Record<string, string>;
+const nodes = (process.env.DAVINCI_NODES ?? '').split(',').filter(Boolean);
+const voters = (process.argv[2] ?? '').split(',').filter(Boolean);
+
+const uploader: Uploader = {
+  async upload({ data, contentType, sha256 }) {
+    const name = `${sha256.slice(2)}.json`;
+    const res = await fetch(`${UPLOAD_URL}/${name}`, {
+      method: 'PUT',
+      body: new Uint8Array(data), // a copy fetch types accept
+      headers: { 'content-type': contentType },
+    });
+    if (!res.ok) throw new Error(`upload of ${name} failed: HTTP ${res.status}`);
+    return `${PUBLIC_URL}/${name}`;
+  },
+};
 
 async function main() {
+  if (voters.length === 0) throw new Error('usage: tsx create-process.ts <address,address,...>');
+
   const sdk = new DavinciSDK({
     signer: new Wallet(PRIVATE_KEY, new JsonRpcProvider(RPC_URL)),
-    sequencerUrl: SEQUENCER_API_URL,
-    censusUrl: CENSUS_API_URL, // required to publish the Merkle census
+    sequencerUrls: nodes,
+    uploader,
   });
   await sdk.init();
 
-  // 1. Census of eligible voters. Plain addresses → weight 1 each.
-  //    (For weighted voting use census.add({ key, weight }).)
+  // 1. The census: plain addresses weigh 1 (census.add({ key, weight }) for more).
   const census = new OffchainCensus();
-  census.add([
-    "0x1111111111111111111111111111111111111111",
-    "0x2222222222222222222222222222222222222222",
-    "0x3333333333333333333333333333333333333333",
-  ]);
+  census.add(voters);
 
-  // 2. Process config. One question, 4 options → numFields: 4 (one-hot).
-  //    Single-choice: each field 0..1, exactly one selected (maxValueSum "1").
-  const config = {
-    title: "Favourite colour",
-    description: "Pick one",
-    census, // auto-published; maxVoters defaults to participant count
-    ballot: {
-      numFields: 4,
-      minValue: "0",
-      maxValue: "1",
-      uniqueValues: false,
-      costExponent: 1,
-      minValueSum: "1",
-      maxValueSum: "1",
-    },
-    timing: {
-      startDate: new Date(Date.now() + 60 * 1000), // start in ~1 minute
-      duration: 3600 * 8, // 8 hours
-    },
+  // 2. Stream the creation. Omitting startDate starts it in the creation block.
+  let processId = '';
+  for await (const event of sdk.createProcessStream({
+    title: 'Favourite colour',
+    description: 'Pick one',
+    census, // maxVoters defaults to its member count
+    electionPreset: { type: 'single_choice' },
+    timing: { duration: 8 * 3600 },
     questions: [
       {
-        title: "What is your favourite colour?",
+        title: 'What is your favourite colour?',
         choices: [
-          { title: "Red", value: 0 },
-          { title: "Blue", value: 1 },
-          { title: "Green", value: 2 },
-          { title: "Yellow", value: 3 },
+          { title: 'Red', value: 0 },
+          { title: 'Blue', value: 1 },
+          { title: 'Green', value: 2 },
+          { title: 'Yellow', value: 3 },
         ],
       },
     ],
-  };
-
-  // 3. Stream the creation so we can react to each on-chain state.
-  let processId = "";
-  for await (const event of sdk.createProcessStream(config)) {
+  })) {
     switch (event.status) {
       case TxStatus.Pending:
-        console.log("Tx submitted:", event.hash);
+        console.log('transaction sent:', event.hash);
         break;
       case TxStatus.Completed:
         processId = event.response.processId;
-        console.log("Process created:", processId);
-        console.log("Tx:", event.response.transactionHash);
+        console.log('created', processId, 'in', event.response.transactionHash);
         break;
       case TxStatus.Failed:
-        throw event.error;
+        throw event.error; // refused before anything was mined (see err.revertName)
       case TxStatus.Reverted:
-        throw new Error(`Reverted: ${event.reason ?? "unknown"}`);
+        throw event.error ?? new Error(`reverted: ${event.reason ?? 'unknown'}`);
     }
   }
 
-  // Simpler, non-streaming equivalent:
+  // The same, without the stream:
   //   const { processId } = await sdk.createProcess(config);
 
-  console.log("Done. processId =", processId);
+  const info = await sdk.getProcess(processId);
+  console.log(info.phase, 'until', info.endDate.toISOString(), 'metadata', info.metadataStatus);
 }
 
 main().then(
   () => process.exit(0),
-  (err) => {
+  err => {
     console.error(err);
     process.exit(1);
-  },
+  }
 );

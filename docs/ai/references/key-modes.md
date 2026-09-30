@@ -1,0 +1,80 @@
+# `references/key-modes.md` — Who holds the election key
+
+Companion to the [[davinci-sdk]] skill. Every process has one of three key modes, chosen at creation with `keyMode`. The key encrypts every ballot; whoever holds its secret can decrypt the tally, and could open the ballots published in the settlement blobs. The mode decides who that is and who publishes the results.
+
+| `keyMode` | `KeyMode` | Who holds the secret | Who publishes the results |
+| --- | --- | --- | --- |
+| `'sequencer'` (default) | `Sequencer` (0) | the key node (`keySequencerUrl`) | only that node |
+| `'dkg'` | `DkgAutomatic` (1) | a davinci-dkg committee, as threshold shares | any node asks the committee, which decrypts the final tally |
+| `'dkg-locked'` | `DkgLocked` (2) | the committee plus the organizer | the committee, once the organizer reveals its secret |
+
+In every mode only the final tally is decrypted, after the grace window (`references/grace.md`), and never the individual ballots.
+
+## Sequencer key
+
+```ts
+const { processId } = await sdk.createProcess({ ...config, keyMode: 'sequencer' });
+```
+
+The SDK asks the key node for the key of the id the registry assigns next, checks it is a valid point of the prime-order subgroup, and creates the process with it. That node derives the secret from its master key and is the only one able to prove and publish the results; if it disappears, the results never come. It also holds a key that opens every ballot in the blobs, so this mode trusts one node with ballot secrecy. It suits tests, and organizers who accept that trust.
+
+Two creations from one account must not race for the same id: the SDK serializes creations per account, and a creation that lands under another id anyway fails with `WrongProcessIdError` (`created`, `expected`). No node holds that process's key; cancel it (`cancelOpenProcesses()` finds it).
+
+## DKG key (`'dkg'`)
+
+```ts
+const { processId } = await sdk.createProcess({ ...config, keyMode: 'dkg' });
+```
+
+The registry takes a free key from the pool of the committee's newest live epoch. No sequencer and no organizer holds the secret; each committee member holds a share. After the grace window a node sends `requestResultsDecryption`, the committee combines its decryption shares (1 to 5 minutes), and a node stores the tally with `finalizeResultsFromDKG`. Anyone may send that last call; `waitForResults({ finalize: true })` sends it from the signer when no node has after a minute.
+
+- A registry deployed without a DKG manager refuses both DKG modes: `DkgDisabledError`, before anything is uploaded.
+- An epoch pool holds 16 keys. When it runs out, or a new epoch goes live, between the read and the transaction, the creation is retried once (a second `Pending` event).
+- `NoLiveEpoch` (`revertName`) means no epoch can take a process right now; the committee opens a new one within minutes.
+
+## DKG-locked key and the organizer secret (`'dkg-locked'`)
+
+```ts
+const { processId, organizerSecret } = await sdk.createProcess({
+  ...config,
+  keyMode: 'dkg-locked',
+});
+// Store organizerSecret (a bigint) now: the SDK keeps no copy and never logs it.
+```
+
+The key is the committee's pool key plus an organizer key. The SDK draws the organizer secret, proves possession of it to the DKG (a Schnorr proof bound to the epoch and the application id), and returns it once, in `organizerSecret`. The committee does not decrypt anything until the secret is revealed:
+
+```ts
+await sdk.revealProcessKey(processId, organizerSecret);
+```
+
+- It works at any time and needs only the secret, not the organizer's account. Revealing after the end lets the organizer decide **when** the tally appears, never **which** tally.
+- Revealing while voting runs drops the process to the `'dkg'` trust model.
+- A wrong secret is refused by the simulation (`ProcessKeyRevealError`, `revertName` `InvalidOrganizerSecret`) before anything is sent. A second reveal is refused (`AlreadyRevealed`).
+- **Losing the secret loses the results.** Keep it where the organizer's other credentials live; do not put it in the metadata, logs or the browser's local storage of a shared machine.
+
+Until the reveal, `getResultsStatus` reports `locked` after the grace window, and `waitForResults` fails with `ResultsError('locked')` unless `waitForReveal: true` (`references/results.md`).
+
+## Reading the mode
+
+```ts
+import { KeyMode } from '@vocdoni/davinci-sdk';
+
+const info = await sdk.getProcess(processId);
+if (info.keyMode === KeyMode.DkgLocked) {
+  console.log('epoch', info.dkg?.epochId, 'decryption requested:', info.dkg?.resultsRequested);
+}
+const revealed = info.dkg ? await sdk.registry.isProcessKeyRevealed(info.dkg) : false;
+```
+
+## Choosing
+
+- **Tests, demos, trusted operator:** `'sequencer'`. Fastest results, no committee.
+- **Public elections:** `'dkg'`. No single party can decrypt ballots or withhold the results.
+- **Results released on the organizer's schedule** (an embargo, an announcement): `'dkg-locked'`, with the secret stored safely.
+
+## Cross-references
+
+- `references/results.md`: the results states per key mode.
+- `references/process.md`: creation and `revealProcessKey` among the controls.
+- `recipes/dkg-locked.ts`: a locked election and its reveal.

@@ -1,7 +1,11 @@
 import {
+  Contract,
+  ContractEventPayload,
   Interface,
+  Log,
   NonceManager,
   id,
+  type Provider,
   Wallet,
   ZeroAddress,
   getAddress,
@@ -1011,6 +1015,43 @@ describe('registry events', () => {
         REGISTRY
       )
     ).toHaveLength(1);
+  });
+
+  it('calls listeners with the event arguments only', () => {
+    // What ethers v6 `contract.on` passes: the decoded arguments, then the event payload.
+    class Probe extends ProcessRegistryService {
+      listener<Args extends unknown[]>(cb: (...args: Args) => void) {
+        return this.normalizeListener(cb);
+      }
+    }
+    const probe = new Probe(REGISTRY, new MockChain());
+    const contract = new Contract(REGISTRY, PROCESS_REGISTRY_ABI);
+    const fragment = iface.getEvent('ProcessStatusChanged');
+    if (!fragment) throw new Error('no ProcessStatusChanged in the ABI');
+    const { topics, data } = iface.encodeEventLog(fragment, [PID, 0, 3]);
+    const log = new Log(
+      {
+        topics,
+        data,
+        address: REGISTRY,
+        blockNumber: 9,
+        blockHash: `0x${'01'.repeat(32)}`,
+        transactionHash: `0x${'02'.repeat(32)}`,
+        transactionIndex: 0,
+        index: 0,
+        removed: false,
+      },
+      null as unknown as Provider
+    );
+    const payload = new ContractEventPayload(contract, null, fragment.name, fragment, log);
+    const received: unknown[][] = [];
+    const listener = probe.listener((...args: [string, bigint, bigint]) => received.push(args));
+    listener(...payload.args, payload);
+    listener(PID, 3n, 0n);
+    expect(received).toEqual([
+      [PID, 0n, 3n],
+      [PID, 3n, 0n],
+    ]);
   });
 });
 

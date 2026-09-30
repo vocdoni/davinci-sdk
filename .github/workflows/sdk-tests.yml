@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   checks:
-    name: Lint, types, unit tests and build
+    name: Lint, types, unit tests, build and docs
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -56,6 +56,9 @@ jobs:
 
       - name: Build
         run: yarn build
+
+      - name: Documentation
+        run: yarn docs:check
 
   anvil:
     name: Contracts on anvil

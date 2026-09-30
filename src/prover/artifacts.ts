@@ -84,10 +84,12 @@ export interface ArtifactCache {
 export class MemoryArtifactCache implements ArtifactCache {
   private readonly files = new Map<string, Uint8Array>();
 
+  /** The file stored under `hash`, if any. */
   get(hash: string): Uint8Array | undefined {
     return this.files.get(hash);
   }
 
+  /** Stores a checked file under its sha256. */
   set(hash: string, data: Uint8Array): void {
     this.files.set(hash, data);
   }

@@ -170,8 +170,9 @@ describe('registry events', () => {
     const registry = sdk.processes;
     const status: [string, bigint, bigint][] = [];
     const grace: [string, bigint][] = [];
-    registry.onProcessStatusChanged((id, from, to) => status.push([id, from, to]));
-    registry.onProcessGraceChanged((id, seconds) => grace.push([id, seconds]));
+    // Record every argument a listener gets: exactly the event's, no payload after them.
+    registry.onProcessStatusChanged((...args) => status.push(args));
+    registry.onProcessGraceChanged((...args) => grace.push(args));
     const of = <T extends [string, ...unknown[]]>(events: T[], id: string) =>
       events.filter(e => e[0] === id);
     try {

@@ -1,5 +1,6 @@
 import {
   BaseWallet,
+  EventPayload,
   keccak256,
   type Interface,
   type BaseContract,
@@ -334,9 +335,10 @@ export abstract class SmartContractService {
   }
 
   /**
-   * Normalizes event listener arguments between different ethers.js versions.
-   * This helper method ensures consistent event argument handling regardless of
-   * whether the event payload follows ethers v5 or v6 format.
+   * A contract listener that calls `callback` with the event's arguments
+   * only. ethers v6 passes the arguments followed by the event payload
+   * (`ContractEventPayload`); the payload is dropped, so a callback gets
+   * exactly the arguments its type declares, as with the polling fallback.
    *
    * @template Args - Tuple type representing the expected event arguments
    * @param callback - The event callback function to normalize
@@ -344,7 +346,7 @@ export abstract class SmartContractService {
    *
    * @example
    * ```typescript
-   * contract.on('Transfer', this.normalizeListener((from: string, to: string, amount: BigInt) => {
+   * contract.on('Transfer', this.normalizeListener((from: string, to: string, amount: bigint) => {
    *   console.log(`Transfer from ${from} to ${to}: ${amount}`);
    * }));
    * ```
@@ -353,8 +355,8 @@ export abstract class SmartContractService {
     callback: (...args: Args) => void
   ): (...listenerArgs: unknown[]) => void {
     return (...listenerArgs: unknown[]) => {
-      const first = listenerArgs[0] as { args?: unknown[] } | undefined;
-      const args = listenerArgs.length === 1 && first?.args ? first.args : listenerArgs;
+      const last = listenerArgs[listenerArgs.length - 1];
+      const args = last instanceof EventPayload ? listenerArgs.slice(0, -1) : listenerArgs;
       callback(...(args as Args));
     };
   }

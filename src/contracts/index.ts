@@ -1,26 +1,17 @@
 /**
- * @module @vocdoni/davinci-sdk-contracts
- *
- * Smart contract interaction layer for the Vocdoni voting protocol.
- * This package provides TypeScript classes for interacting with Vocdoni's Ethereum smart contracts.
- *
- * Key features:
- * - Voting process management through ProcessRegistryService
- * - Transaction lifecycle management and status monitoring
- * - TypeScript support with full type definitions
- * - Compatible with ethers.js v6
+ * The contracts layer: the `ProcessRegistry` (reads, organizer writes as
+ * transaction status streams, events, the deployment pin check), census
+ * contracts of origin 3, the write argument builders and the vendored ABIs
+ * with revert decoding. Exported from the package root; the `DavinciSDK`
+ * facade covers the usual flows.
  *
  * @example
- * Basic usage:
  * ```typescript
- * import { ethers } from 'ethers';
- * import { ProcessRegistryService } from '@vocdoni/davinci-sdk-contracts';
+ * import { JsonRpcProvider } from 'ethers';
+ * import { GNOSIS, ProcessRegistryService } from '@vocdoni/davinci-sdk';
  *
- * // Initialize provider
- * const provider = new ethers.JsonRpcProvider('YOUR_RPC_URL');
- *
- * // Create process registry instance
- * const processRegistry = new ProcessRegistryService(registryAddress, provider);
+ * const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcProvider(rpcUrl));
+ * const process = await registry.getProcess(processId);
  * ```
  */
 

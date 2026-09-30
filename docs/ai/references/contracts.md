@@ -1,133 +1,153 @@
-# `references/contracts.md` — The raw contract service (`sdk.processes`)
+# `references/contracts.md` — The registry, directly
 
-Companion to the [[davinci-sdk]] skill. This is an **escape hatch**. The `DavinciSDK` facade (`createProcess`, `endProcess`, `getProcess`, …) wraps the on-chain `ProcessRegistryService` and is what you should use. Drop here only when you need an event subscription, a raw read, or a method the facade doesn't expose.
-
-> There is **no** `OrganizationRegistryService`, `deployedAddresses`, `getAddresses`, or `AbiRegistry` in this SDK. The process creator is simply the signer's address (`ProcessInfo.creator` / `organizationId`). The `contracts` module exports exactly: `SmartContractService`, `ProcessRegistryService`, the contract types/enums, and the error classes.
+Companion to the [[davinci-sdk]] skill. The facade (`createProcess`, the organizer controls, `getProcess`, `waitForResults`) wraps the `ProcessRegistry`. Come here for events, raw reads and writes, the deployment pin check and revert decoding.
 
 ## Getting the service
 
 ```ts
-const registry = sdk.processes;     // ProcessRegistryService, wired to your signer's chain
+const reader = sdk.registry; // through the read provider: reads and listeners
+const writer = sdk.processes; // with the signer: writes (its provider must be on the network's chain)
 ```
 
-`sdk.processes` requires a signer **with a provider** and that the registry address is resolved (it is, after `init()` against a sequencer that knows your chain). Constructing one by hand:
+By hand, with any ethers runner:
 
 ```ts
-import { ProcessRegistryService } from "@vocdoni/davinci-sdk";
-const registry = new ProcessRegistryService(contractAddress, signerOrProvider /* ContractRunner */);
+import { GNOSIS, ProcessRegistryService } from '@vocdoni/davinci-sdk';
+import { JsonRpcProvider } from 'ethers';
+
+const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcProvider(rpcUrl), {
+  receiptTimeoutMs: 180_000, // the default
+});
 ```
 
-## Transactions are async generators of `TxStatusEvent`
+The ABIs are vendored from davinci-contracts at a pinned commit (`CONTRACTS_ABI_COMMIT`) and exported: `PROCESS_REGISTRY_ABI`, `DAVINCI_DKG_ADAPTER_ABI`, `ZISK_VERIFIER_ABI`, `CENSUS_VALIDATOR_ABI`, `DKG_APP_MANAGER_ABI`, `DKG_MANAGER_ABI`, and the census contracts' `ONCHAIN_CENSUS_ABI` and `OWNED_CENSUS_ABI`.
 
-Every write method returns `AsyncGenerator<TxStatusEvent<T>>`, not a receipt. Consume it, or unwrap with the static helper.
+## Writes are streams of `TxStatusEvent`
 
-```ts
-enum TxStatus { Pending = "pending", Completed = "completed", Reverted = "reverted", Failed = "failed" }
+```ts nocheck
+enum TxStatus { Pending = 'pending', Completed = 'completed', Reverted = 'reverted', Failed = 'failed' }
 type TxStatusEvent<T> =
-  | { status: TxStatus.Pending;   hash: string }
+  | { status: TxStatus.Pending; hash: string; step?: string }
   | { status: TxStatus.Completed; response: T }
-  | { status: TxStatus.Reverted;  reason?: string }
-  | { status: TxStatus.Failed;    error: Error };
+  | { status: TxStatus.Reverted; reason?: string; error?: Error }
+  | { status: TxStatus.Failed; error: Error };
 ```
 
+Every write returns an async generator:
+
+1. Nothing happens until it is iterated; arguments that do not build fail the stream.
+2. The call is simulated from the signer (`eth_call`) first, so a revert comes back as a `Failed` event carrying the decoded custom error, and nothing is signed.
+3. It is signed and sent. A resend refused as "already known" or "nonce too low" whose transaction the chain has counts as sent.
+4. The receipt is awaited; a mined revert is named by replaying the call (`Reverted`, with `error`).
+
 ```ts
-import { SmartContractService } from "@vocdoni/davinci-sdk";
-// unwrap a stream to a promise of the final response:
-await SmartContractService.executeTx(registry.setProcessStatus(processId, ProcessStatus.ENDED));
+import { ProcessStatus, SmartContractService } from '@vocdoni/davinci-sdk';
+
+// Unwrap a stream: the Completed response, or the Failed/Reverted error thrown.
+await SmartContractService.executeTx(writer.setProcessStatus(processId, ProcessStatus.PAUSED));
 ```
 
-The facade's lifecycle methods are thin wrappers around exactly these streams.
+## Reads
 
-## `ProcessRegistryService` — methods
+| Method | Returns |
+| --- | --- |
+| `getProcess(pid)` | `OnchainProcess`: every field of the registry struct, grace window and DKG side included; `ProcessNotFoundError` for an unknown id |
+| `getChainTime()` | the latest block's time: the clock the registry's rules run on |
+| `getProcessCount()`, `getNextProcessId(creator)`, `getProcessNonce(creator)`, `getPidPrefix()` | ids |
+| `getProcessEndTime(pid)`, `getProcessGraceEnd(pid)`, `getGraceParams()` | the timeline |
+| `getBallotVKHash()`, `getBatchProgramVK()`, `getResultsProgramVK()`, `getRootCVadcopFinal()`, `getZiskVerifier()`, `getChainID()` | the pins |
+| `getDkgAdapter()` (null when DKG is disabled), `aidFor(pid)`, `getRegistrationEpoch()`, `getDkgPlaintexts(dkg)`, `isProcessKeyRevealed(dkg)` | the DKG side |
 
-### Writes (all → `AsyncGenerator<TxStatusEvent<{ success: true }>>`)
+## Writes
+
+| Method | |
+| --- | --- |
+| `createProcess(params)` | a creation in any key mode: builds the DKG arguments (the locked mode's organizer secret and proof), checks the id is still the next one, and retries a DKG creation once. Returns `{ processId, transactionHash, organizerSecret? }` |
+| `newProcess(params, { expectedProcessId? })` | one `newProcess`, the 10 arguments as a `NewProcessParams` object |
+| `setProcessStatus(pid, status)` | end, pause, resume, cancel |
+| `setProcessCensus(pid, census)` | origin 2 only (`CensusNotUpdatable`) |
+| `setProcessMetadata(pid, uri, hash)` | a new metadata document |
+| `setProcessDuration(pid, duration)` | the raw duration change |
+| `closeProcessIn(pid, seconds, { slack? })` | a shorter end with notice (`references/grace.md`) |
+| `setProcessMaxVoters(pid, n)`, `setProcessGrace(pid, seconds)` | limits |
+| `revealProcessKey(pid, secret)` | a DKG-locked key |
+| `finalizeResultsFromDKG(pid)` | stores a DKG tally (permissionless) |
+
+The facade's versions add the local checks (organizer, status, time window) and the documents; use them unless you need the raw call. `metadataHash(bytes)`, `sequencerKeyParams()`, `dkgAutomaticParams()` and `dkgLockedParams(epochId, proof)` build write arguments by hand.
+
+## Deployment pins
 
 ```ts
-registry.newProcess(
-  status: ProcessStatus, startTime: number, duration: number, maxVoters: number,
-  ballotMode: BallotMode, census: CensusData, metadata: string, encryptionKey: EncryptionKey
-)
-registry.setProcessStatus(processID: string, newStatus: ProcessStatus)
-registry.setProcessCensus(processID: string, census: CensusData)
-registry.setProcessDuration(processID: string, duration: number)
-registry.setProcessMaxVoters(processID: string, maxVoters: number)
-// sequencer-only in practice (your app never calls these):
-registry.submitStateTransition(processID: string, proof: string, input: string)
-registry.setProcessResults(processID: string, proof: string, input: string)
+import { RELEASE_PINS } from '@vocdoni/davinci-sdk';
+
+const { chainId, verifier, dkgAdapter } = await registry.verifyDeployment();
 ```
 
-> `newProcess` here takes **positional args** and the contract-shaped structs below. This is *not* the friendly `ProcessConfig` — use `sdk.createProcess` for that. The facade computes `startTime`/`duration`, fetches the `encryptionKey` from the sequencer, builds `CensusData`, uploads metadata, and calls this for you.
+It checks the registry's batch and results program vks, vadcop root and ballot VK hash against `RELEASE_PINS`, its `chainID()` against the provider's chain, the `ZiskVerifier`'s code hash and root, and that the DKG adapter points back at the registry. A difference throws `DeploymentPinError { field, expected, got }`. `verifyDeployment(pins)` overrides entries, for a local deployment. `init()` runs it unless `verifyDeployment: false`.
 
-### Reads
-
-```ts
-registry.getProcess(processID: string)                  // raw contract struct
-registry.getProcessCount(): Promise<number>
-registry.getChainID(): Promise<string>
-registry.getNextProcessId(organizationId: string): Promise<string>   // precompute the id
-registry.getProcessEndTime(processID: string): Promise<bigint>
-registry.getProcessNonce(address: string): Promise<bigint>
-registry.getRVerifier(): Promise<string>      // + getSTVerifier, *VKeyHash, getMaxCensusOrigin, getMaxStatus
-```
-
-### Events (the main reason to come here)
+## Events
 
 ```ts
-registry.onProcessCreated((processID, creator) => …)
-registry.onProcessStatusChanged((processID, oldStatus, newStatus) => …)         // bigints
-registry.onCensusUpdated((processID, root, uri) => …)
-registry.onProcessDurationChanged((processID, duration) => …)
-registry.onStateTransitioned((processID, sender, oldRoot, newRoot, voters, overwritten) => …)
-registry.onProcessResultsSet((processID, sender, result /* bigint[] */) => …)   // ← results landed
-registry.onProcessMaxVotersChanged((processID, maxVoters) => …)
-registry.removeAllListeners()
-registry.setEventPollingInterval(ms)   // default 5000
-```
-
-`onProcessResultsSet` is the clean way to know the tally is final (see `recipes/read-results.ts`).
-
-## Contract-shaped types
-
-These differ from the friendly SDK config; the facade converts at the boundary, coercing to `bigint` where the contract needs it.
-
-```ts
-// core types — what newProcess consumes
-interface BallotMode {           // SAME field names as ProcessConfig.ballot; bounds are decimal strings
-  numFields: number; groupSize?: number;
-  minValue: string; maxValue: string; uniqueValues: boolean;
-  costExponent: number; minValueSum: string; maxValueSum: string;
+const events = await reader.queryEvents({ processId, fromBlock: 48_600_000 });
+for (const e of events) {
+  if (e.name === 'ProcessStateTransitioned') console.log(e.newStateRoot, e.votersCount);
 }
-interface CensusData {
-  censusOrigin: CensusOrigin; censusRoot: string;
-  contractAddress?: string;      // set for Onchain censuses (else zero address)
-  censusURI: string; onchainAllowAnyValidRoot?: boolean;
-}
-interface EncryptionKey { x: string; y: string; }   // BabyJubJub pubkey (from sequencer getProcessKeys)
-```
 
-`ProcessStatus`:
-
-```ts
-enum ProcessStatus { READY = 0, ENDED = 1, CANCELED = 2, PAUSED = 3, RESULTS = 4 }
-```
-
-## `SmartContractService` (base class)
-
-```ts
-class SmartContractService {
-  static executeTx<T>(stream: AsyncGenerator<TxStatusEvent<T>>): Promise<T>   // unwrap → promise
-  setEventPollingInterval(ms: number): void
+// Public RPCs cap the block range of one query: read in windows, newest first.
+for await (const window of reader.eventWindows({ processId })) {
+  const results = window.find(e => e.name === 'ProcessResultsSet');
+  if (results) break;
 }
 ```
 
-`ProcessRegistryService` extends it; the streaming + event plumbing lives here.
+`RegistryEvent` is a union over the ten events (`ProcessCreated`, `ProcessStatusChanged`, `CensusUpdated`, `ProcessMetadataUpdated`, `ProcessDurationChanged`, `ProcessMaxVotersChanged`, `ProcessGraceChanged`, `ProcessStateTransitioned`, `ProcessResultsSet`, `ResultsDecryptionRequested`), each with `blockNumber`, `transactionHash` and `logIndex`. `fromBlock` defaults to the registry's deployment block for a known network and is required otherwise. `parseRegistryLogs(receipt.logs, registry.address)` decodes a receipt's logs.
+
+Listeners call back with exactly the event's arguments:
+
+```ts
+reader.onProcessStatusChanged((id, oldStatus, newStatus) => console.log(id, oldStatus, newStatus));
+reader.onStateTransitioned((id, sender, oldRoot, newRoot, voters, overwrites, nBlobs) => {
+  console.log(id, newRoot, voters);
+});
+reader.onProcessResultsSet((id, sender, result) => console.log(id, result));
+// also onProcessCreated, onCensusUpdated, onProcessMetadataUpdated, onProcessDurationChanged,
+// onProcessGraceChanged, onProcessMaxVotersChanged, onResultsDecryptionRequested
+reader.removeAllListeners();
+```
+
+They use `eth_newFilter` when the RPC keeps filters and poll `eth_getLogs` otherwise (`setEventPollingInterval(ms)`, default 5 s).
 
 ## Errors
 
-All contract-layer errors extend `ContractServiceError` (`.operation` field), e.g. `ProcessCreateError`, `ProcessStatusError`, `ProcessCensusError`, `CensusNotUpdatable`, `ProcessDurationError`, `ProcessStateTransitionError`, `ProcessResultError`. No numeric codes here (those are the sequencer's — see `references/sequencer.md`).
+Every contract error extends `ContractServiceError`, with `operation`, `revert` (the decoded custom error: `{ name, signature, selector, args }`), `revertName` and `cause`:
+
+| Class | Operation |
+| --- | --- |
+| `ProcessCreateError`, `WrongProcessIdError` | creation |
+| `ProcessStatusError` | end, pause, resume, cancel |
+| `ProcessCensusError`, `CensusNotUpdatable` | census updates |
+| `ProcessMetadataError`, `ProcessDurationError`, `ProcessMaxVotersError`, `ProcessGraceError` | the other controls |
+| `ProcessKeyRevealError`, `ProcessResultError` | reveal, results |
+| `ProcessNotFoundError`, `DkgDisabledError`, `DeploymentPinError`, `CensusContractError` | reads and checks |
+
+```ts
+import { decodeDavinciError, ProcessDurationError } from '@vocdoni/davinci-sdk';
+
+try {
+  await sdk.closeProcessIn(processId, 60);
+} catch (err) {
+  if (err instanceof ProcessDurationError) console.log(err.revertName, err.revert?.args);
+}
+decodeDavinciError('0x…'); // any registry, adapter, DKG or verifier revert data → { name, args, … } | null
+```
+
+The registry's error names are listed in `references/errors.md`.
+
+## The census contract
+
+`OnchainCensusService(address, runner)` reads an origin-3 census contract (`getCensusRoot`, `treeSize`, `weightOf`, `slotOf`, `slotOwner`, `totalVotingPower`, `check`) and writes an `OwnedCensus` (`addMember`, `addMembers`). See `references/census.md`.
 
 ## Cross-references
 
-- `references/process.md` — the facade methods you should normally use instead.
-- `references/sequencer.md` — the off-chain side and where `encryptionKey` comes from.
-- `references/errors.md` — `TxStatus.Reverted`/`Failed` handling and revert reasons.
+- `references/process.md`: the facade's controls.
+- `references/errors.md`: revert names and what they mean.

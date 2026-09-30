@@ -34,6 +34,7 @@ export interface IChoice {
   answer?: number;
 }
 
+/** A choice as the SDK writes it: title, ballot field and free-form `meta`. */
 export type Choice = Pick<IChoice, 'title' | 'value' | 'meta'>;
 
 /** A question of the election. */
@@ -45,6 +46,7 @@ export interface IQuestion {
   choices: Array<IChoice>;
 }
 
+/** A question as the SDK writes it. */
 export type Question = Pick<IQuestion, 'title' | 'description' | 'choices' | 'meta'>;
 
 /** Metadata document version: the SDK writes `1.1`. */
@@ -101,7 +103,7 @@ export interface ElectionMetadataConfig {
   meta?: JsonMap;
 }
 
-// An empty yes/no document, as `buildElectionMetadata` writes one.
+/** An empty yes/no document, as `buildElectionMetadata` writes one. */
 export const ElectionMetadataTemplate: ElectionMetadata = {
   version: '1.1',
   title: {

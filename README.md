@@ -1,13 +1,17 @@
 # Vocdoni DaVinci SDK
 
-TypeScript SDK for the Vocdoni DaVinci voting protocol.
+TypeScript SDK for the Vocdoni DAVINCI voting protocol.
 
 [![npm version](https://badge.fury.io/js/%40vocdoni%2Fdavinci-sdk.svg)](https://www.npmjs.com/package/@vocdoni/davinci-sdk)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
+DAVINCI runs private, verifiable elections on an Ethereum `ProcessRegistry` contract (the Gnosis deployment is built in). A voter encrypts its ballot, proves it valid with a zk-SNARK computed on its own device, signs it and sends it to a **sequencer node**. The nodes, run by independent operators, batch ballots, re-encrypt them and prove each batch in a **zkVM**; the registry verifies the proof and records the new state, with the batch's data published in EIP-4844 blobs. After the end and a short **grace window**, whoever holds the election key (a node, or a **DKG committee**) decrypts only the final tally and proves it on-chain.
+
+Organizers use the SDK to create and run elections, voters to cast and track their votes, and anyone to read results and receipts. It checks what it is told against the registry: the election parameters, the pinned zkVM programs and the ballot circuit files.
+
 ## Installation
 
-Requires Node.js 18 or newer and an Ethereum signer.
+Requires Node.js 18 or newer, or a current browser.
 
 ```bash
 npm install @vocdoni/davinci-sdk ethers
@@ -15,435 +19,265 @@ yarn add @vocdoni/davinci-sdk ethers
 pnpm add @vocdoni/davinci-sdk ethers
 ```
 
+The package ships ESM, CommonJS and a UMD bundle, and has a single root export.
+
 ## Quick start
 
-End-to-end example: initialize the SDK, create a process with an off-chain census, submit a vote, and wait for it to settle.
-
 ```typescript
-import { DavinciSDK, OffchainCensus, VoteStatus } from '@vocdoni/davinci-sdk';
-import { Wallet } from 'ethers';
+import { BallotProver, DavinciSDK, OffchainCensus, type Uploader } from '@vocdoni/davinci-sdk';
+import { JsonRpcProvider, Wallet } from 'ethers';
 
-// Substitute your own sequencer and census endpoints.
-const SEQUENCER = 'https://sequencer-dev.davinci.vote';
-const CENSUS = 'https://c3-dev.davinci.vote';
+// The deployment's sequencer nodes: configuration, never built in.
+const sequencerUrls = ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'];
 
-// Organizer SDK — needs a census URL because we're creating a census.
+// Your hosting for the census file and the metadata document. They must be
+// served unchanged over public https; the SDK reads them back before use.
+const uploader: Uploader = {
+  async upload({ data, contentType, sha256 }) {
+    const key = `davinci/${sha256.slice(2)}.json`;
+    await bucket.put(key, data, { contentType });
+    return `https://files.example.org/${key}`;
+  },
+};
+
+// Organizer: a signer with a provider on Gnosis, the default network.
 const organizer = new DavinciSDK({
-  signer: new Wallet(process.env.ORGANIZER_KEY!),
-  sequencerUrl: SEQUENCER,
-  censusUrl: CENSUS,
+  signer: new Wallet(process.env.ORGANIZER_KEY!, new JsonRpcProvider(process.env.GNOSIS_RPC)),
+  sequencerUrls,
+  uploader,
 });
 await organizer.init();
 
-// Eligible voters.
+const voterWallet = new Wallet(process.env.VOTER_KEY!);
 const census = new OffchainCensus();
-census.add([
-  '0x1234567890123456789012345678901234567890',
-  '0x2345678901234567890123456789012345678901',
-  '0x3456789012345678901234567890123456789012',
-]);
+census.add([voterWallet.address, '0x2222222222222222222222222222222222222222']);
 
 const { processId } = await organizer.createProcess({
-  title: 'Community Decision',
+  title: 'Community decision',
   description: 'Vote on our next community initiative.',
   census,
-  timing: {
-    startDate: new Date(Date.now() + 60_000), // starts in one minute
-    duration: 86_400,                          // open for 24 hours
-  },
-  questions: [{
-    title: 'Which initiative should we prioritize?',
-    choices: [
-      { title: 'Community Garden', value: 0 },
-      { title: 'Tech Workshop',    value: 1 },
-      { title: 'Art Exhibition',   value: 2 },
-    ],
-  }],
+  electionPreset: { type: 'single_choice' },
+  timing: { duration: 24 * 3600 }, // starts in the block that creates it
+  questions: [
+    {
+      title: 'Which initiative should we prioritize?',
+      choices: [
+        { title: 'Community garden', value: 0 },
+        { title: 'Tech workshop', value: 1 },
+        { title: 'Art exhibition', value: 2 },
+      ],
+    },
+  ],
 });
 
-// Voter SDK — no census URL needed for voting-only operations.
-const voter = new DavinciSDK({
-  signer: new Wallet(process.env.VOTER_KEY!),
-  sequencerUrl: SEQUENCER,
-});
+// Voter: a bare wallet is enough; the SDK reads the chain through public RPCs.
+const voter = new DavinciSDK({ signer: voterWallet, sequencerUrls });
 await voter.init();
+const vote = await voter.submitVote({ processId, choices: [0, 1, 0] });
+const status = await voter.waitForVoteStatus(processId, vote.voteId); // settled, or error with a reason
 
-const { voteId } = await voter.submitVote({
-  processId,
-  choices: [1],
-});
+// Once the election has ended and its grace window closed:
+const results = await voter.waitForResults(processId);
+for (const c of results.questions[0].choices) console.log(c.title, c.total);
 
-const final = await voter.waitForVoteStatus(processId, voteId, VoteStatus.Settled);
-console.log('Vote settled:', final.status);
+await BallotProver.terminate(); // in Node: stop snarkjs's worker threads so the process exits
 ```
 
 ## Concepts
 
-### Voting process lifecycle
+### An election's life
 
-1. **Process creation.** The organizer registers a process on-chain with its census, timing, and ballot configuration.
-2. **Vote submission.** Eligible voters submit encrypted ballots through the sequencer.
-3. **Vote processing.** The sequencer aggregates and verifies votes using zk-SNARKs.
-4. **Results.** Final tallies become available once the process settles.
+1. **Creation.** The organizer publishes the census and the metadata document, and registers the process with its ballot mode, timing and key mode.
+2. **Voting.** Voters send encrypted, proved and signed ballots to the nodes, from the start to the end. A voter may vote again; its latest ballot counts.
+3. **Settlement.** Nodes batch ballots and settle each batch on the registry. A vote goes `pending` → `aggregated` → `processed` → `settled`; batching takes minutes, up to a quarter of an hour with default node settings.
+4. **Grace window.** From the end, batches of votes cast before it keep landing until the grace window closes. Every landing pushes it out, up to a cap.
+5. **Results.** The key holder decrypts the final tally and stores it with a proof, seconds to a few minutes after the grace window.
 
-### Key components
+### Key modes
 
-- **Census** — set of eligible voters, addressed either off-chain (Merkle tree) or on-chain (token contract).
-- **Ballot** — structure describing the questions, choice ranges, and aggregation rules.
-- **Process** — the on-chain container holding the census, ballot, timing, and lifecycle status.
-- **Proof** — zero-knowledge attestation that a vote is valid without revealing its contents.
+| `keyMode` | Who holds the key | Results |
+| --- | --- | --- |
+| `'sequencer'` (default) | the key node | published by that node only |
+| `'dkg'` | a davinci-dkg committee, as threshold shares | decrypted by the committee |
+| `'dkg-locked'` | the committee plus the organizer | decrypted once the organizer reveals the secret returned at creation |
 
-## Creating a process
+### Census origins
 
-### `createProcess(config)`
+| Origin | Class | Members |
+| --- | --- | --- |
+| static Merkle | `OffchainCensus` | a census file the SDK builds and publishes |
+| updatable Merkle | `OffchainDynamicCensus` | the same, replaceable until the end (`updateCensus`) |
+| on-chain | `OnchainCensus` | an append-only census contract; members added later can vote |
+| CSP | `CspCensus`, `CspSigner` | a credential provider signs each voter's attestation |
 
-Resolves once the process is registered. Use this when you do not need to surface intermediate transaction status.
-
-```typescript
-import { DavinciSDK, OffchainCensus } from '@vocdoni/davinci-sdk';
-
-const sdk = new DavinciSDK({ signer, sequencerUrl, censusUrl });
-await sdk.init();
-
-const census = new OffchainCensus();
-census.add(['0x...', '0x...']);
-
-const result = await sdk.createProcess({
-  title: 'Election',
-  description: 'Detailed description of the election.',
-  census,
-  timing: {
-    startDate: new Date(Date.now() + 60_000),
-    duration: 86_400,
-  },
-  ballot: {
-    numFields: 1,
-    maxValue: '2',
-    minValue: '0',
-    uniqueValues: false,
-    costExponent: 1,
-    maxValueSum: '2',
-    minValueSum: '0',
-  },
-  questions: [{
-    title: 'What is your preferred option?',
-    description: 'Choose the option that best represents your view.',
-    choices: [
-      { title: 'Option A', value: 0 },
-      { title: 'Option B', value: 1 },
-      { title: 'Option C', value: 2 },
-    ],
-  }],
-});
-
-console.log('Process ID:', result.processId);
-```
-
-`OffchainCensus` is published automatically as part of `createProcess`, and `maxVoters` is set to the participant count. For other census types, see Advanced configuration.
-
-### Election presets
-
-For common voting modes, pass an `electionPreset` instead of a raw `BallotMode`. The SDK derives the ballot mode using `questions[0].choices.length` as the field count. `ballot` and `electionPreset` are mutually exclusive — provide one or the other.
-
-```typescript
-await sdk.createProcess({
-  electionPreset: { type: 'rating', maxValue: 5 },
-  questions: [{
-    title: 'Rate each candidate',
-    choices: [
-      { title: 'Alice', value: 0 },
-      { title: 'Bob',   value: 1 },
-      { title: 'Carol', value: 2 },
-    ],
-  }],
-  /* census, timing, ... */
-});
-```
-
-The six supported presets — `single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic` — follow the canonical DAVINCI ballot protocol. Each variant carries its own typed options (e.g. `rating` requires `maxValue`, `quadratic` requires `budget`). See the JSDoc on `ElectionPreset` for the exact parameter mapping per type.
-
-When a process is created with `electionPreset`, the preset is also stored in the off-chain election metadata (under `meta.electionPreset`). `getProcess(processId)` reads it back and exposes it as `info.electionPreset` alongside the raw `info.ballot`. Processes created with a raw `BallotMode` carry no preset on the way out — only `info.ballot` is populated.
-
-### `createProcessStream(config)`
-
-Returns an async iterator of `TxStatus` events for the underlying transaction. Use this in UI flows that need to display submission, mining, and revert states.
-
-```typescript
-import { TxStatus } from '@vocdoni/davinci-sdk';
-
-const stream = sdk.createProcessStream(config);
-
-for await (const event of stream) {
-  switch (event.status) {
-    case TxStatus.Pending:
-      console.log('Transaction submitted:', event.hash);
-      break;
-    case TxStatus.Completed:
-      console.log('Process created:', event.response.processId);
-      break;
-    case TxStatus.Failed:
-      console.error('Transaction failed:', event.error);
-      break;
-    case TxStatus.Reverted:
-      console.error('Transaction reverted:', event.reason);
-      break;
-  }
-}
-```
-
-Use `createProcess` for scripts and short flows. Use `createProcessStream` when the caller needs per-event UI feedback.
-
-## Submitting a vote
-
-### `submitVote({ processId, choices, randomness? })`
-
-```typescript
-const result = await sdk.submitVote({
-  processId: '0x...',
-  choices: [1, 0],
-});
-
-console.log('Vote ID:', result.voteId);
-console.log('Status:', result.status);
-```
-
-### `getVoteStatus(processId, voteId)`
-
-```typescript
-const status = await sdk.getVoteStatus(processId, voteId);
-console.log('Status:', status.status);
-```
-
-`VoteStatus` is one of `pending`, `verified`, `aggregated`, `processed`, `settled`, or `error`.
-
-### `waitForVoteStatus(processId, voteId, target, timeoutMs?, intervalMs?)`
-
-Polls until the vote reaches `target` or the timeout elapses.
-
-```typescript
-import { VoteStatus } from '@vocdoni/davinci-sdk';
-
-const final = await sdk.waitForVoteStatus(
-  processId,
-  voteId,
-  VoteStatus.Settled,
-  300_000, // 5 minute timeout
-  5_000,   // 5 second poll interval
-);
-```
-
-### Eligibility checks
-
-```typescript
-// Has this address already cast a vote in this process?
-const voted = await sdk.hasAddressVoted(processId, voterAddress);
-
-// Is this address allowed to vote, and with what weight?
-const info = await sdk.isAddressAbleToVote(processId, voterAddress);
-console.log('Key:', info.key, 'weight:', info.weight);
-```
-
-## Advanced configuration
-
-<details>
-<summary>Other census types</summary>
-
-#### `OffchainDynamicCensus`
-
-Off-chain Merkle census whose participants can be updated after process creation.
-
-```typescript
-import { OffchainDynamicCensus } from '@vocdoni/davinci-sdk';
-
-const census = new OffchainDynamicCensus();
-census.add([
-  { key: '0x...', weight: 10 },
-  { key: '0x...', weight: 20 },
-]);
-
-await sdk.createProcess({ census, /* ... */ });
-```
-
-#### `CspCensus`
-
-Census whose membership is attested by an external Credential Service Provider.
-
-```typescript
-import { CspCensus } from '@vocdoni/davinci-sdk';
-
-const census = new CspCensus(
-  '0x1234567890abcdef',           // CSP root (public key)
-  'https://csp-server.example',
-);
-
-await sdk.createProcess({
-  census,
-  maxVoters: 1000, // required for CSP census
-  // ...
-});
-```
-
-#### `PublishedCensus`
-
-Reuse a census already published to the network.
-
-```typescript
-import { PublishedCensus, CensusOrigin } from '@vocdoni/davinci-sdk';
-
-const census = new PublishedCensus(
-  CensusOrigin.OffchainStatic,
-  '0xroot...',
-  'ipfs://uri...',
-);
-
-await sdk.createProcess({
-  census,
-  maxVoters: 100,
-  // ...
-});
-```
-
-#### `OnchainCensus`
-
-Token-gated census backed by an ERC-20 or ERC-721 contract, with off-chain holder data sourced from a subgraph.
-
-```typescript
-import { OnchainCensus } from '@vocdoni/davinci-sdk';
-
-const census = new OnchainCensus(
-  '0xTokenContract...',
-  'https://api.studio.thegraph.com/query/12345/token-holders/v1.0.0',
-);
-
-await sdk.createProcess({
-  census,
-  maxVoters: 10_000,
-  // ...
-});
-```
-
-The contract address is validated on construction; no publishing step is required.
-
-</details>
-
-<details>
-<summary>Custom contract addresses</summary>
-
-By default the SDK fetches the `ProcessRegistry` address from the sequencer's `/info` endpoint during `init()`. Override with `addresses.processRegistry` when running against a non-default deployment.
+## Configuration
 
 ```typescript
 const sdk = new DavinciSDK({
-  signer,
-  sequencerUrl,
-  addresses: {
-    processRegistry: '0xYourRegistryAddress...',
-  },
+  signer, // an ethers Signer: a bare Wallet for voters, one with a provider for organizers
+  network: 'gnosis', // the default; or { chainId, processRegistry, startBlock?, rpcUrls? }
+  sequencerUrls: ['https://sequencer-1.example.org'], // the deployment's nodes (required)
+  keySequencerUrl: 'https://sequencer-1.example.org', // issues sequencer keys; default the first node
+  rpcUrls: ['https://rpc.example.org'], // chain reads; default the signer's provider, else the preset's RPCs
+  uploader, // publishes census files and metadata documents (to create elections)
+  documents: { verify: true }, // read back what is published (default)
+  artifacts: {}, // where the ballot circuit files come from; default their pinned URLs
+  verifyDeployment: true, // check the registry pins at init() (default)
+  censusProviders: {}, // `csp`: the attestation source, to vote in a CSP census
+});
+await sdk.init();
+```
+
+`init()` picks the read RPC, checks that the registry pins what this release proves and verifies (program vks, vadcop root, ballot VK hash, verifier code), and checks every node's `/info` against the registry. A node of another deployment fails `init()` (`NodeMismatchError`); a node that is down or an observer is left out for the session and listed in `sdk.nodeChecks`.
+
+**Networks.** A preset (`GNOSIS`, `getNetwork('gnosis')`) carries the chain id, the registry, its deployment block and public RPCs. Any other deployment, such as a local chain, is a `CustomNetwork`. Process ids carry their registry's prefix, so an id of another deployment is refused before any request.
+
+**Node URLs** are always configuration: the SDK embeds none. Ask the operators of the deployment you target.
+
+**Hosting.** The SDK ships no hosting. Creating an election publishes the census file and the metadata document through your `Uploader`, which returns a public URL. Nodes refuse census URLs on private hosts or behind redirects, and a census they cannot load leaves the process ignored, so the SDK downloads each document back as nodes and readers will before anything is sent.
+
+## Creating a process
+
+```typescript
+const { processId, organizerSecret, grace } = await sdk.createProcess({
+  title: 'Board election',
+  census,
+  electionPreset: { type: 'multiple_choice', maxSelections: 2 },
+  timing: { startDate: '2026-12-07T09:00:00Z', endDate: '2026-12-08T18:00:00Z' },
+  questions,
+  keyMode: 'dkg-locked', // returns organizerSecret: store it, the results never unlock without it
+  grace: 150, // the grace window in seconds, within the registry's floor and ceiling
 });
 ```
 
-</details>
+- `electionPreset` (`single_choice`, `multiple_choice`, `approval`, `rating`, `ranking`, `quadratic`) or a raw `ballot`: at most 16 fields, bounds as decimal strings.
+- Times are checked against the chain clock. Without `startDate` the process starts in the block that creates it.
+- `maxVoters` defaults to the member count of a Merkle census object and is required otherwise; the registry caps `maxValue * maxVoters` at 1e12.
+- `paused: true` creates it paused: votes queue until `resumeProcess`.
+- Refusals name the registry error they avoid (`err.revertName`, e.g. `InvalidStartTime`); nothing is uploaded or sent for a config the registry would reject.
 
-<details>
-<summary>Custom vote randomness</summary>
+`createProcessStream(config)` yields the transaction's `TxStatus` events (`pending`, `completed`, `failed`, `reverted`) for UIs.
 
-Pass a hex-encoded `randomness` value to `submitVote` to override the SDK's default entropy source. Used primarily for deterministic test fixtures.
+### Organizer controls
+
+| Method | When |
+| --- | --- |
+| `endProcess`, `pauseProcess`, `resumeProcess`, `cancelProcess` | status changes; END and PAUSE only within the voting period |
+| `extendProcess(pid, seconds)` | before the end |
+| `closeProcessIn(pid, seconds)` | before the end: an earlier end, with the registry's minimum notice |
+| `setProcessGrace(pid, seconds)` | before the end, within `graceFloor..graceCeil` |
+| `setProcessMaxVoters(pid, n)` | before the end |
+| `updateCensus(pid, census)` | updatable censuses, before the end |
+| `updateMetadata(pid, metadata)` | before the end |
+| `revealProcessKey(pid, secret)` | `dkg-locked` processes, any time |
+| `cancelOpenProcesses()` | cleanup of the account's open processes |
+
+Each has a `…Stream` variant. Every control checks the process and the chain clock first, then simulates the call before signing; a refusal is the operation's error class with the registry error in `revertName`.
+
+### Closing a live meeting
 
 ```typescript
-const result = await sdk.submitVote({
-  processId,
-  choices: [1],
-  randomness: '0xabc...',
-});
+const { graceFloor, noticeMin } = await sdk.getGraceParams();
+await sdk.setProcessGrace(processId, graceFloor); // or `grace: graceFloor` at creation
+await sdk.closeProcessIn(processId, noticeMin); // "voting closes in one minute"
+const results = await sdk.waitForResults(processId, { onStatus: s => console.log(s.state) });
 ```
 
-</details>
+Nodes flush every vote they hold during the notice; results follow the grace window, a few minutes after the announcement.
 
-<details>
-<summary>Direct service access</summary>
-
-The high-level `DavinciSDK` composes three lower-level services. Each is reachable when you need an endpoint the facade does not surface.
+## Voting
 
 ```typescript
-// Sequencer REST client
-const process = await sdk.api.sequencer.getProcess(processId);
+const vote = await voter.submitVote({ processId, choices: [1, 0, 0] });
+// { voteId, node, weight, k, status: 'pending', ... }
 
-// Census REST client
-const proof = await sdk.api.census.getCensusProof(root, address);
+for await (const s of voter.watchVoteStatus(processId, vote.voteId)) {
+  console.log(s.status, s.error ?? '');
+}
 
-// CSP client (lazy-initialized)
-const csp = await sdk.getCSP();
+const receipt = await voter.getVoteReceipt(processId, vote.voteId); // once settled
 ```
 
-</details>
+- `choices` holds one integer per ballot field; field `i` is the choice whose metadata `value` is `i`.
+- The election key, ballot mode and census root come from the registry, never from a node. The first vote downloads the circuit files (about 44 MB) and checks them against the ballot VK hash the registry pins.
+- Votes are routed per voter over the nodes, with failover only when it is safe. **A revote goes to the node that took the voter's previous ballot**, so it settles after it: the SDK remembers that node in memory; an app that reloads stores `vote.node` and passes it back as `node`.
+- A refused vote is a `VoteError` with a `reason`: `not-in-census`, `not-started`, `closed`, `invalid`, `duplicate`, `slot-busy`, `max-voters`, `busy`, `unavailable`.
+- `isAddressAbleToVote`, `getAddressWeight` (a `bigint`) and `hasAddressVoted` read membership and past votes.
+- A receipt is a tracker proof that the vote id is in the process's state, checked against the registry's state roots.
 
-<details>
-<summary>Manual census configuration</summary>
-
-`createProcess` also accepts a plain census descriptor when you already have a published root and URI.
-
-```typescript
-import { CensusOrigin } from '@vocdoni/davinci-sdk';
-
-await sdk.createProcess({
-  census: {
-    type: CensusOrigin.OffchainStatic,
-    root: '0xabc...',
-    uri: 'ipfs://...',
-  },
-  maxVoters: 100,
-  // ...
-});
-```
-
-</details>
-
-## Error handling
-
-`submitVote`, `createProcess`, and the process lifecycle methods throw `Error` instances whose `message` describes the failure. Discriminate by inspecting the message.
+## Results
 
 ```typescript
-try {
-  await sdk.submitVote({ processId, choices: [1, 2, 3] });
-} catch (err) {
-  const msg = (err as Error).message;
-  if (msg.includes('already voted'))            { /* the voter has already submitted */ }
-  else if (msg.includes('not accepting votes')) { /* voting period is closed */ }
-  else if (msg.includes('out of range'))        { /* a choice is outside the configured range */ }
-  else                                          { throw err; }
+const status = await sdk.getResultsStatus(processId); // voting, grace, awaiting-key-holder, locked, decrypting, results, ...
+const results = await sdk.waitForResults(processId);
+console.log(results.kind, results.voters);
+for (const q of results.questions) {
+  for (const c of q.choices) console.log(q.title, c.title, c.total, c.mean);
 }
 ```
 
-Common error categories:
+Results unlock when the grace window closes. A sequencer key's node publishes them within a couple of minutes; a DKG committee takes a few more; a `dkg-locked` key first needs `revealProcessKey`. The tally is additive: each field's total is the sum over every voter's latest ballot, and census weights are not multiplied in (a weight is a voter's budget when the ballot mode's `maxValueSum` is 0).
 
-- **Process errors** — process not found, not accepting votes, invalid configuration.
-- **Vote errors** — already voted, invalid choices, proof generation failed.
-- **Network errors** — connection failures, transaction failures.
-- **Validation errors** — invalid parameters, out-of-range values.
+## Error handling
+
+Errors are classes: test them with `instanceof`.
+
+```typescript
+import { ProcessStatusError, VoteError } from '@vocdoni/davinci-sdk';
+
+try {
+  await voter.submitVote({ processId, choices: [1, 0, 0] });
+} catch (err) {
+  if (err instanceof VoteError && err.reason === 'slot-busy') {
+    // the voter's earlier ballots are still queued: retry later, on the same node
+  } else throw err;
+}
+
+try {
+  await sdk.endProcess(processId);
+} catch (err) {
+  if (err instanceof ProcessStatusError && err.revertName === 'InvalidTimeBounds') {
+    await sdk.cancelProcess(processId); // it has not started yet
+  } else throw err;
+}
+```
+
+- Contract errors (`ProcessCreateError`, `ProcessStatusError`, `ProcessDurationError`, …) carry the decoded registry error in `revert` and `revertName`.
+- Node errors are `SequencerApiError` (with the node's `code`), `SequencerNetworkError` and `SequencerDecodeError`.
+- Setup errors: `DeploymentPinError`, `NodeMismatchError`, `SequencerUnavailableError`, `ArtifactError`.
+- Results: `ResultsError` (`canceled`, `locked`, `timeout`); receipts: `VoteReceiptError`.
+
+See [`docs/ai/references/errors.md`](docs/ai/references/errors.md) for the full list.
+
+## Security
+
+- **Registry pins.** `init()` checks that the registry pins the zkVM programs, the vadcop root and the ballot VK hash this release carries, and the verifier's code hash. Disable it only for a deployment you control (`verifyDeployment: { pins }`).
+- **Circuit files.** The ballot circuit files are keyed by the ballot VK hash the registry pins. Each file is checked against its pinned sha256, and both verification keys (the file, and the one inside the proving key) must hash to the registry's value; a mirror or a local copy (`artifacts`) is checked the same way. Proofs are verified locally before they are sent (`verifyProof`).
+- **Election parameters** come from the registry, never from a node: a node whose view differs is refused.
+- **Metadata** is shown only when the served bytes hash to the registry's `metadataHash` (`metadataVerified`). Census and metadata downloads refuse private hosts and redirects.
+- **Secrets.** The ballot secret `k` returned by `submitVote` opens the ballot with the election key: keep it private. A `dkg-locked` organizer secret is returned once and never stored or logged by the SDK: losing it loses the results.
+- **Trust.** A sequencer key trusts its node with ballot secrecy and with publishing the results; a DKG key moves both to a committee threshold.
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Examples
 
-A runnable end-to-end script lives under [`examples/script/`](examples/script). It exercises the full lifecycle — process creation, vote submission, and settlement — against a configurable sequencer and census service.
+Runnable scripts against a configured deployment live under [`examples/script/`](examples/script): a full election (census, creation, votes, revote, early close, results, receipts) and an election on an on-chain census contract.
 
-## AI-assisted integration
+## Documentation
 
-Machine-readable documentation for AI coding tools (Cursor, Claude Code, Cline, ChatGPT, custom agents) lives at the repo root as `llms.txt` (index) and `llms-full.txt` (full bundle). Configure your tool to load the raw URL:
-
-- https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms.txt
-- https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms-full.txt
-
-Browsable source for the same content is under [`docs/ai/`](docs/ai). For a Claude Code plugin installation, see the [`@vocdoni/skills`](https://github.com/vocdoni/skills) marketplace.
+- [`docs/ai/`](docs/ai): the guides. Start at [`SKILL.md`](docs/ai/SKILL.md); topic references cover setup, processes, key modes, the grace window, censuses, metadata, voting, nodes, receipts, results, ballot modes, the node client, the contracts, errors and the protocol, and `recipes/` holds runnable files.
+- `llms.txt` (index) and `llms-full.txt` (everything in one file) at the repository root, for tools that load documentation by URL:
+  - https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms.txt
+  - https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/llms-full.txt
+- [CHANGELOG.md](CHANGELOG.md): 2.0.0 moves the SDK to the zkVM stack, with migration notes.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, branching, and PR conventions.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development setup, tests and conventions.
 
-Code quality tools:
-
-- TypeScript — full type safety
-- ESLint — linting and style
-- Prettier — formatting
-- Vitest — unit and integration test runner
-- Husky — pre-commit hooks
+- TypeScript, with ESLint and Prettier.
+- Vitest: offline unit tests (`yarn test:unit`), the contracts on a local anvil chain (`yarn test:anvil`, needs Foundry), and a live suite run on demand (`yarn test:e2e`).
 
 ## License
 
@@ -453,10 +287,10 @@ AGPL-3.0 is a copyleft license: derivative works and network-deployed applicatio
 
 ## Links
 
-- Protocol whitepaper — https://whitepaper.vocdoni.io
-- API documentation — https://github.com/vocdoni/davinci-node/tree/main/api
-- Discord — https://chat.vocdoni.io
-- Telegram — https://t.me/vocdoni_community
-- Twitter — https://twitter.com/vocdoni
-- AI documentation — [`docs/ai/`](docs/ai)
-- Website — https://vocdoni.io
+- Protocol whitepaper: https://whitepaper.vocdoni.io
+- Sequencer node: https://github.com/vocdoni/davinci-sequencer
+- Contracts: https://github.com/vocdoni/davinci-contracts
+- Discord: https://chat.vocdoni.io
+- Telegram: https://t.me/vocdoni_community
+- Twitter: https://twitter.com/vocdoni
+- Website: https://vocdoni.io

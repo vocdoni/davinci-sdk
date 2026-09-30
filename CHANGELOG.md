@@ -7,6 +7,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-30
+
+The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci-sequencer), the zkVM batch and results provers (davinci-zkvm), the `BallotProof(16)` ballot circuit, and the `ProcessRegistry` with the grace window and the DKG key modes (davinci-contracts). The Gnosis deployment is built in as a network preset. Nothing of the 1.x stack (davinci-node, the census service, the `/info`-based addresses) is supported any more: every integration has to migrate, following the notes at the end of this entry.
+
+### Added
+
+- **Networks and configuration.**
+  - The `network` option: a preset by name (`'gnosis'`, the default: `GNOSIS`, `NETWORKS`, `getNetwork`) or a `CustomNetwork` (`{ chainId, processRegistry, startBlock?, rpcUrls? }`), resolved by `resolveNetwork`. `processIdPrefix`, `processIdPrefixOf`, `networkOfProcessId` and `computeProcessId` read and compute registry-scoped process ids.
+  - `sequencerUrls` (several nodes) and `keySequencerUrl`. Node URLs are always configuration; the SDK embeds none.
+  - `rpcUrls` and `FailoverRpcProvider`, which fails over between JSON-RPC endpoints, backs off on rate limits, broadcasts a signed transaction to every endpoint and takes the highest nonce any endpoint reports. A voter's bare wallet reads the chain through the network's public RPCs.
+  - `init()` checks the registry pins (`verifyDeployment`, default true: program vks, vadcop root, ballot VK hash, verifier code hash, DKG adapter) and every node's `/info` against the registry. `sdk.nodeChecks` reports each node as `usable`, `observer` or `down`.
+  - `sdk.network`, `sdk.provider`, `sdk.registry` (read-only), `sdk.uploader`, `sdk.ballotProver`, `sdk.proveBallot`.
+  - `sequencerConfig` (headers, `fetchImpl`, timeout, body cap of the node clients) and `documents` (`fetchImpl`, `timeoutMs`, `verify`, `allowPrivateHosts`).
+- **Key modes.** `keyMode: 'sequencer' | 'dkg' | 'dkg-locked'` on `createProcess`. `'dkg-locked'` returns `organizerSecret`; `revealProcessKey` unlocks the results. `KeyMode`, `ProcessInfo.keyMode` and `ProcessInfo.dkg`.
+- **Grace window and organizer controls.** `grace` and `paused` on `createProcess`; `extendProcess`, `closeProcessIn` (a shorter end with the registry's notice), `setProcessGrace`, `revealProcessKey`, `updateCensus`, `updateMetadata`, `cancelOpenProcesses`, `getGraceParams` and `getGraceEnd`, each control with a `…Stream` variant. `ProcessInfo` gains `phase`, `grace`, `lastVoteAt`, `graceEnd`, `chainTime` and `stateRoot`; `graceEndOf` and `processPhase` compute them.
+- **Censuses for every origin.** Local lean-IMT Merkle censuses (`OffchainCensus`, `OffchainDynamicCensus`) published through an `Uploader` (`publishCensus`, `verifyCensusUrl`, `checkCensusUrl`); on-chain census contracts (`OnchainCensus` with `check` and `witness`, `OnchainCensusService`); CSP censuses with ECDSA attestations (`CspCensus`, `CspSigner`); witness checks (`checkCensusWitness`) and the `CensusError` family.
+- **Metadata with its hash.** `buildElectionMetadata`, `serializeMetadata`, `publishMetadata`, `readMetadata`, `fetchMetadataHash`, `metadataHash`, `localizedText`; `ProcessInfo.metadataHash`, `metadataVerified`, `metadataStatus`, `metadataError` and `metadata`. Multi-language titles, descriptions and choices.
+- **Voting.** 16-field ballots proved with the pinned circuit files (`BallotProver`, `BALLOT_ARTIFACTS`, the `artifacts` option, `verifyBallotProof`); per-voter node routing with failover (`pickNode`, `SequencerNodes`) and revotes kept on the node that holds the voter's previous ballot (`VoteConfig.node`, `VoteResult.node`); `VoteError` with a `reason`; `getVoteReceipt` (tracker proofs checked against the registry, `verifyTrackerProof`).
+- **Results.** `getResultsStatus`, `waitForResults`, `decodeResults`, `ballotKindOf`, `finalizeResults(Stream)`, `ResultsError`.
+- **Registry layer.** Vendored ABIs with a drift test (`PROCESS_REGISTRY_ABI` and the DKG, verifier and census contract ABIs), `decodeDavinciError`, `verifyDeployment`, `createProcess` in every key mode, `queryEvents`, `eventWindows`, `parseRegistryLogs`, the DKG reads (`getDkgAdapter`, `aidFor`, `getRegistrationEpoch`, `getDkgPlaintexts`, `isProcessKeyRevealed`) and listeners for the new events (`onProcessMetadataUpdated`, `onProcessGraceChanged`, `onResultsDecryptionRequested`).
+- **Protocol primitives**, exported from the root: BabyJubJub and ElGamal, Poseidon, ballots (`buildBallot`, `packBallotMode`, `computeVoteId`, …), the ballot checker (`checkBallot`), lean-IMT censuses and slots, ECDSA vote-id signatures and CSP attestations, tracker proofs, the ballot VK hash and the DKG organizer proof; the protocol limits and release pins (`NUM_FIELDS`, `RELEASE_PINS`, …).
+- **Documentation.** Guides for key modes, the grace window, censuses, metadata, nodes, receipts and results; recipes for a DKG-locked election, an early close, an on-chain census and receipts; runnable examples on the new API; `scripts/build-llms.mjs` builds `llms.txt` and `llms-full.txt` from `docs/ai`, and `yarn docs:check` type-checks every code block of the documentation.
+
+### Changed
+
+- **BREAKING** `DavinciSDKConfig`: `sequencerUrls` replaces `sequencerUrl` (kept as a deprecated alias), `network` replaces `addresses.processRegistry` (a deprecated alias), `censusUrl` and `verifyCircuitFiles` are ignored. Creating elections needs an `uploader`.
+- **BREAKING** `init()` resolves one deployment from the network preset instead of the node's `/info`, and fails on a registry or node that does not match (`DeploymentPinError`, `NodeMismatchError`). A process id of another deployment is refused by every facade method.
+- **BREAKING** `sdk.api`, `sdk.processes`, `sdk.processOrchestrator` and `sdk.voteOrchestrator` require `init()`. `sdk.api.sequencer` is the key node's client and `sdk.api.nodes` the vote nodes (`SequencerNodes`). `getConfig()` returns a frozen `DavinciSDKSettings`.
+- **BREAKING** `createProcess`: without `startDate` a process starts in the block that creates it (it was 60 s later); an explicit start must be after the chain head (30 s in the past was accepted). Timing, ballot mode, `maxVoters` and the result cap are checked against the chain clock and the registry's rules before anything is uploaded or sent, as `Failed` stream events with the registry error in `revertName`. The plain methods throw the typed error instead of `Error('Transaction reverted: …')`.
+- **BREAKING** Ballot modes are checked like the registry and the circuit do (`ballotModeValues`, `BallotModeError`): 1 to 16 fields, bounds as decimal strings (hex is refused), values below 2^48, sums below 2^63, `uniqueValues` a boolean. `resolveElectionPreset` refuses more than 16 choices and non-integer parameters.
+- **BREAKING** `ProcessConfigWithMetadata`: `title` and `description` are `LocalizedText` and `questions` are `QuestionConfig`s; the document is published through the `uploader` with its SHA-256 (`metadataHash`). `ProcessConfigWithMetadataUri` takes an optional `metadataHash`. `ElectionMetadata.version` is `1.1` and `media` is optional.
+- **BREAKING** `ProcessInfo`: title, description, questions and preset come from the metadata only when its bytes hash to the registry's `metadataHash`; `timeRemaining` is negative before the start; `graceEnd` may be null; `raw` is the `OnchainProcess`.
+- **BREAKING** `ProcessCreationResult` gains `organizerSecret`, `grace` and `graceError`. `TxStatusEvent`'s pending event may carry `step`, and the reverted event an `error`.
+- **BREAKING** Census classes: `CensusParticipant` is `{ key, weight: string }`; `MerkleCensus.add` validates addresses (checksums, no zero address), weights (below 2^88) and ballot slots (`CensusSlotCollisionError`); `root()` is computed locally; `Census.censusId` is gone. `CspCensus(cspAddress, uri)` takes the CSP's Ethereum address. `OnchainCensus(contract, uri?)` is an append-only census contract, with no indexer URI. `PublishedCensus` refuses origin 3 and checks its root. `CensusConfig.size` is deprecated.
+- **BREAKING** `CensusProviders` is `{ merkle?, csp? }`: `csp` returns a `CspAttestation` (ECDSA), `merkle` a `MerkleCensusWitness`.
+- **BREAKING** Voting: `VoteConfig.choices` takes numbers or bigints (at most `numFields`, missing fields are 0); `VoteConfig.randomness` is deprecated for `k` (a bigint; one below 2^128 is refused). `VoteResult` gains `node`, `weight` and `k`; `voteId` is `0x` + 16 hex digits. `submitVote` throws `VoteError` with a `reason` instead of message strings.
+- **BREAKING** `VoteStatus` has no `verified`; `VoteStatusInfo` gains `error` and `node`. `waitForVoteStatus` and `watchVoteStatus` wait by default until the process's grace window closes plus 5 minutes (it was 300 s); `watchVoteStatus` takes `node`.
+- **BREAKING** `getAddressWeight` returns a `bigint`, 0 for a non-member (it was a string). It and `isAddressAbleToVote` read the census from the nodes (Merkle censuses, with the proof checked against the registry's root), the census contract (on-chain) or `censusProviders.csp` (CSP); `hasAddressVoted` asks every node.
+- **BREAKING** `VoteOrchestrationService` is built as `(registry, api, signer, options)`; `VoteOrchestrationConfig` is replaced by `VoteOrchestrationOptions`.
+- **BREAKING** `VocdoniSequencerService` follows the new node API: `getInfo()` returns `SequencerInfo`, `getProcess()` a `ProcessView`, `getEncryptionKey()` replaces `getProcessKeys()`, and `getParticipant`, `getTransitions`, `getTransitionBlobs`, `getVoteIdProof` and `getBallot` are new. Failures are `SequencerApiError` (with the node's `code`), `SequencerNetworkError` or `SequencerDecodeError` instead of an `Error` with a `.code`; the codes are the new node's (`SequencerErrorCode`: 40007 is gone, 40001 means a malformed request). `VoteRequest` carries `weight` and a tagged `censusProof`.
+- **BREAKING** `ProcessRegistryService` is built on the vendored ABI: `newProcess(params, options)` takes a `NewProcessParams` object with the ten registry arguments (metadata hash and DKG parameters included); `getProcess` returns an `OnchainProcess`; writes are simulated before they are signed and sent only when their stream is iterated; contract errors carry the decoded revert (`revert`, `revertName`, `cause`). `setProcessMaxVoters` fails with `ProcessMaxVotersError`. `ProcessStateTransitionedCallback` has the seven arguments of the new event.
+- **BREAKING** Event listeners (`onProcessStatusChanged`, …) receive exactly the event's arguments; the ethers event payload that followed them is no longer passed.
+- **BREAKING** The CommonJS build is `dist/index.cjs` (with `dist/index.d.cts`), and `package.json` `exports` has `import` and `require` conditions with their own types. `require('@vocdoni/davinci-sdk')` works; `dist/index.js` no longer exists.
+- The ESM bundle imports in plain Node (no global `Worker` needed). In Node, `BallotProver.terminate()` lets a script exit after proving.
+- Development: `yarn test` runs the unit tests and the anvil suite (it needs Foundry); the per-area scripts run unit tests only; CI runs lint, types, unit tests, the build, the documentation checks and the anvil suite on GitHub-hosted runners.
+
+### Removed
+
+- **BREAKING** The census service client and its orchestration: `VocdoniCensusService`, `CensusOrchestrator`, `sdk.api.census`, and the types `CensusSizeResponse`, `PublishCensusResponse`, `Snapshot`, `SnapshotsQueryParams`, `SnapshotsResponse`.
+- **BREAKING** The EdDSA CSP: `DavinciCSP`, `sdk.getCSP()`, `CspCensus.publicKey` and `cspURI`, and the census proof types `CensusProof`, `BaseCensusProof`, `MerkleCensusProof`, `CSPCensusProof`, `MerkleCensusProofProvider`, `CSPCensusProofProvider`, `isMerkleCensusProof`, `isCSPCensusProof`, `assertMerkleCensusProof`, `assertCSPCensusProof`.
+- **BREAKING** The 8-field ballot flow: `BallotInputGenerator`, `sdk.getBallotInputGenerator()`, `ProofInputs`.
+- **BREAKING** Sequencer routes and types the new nodes do not have: `pushMetadata`, `getMetadata`, `getMetadataUrl`, `getStats`, `getWorkers`, `getProcessKeys`, `createProcessSignatureMessage`, `signProcessCreation`, and `InfoResponse`, `GetProcessResponse`, `ListProcessesResponse`, `HealthResponse`, `ProcessKeysRequest`, `ProcessKeysResponse`, `ParticipantInfoResponse`, `SequencerStats`, `WorkerStats`, `WorkersResponse`, `VoteBallot`, `VoteCiphertext`, `VoteProof`.
+- **BREAKING** Registry calls only sequencers make or that no longer exist: `submitStateTransition`, `setProcessResults`, `getRVerifier`, `getSTVerifier`, `getRVerifierVKeyHash`, `getSTVerifierVKeyHash`, `getMaxCensusOrigin`, `getProcessDirect`, the protected `sendTx`, and `ProcessStateTransitionError`.
+- **BREAKING** `CensusData` (it described `onchainAllowAnyValidRoot`, which the registry now refuses).
+- The `@vocdoni/davinci-contracts` and `@ethereumjs/common` dependencies.
+- The Go-stack integration tests and their Docker Compose environment.
+
+### Deprecated
+
+- `sequencerUrl`, `addresses.processRegistry`, `censusUrl` and `verifyCircuitFiles` in `DavinciSDKConfig`; `VoteConfig.randomness`; `CensusConfig.size`; the `EncryptionKey` type.
+
+### Fixed
+
+- `require()` of the package loaded the CommonJS bundle as ESM and got no exports.
+- `setProcessMaxVoters` failures were reported as `ProcessDurationError`.
+
+### Migrating from 1.0.x
+
+1. **Configuration.** Name the nodes and, to create elections, the hosting:
+
+   ```typescript
+   // 1.0: new DavinciSDK({ signer, sequencerUrl, censusUrl })
+   const sdk = new DavinciSDK({
+     signer,
+     sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
+     uploader, // publishes census files and metadata documents
+   });
+   await sdk.init();
+   ```
+
+   The network defaults to Gnosis; another deployment is `network: { chainId, processRegistry, startBlock, rpcUrls }`. Voters no longer need a census URL. Access `sdk.api` only after `init()`.
+
+2. **Hosting.** There is no census service and nodes host no metadata. Implement an `Uploader` for a store that serves files over public https without redirects. Merkle censuses are built locally and published with the process.
+
+3. **Censuses.**
+   - `OffchainCensus` and `OffchainDynamicCensus` keep `add`, `remove` and `participants`; weights must be below 2^88.
+   - A CSP census is `new CspCensus(cspAddress, uri)` or `await new CspSigner(cspWallet).census(uri)`; voters pass `censusProviders.csp`, which returns the CSP's ECDSA attestation (`CspSigner.attest`).
+   - An on-chain census is a davinci-onchain-census-contract (`davinci-zkvm` branch) contract: `new OnchainCensus(contractAddress)`. Token contracts with an indexer are not supported.
+   - `PublishedCensus` needs the lean-IMT root of a census file served by URL.
+
+4. **Creating processes.**
+   - Drop `startDate` to start at once (it was now + 60 s); a future `startDate` must be after the chain head.
+   - Give bounds as decimal strings and at most 16 fields.
+   - A document served by you goes in `metadataUri`; its SHA-256 is computed from the URL, or given as `metadataHash`.
+   - Choose a `keyMode` (default `'sequencer'`) and, for a live meeting, `grace` at the registry's floor.
+   - Catch typed errors (`ProcessCreateError`, …) and read `revertName`.
+
+5. **Voting.**
+
+   ```typescript
+   try {
+     const vote = await sdk.submitVote({ processId, choices: [0, 1, 0] });
+     // 1.0: { voteId, signature, voterAddress, processId, status }
+     // 2.0 adds node (keep it with the vote for revotes), weight and k (the ballot secret)
+     console.log(vote.voteId, vote.node);
+   } catch (err) {
+     // 1.0: err.message.includes('already voted') and similar
+     if (err instanceof VoteError) console.log(err.reason); // 'not-in-census', 'closed', ...
+     else throw err;
+   }
+   ```
+
+   `VoteStatus.Verified` is gone; `settled` still means counted. The default status wait follows the process: pass `timeoutMs` for a shorter one. `getAddressWeight` returns a bigint.
+
+6. **Results.** Results no longer follow `endProcess`: they come after the grace window, from the key holder. Replace waits on `onProcessResultsSet` or `getProcess(...).result` with:
+
+   ```typescript
+   const results = await sdk.waitForResults(processId);
+   for (const c of results.questions[0].choices) console.log(c.title, c.total);
+   ```
+
+   Tallies add each voter's latest ballot; census weights are not multiplied in.
+
+7. **The node client.** Replace `getProcessKeys` with `getEncryptionKey`, switch on `SequencerErrorCode` values with `hasSequencerErrorCode`, and read process state from `sdk.registry.getProcess` rather than from a node.
+
+8. **The registry.** Build `newProcess` arguments as a `NewProcessParams` object, or use `createProcess`; iterate every write stream (nothing is sent before); use `sdk.processes.onStateTransitioned` with its seven arguments.
+
+9. **Packaging.** CommonJS consumers get `dist/index.cjs` through `require`; deep imports of `dist/index.js` must change to the package name.
+
 ## [1.0.0] - 2026-06-11
 
 ### Added
