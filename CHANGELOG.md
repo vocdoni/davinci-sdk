@@ -49,7 +49,7 @@ The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci
 - **BREAKING** `VocdoniSequencerService` follows the new node API: `getInfo()` returns `SequencerInfo`, `getProcess()` a `ProcessView`, `getEncryptionKey()` replaces `getProcessKeys()`, and `getParticipant`, `getTransitions`, `getTransitionBlobs`, `getVoteIdProof` and `getBallot` are new. Failures are `SequencerApiError` (with the node's `code`), `SequencerNetworkError` or `SequencerDecodeError` instead of an `Error` with a `.code`; the codes are the new node's (`SequencerErrorCode`: 40007 is gone, 40001 means a malformed request). `VoteRequest` carries `weight` and a tagged `censusProof`.
 - **BREAKING** `ProcessRegistryService` is built on the vendored ABI: `newProcess(params, options)` takes a `NewProcessParams` object with the ten registry arguments (metadata hash and DKG parameters included); `getProcess` returns an `OnchainProcess`; writes are simulated before they are signed and sent only when their stream is iterated; contract errors carry the decoded revert (`revert`, `revertName`, `cause`). `setProcessMaxVoters` fails with `ProcessMaxVotersError`. `ProcessStateTransitionedCallback` has the seven arguments of the new event.
 - **BREAKING** Event listeners (`onProcessStatusChanged`, …) receive exactly the event's arguments; the ethers event payload that followed them is no longer passed.
-- **BREAKING** The CommonJS build is `dist/index.cjs` (with `dist/index.d.cts`), and `package.json` `exports` has `import` and `require` conditions with their own types. `require('@vocdoni/davinci-sdk')` works; `dist/index.js` no longer exists.
+- **BREAKING** The CommonJS build is `dist/index.cjs` (with `dist/index.d.cts`), and `package.json` `exports` has `import` and `require` conditions with their own types. `require('@vocdoni/davinci-sdk')` works; `dist/index.js` no longer exists. The package ships only these two builds and their types (see Removed).
 - The ESM bundle imports in plain Node (no global `Worker` needed). In Node, `BallotProver.terminate()` lets a script exit after proving.
 - Development: `yarn test` runs the unit tests and the anvil suite (it needs Foundry); the per-area scripts run unit tests only; CI runs lint, types, unit tests, the build, the documentation checks and the anvil suite on GitHub-hosted runners.
 
@@ -61,6 +61,8 @@ The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci
 - **BREAKING** Sequencer routes and types the new nodes do not have: `pushMetadata`, `getMetadata`, `getMetadataUrl`, `getStats`, `getWorkers`, `getProcessKeys`, `createProcessSignatureMessage`, `signProcessCreation`, and `InfoResponse`, `GetProcessResponse`, `ListProcessesResponse`, `HealthResponse`, `ProcessKeysRequest`, `ProcessKeysResponse`, `ParticipantInfoResponse`, `SequencerStats`, `WorkerStats`, `WorkersResponse`, `VoteBallot`, `VoteCiphertext`, `VoteProof`.
 - **BREAKING** Registry calls only sequencers make or that no longer exist: `submitStateTransition`, `setProcessResults`, `getRVerifier`, `getSTVerifier`, `getRVerifierVKeyHash`, `getSTVerifierVKeyHash`, `getMaxCensusOrigin`, `getProcessDirect`, the protected `sendTx`, and `ProcessStateTransitionError`.
 - **BREAKING** `CensusData` (it described `onchainAllowAnyValidRoot`, which the registry now refuses).
+- **BREAKING** `dist/index.umd.js`, the browser-global build (`window.VocdoniSDK`). No package field pointed at it; browser apps take the ESM build through their bundler, which resolves `ethers` and `snarkjs` for the browser.
+- `dist/contracts.d.ts` and `dist/sequencer.d.ts`, type bundles of subpaths the package does not export (every type is in `dist/index.d.ts`).
 - The `@vocdoni/davinci-contracts` and `@ethereumjs/common` dependencies.
 - The Go-stack integration tests and their Docker Compose environment.
 
@@ -134,7 +136,7 @@ The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci
 
 8. **The registry.** Build `newProcess` arguments as a `NewProcessParams` object, or use `createProcess`; iterate every write stream (nothing is sent before); use `sdk.processes.onStateTransitioned` with its seven arguments.
 
-9. **Packaging.** CommonJS consumers get `dist/index.cjs` through `require`; deep imports of `dist/index.js` must change to the package name.
+9. **Packaging.** CommonJS consumers get `dist/index.cjs` through `require`; deep imports of `dist/index.js` must change to the package name. A page that loaded `dist/index.umd.js` with a `<script>` tag moves to a bundler, which takes the ESM build.
 
 ## [1.0.0] - 2026-06-11
 

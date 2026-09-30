@@ -8,7 +8,7 @@ Companion to the [[davinci-sdk]] skill. Read this first when starting a DAVINCI 
 npm install @vocdoni/davinci-sdk ethers
 ```
 
-Node 18 or newer, or a current browser. The package ships ESM (`import`), CommonJS (`require`) and a UMD bundle; ethers v6 is the chain library, and you import it yourself for wallets and providers.
+Node 18 or newer, or a current browser. The package ships ESM (`import`) and CommonJS (`require`) builds; a browser app takes the ESM build through its bundler (Vite, webpack, esbuild, …). ethers v6 is the chain library, and you import it yourself for wallets and providers.
 
 In Node, snarkjs keeps worker threads alive after proving or verifying. A script that votes calls `BallotProver.terminate()` once done, or it will not exit.
 

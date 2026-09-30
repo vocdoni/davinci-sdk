@@ -65,19 +65,10 @@ const createBundle = (config, options) => ({
 
 // The package is `"type": "module"`, so the CommonJS build must be `.cjs`:
 // Node would load a `.js` file as ESM and `require()` would see no exports.
-const createOutput = (name, options) => [
+// Browsers take the ESM build through a bundler (the `import` condition).
+const createOutput = name => [
   { file: `dist/${name}.cjs`, format: 'cjs', sourcemap: true },
   { file: `dist/${name}.mjs`, format: 'es', sourcemap: true },
-  {
-    name: options.umdName,
-    file: `dist/${name}.umd.js`,
-    format: 'umd',
-    globals: {
-      ethers: 'ethers',
-      snarkjs: 'snarkjs',
-      // NOTE: circomlibjs/blake-hash/buffer are now bundled, so no globals needed for them.
-    }
-  }
 ];
 
 export default [
@@ -100,7 +91,7 @@ export default [
           Buffer: ['buffer', 'Buffer']
         })
       ],
-      output: createOutput('index', { umdName: 'VocdoniSDK' })
+      output: createOutput('index')
     },
     {
       input: 'src/index.ts',
@@ -119,30 +110,6 @@ export default [
     },
     {
       input: 'src/index.ts',
-      includeSnarkjs: true
-    }
-  ),
-
-  // Contracts types bundle
-  createBundle(
-    {
-      plugins: [dts()],
-      output: { file: 'dist/contracts.d.ts', format: 'es' }
-    },
-    {
-      input: 'src/contracts/index.ts',
-      includeSnarkjs: true
-    }
-  ),
-
-  // Sequencer types bundle
-  createBundle(
-    {
-      plugins: [dts()],
-      output: { file: 'dist/sequencer.d.ts', format: 'es' }
-    },
-    {
-      input: 'src/sequencer/index.ts',
       includeSnarkjs: true
     }
   )

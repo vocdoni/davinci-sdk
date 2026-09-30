@@ -25,10 +25,8 @@ const work = join(root, 'node_modules', '.cache', 'davinci-docs');
 const DOCS = ['README.md', 'SECURITY.md', 'CHANGELOG.md', ...markdownUnder('docs')];
 // Where a file's checked part ends.
 const UNTIL = { 'CHANGELOG.md': /^## \[1\./ };
-// The SDK's own module declarations (snarkjs, circomlibjs); src/index.d.ts is a copy of index.ts.
-const AMBIENT = filesUnder('src', '.d.ts')
-  .filter(f => f !== join('src', 'index.d.ts'))
-  .map(f => join(root, f));
+// The SDK's own module declarations (snarkjs, circomlibjs).
+const AMBIENT = filesUnder('src', '.d.ts').map(f => join(root, f));
 const CODE = [...filesUnder('docs/ai/recipes', '.ts'), ...filesUnder('examples/script/src', '.ts')];
 
 // Free variables a block may use without declaring them.

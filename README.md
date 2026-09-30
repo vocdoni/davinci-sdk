@@ -19,7 +19,7 @@ yarn add @vocdoni/davinci-sdk ethers
 pnpm add @vocdoni/davinci-sdk ethers
 ```
 
-The package ships ESM, CommonJS and a UMD bundle, and has a single root export.
+The package ships ESM (`import`) and CommonJS (`require`) builds with their types, and has a single root export. Browser apps take the ESM build through their bundler (Vite, webpack, esbuild, …).
 
 ## Quick start
 

@@ -52,7 +52,7 @@ import {
 } from '@vocdoni/davinci-sdk';
 ```
 
-It builds on **ethers v6**, `snarkjs` and `circomlibjs`, and runs in Node 18 or newer (ESM `import` or CommonJS `require`) and in browsers.
+It builds on **ethers v6**, `snarkjs` and `circomlibjs`, and runs in Node 18 or newer (ESM `import` or CommonJS `require`) and in browsers, through a bundler.
 
 ## Mental model
 

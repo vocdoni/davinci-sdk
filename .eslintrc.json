@@ -30,7 +30,6 @@
     "node_modules",
     "examples",
     "docs",
-    "src/index.d.ts",
     "vitest.*.config.ts",
     "jest.config.js",
     "rollup.config.js"
