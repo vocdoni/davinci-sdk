@@ -282,8 +282,7 @@ describe('DavinciSDK Multichain Consumer Behavior', () => {
     });
 
     // 20-byte addr + 4-byte version + 7-byte nonce = 31 bytes
-    const processId =
-      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa35bf8a7fbbbbbbbbbbbbbb';
+    const processId = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa35bf8a7fbbbbbbbbbbbbbb';
 
     const registry = await (sdk as any).getProcessRegistryForProcessId(processId);
     expect(registry).toBeDefined();

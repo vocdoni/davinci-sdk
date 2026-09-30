@@ -1,15 +1,15 @@
 // test/integration/ProcessRegistry.test.ts
 import { JsonRpcProvider, Wallet, hexlify } from 'ethers';
-import {
-  ProcessRegistryService,
-  ProcessStatus,
-  ProcessCreateError,
-} from '../../../src/contracts';
+import { ProcessRegistryService, ProcessStatus, ProcessCreateError } from '../../../src/contracts';
 import { BallotMode, CensusData, EncryptionKey } from '../../../src/core';
 import { CensusOrigin } from '../../../src/census';
 import { VocdoniSequencerService } from '../../../src/sequencer';
 import { InfoResponse } from '../../../src/sequencer/api/types';
-import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+import {
+  createIntegrationProvider,
+  createIntegrationWallet,
+  getApiUrls,
+} from '../../helpers/integrationRuntime';
 const { sequencerUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const wallet: Wallet = createIntegrationWallet().connect(provider);

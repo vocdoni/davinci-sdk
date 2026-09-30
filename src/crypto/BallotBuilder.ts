@@ -387,6 +387,15 @@ export class BallotBuilder {
     // Generate random k if not provided
     const kValue = k ?? this.randomK();
 
-    return this.generateInputs(fields, weight, pubKey, processId, address, kValue, config, circuitCapacity);
+    return this.generateInputs(
+      fields,
+      weight,
+      pubKey,
+      processId,
+      address,
+      kValue,
+      config,
+      circuitCapacity
+    );
   }
 }

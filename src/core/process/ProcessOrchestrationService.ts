@@ -2,7 +2,11 @@ import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
 import { BallotMode, CensusData, EncryptionKey } from '../types';
-import { ElectionPreset, parseElectionPresetFromMetadata, resolveElectionPreset } from '../types/ballot';
+import {
+  ElectionPreset,
+  parseElectionPresetFromMetadata,
+  resolveElectionPreset,
+} from '../types/ballot';
 import { CensusOrigin } from '../../census/types';
 import { getElectionMetadataTemplate } from '../types/metadata';
 import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
@@ -53,21 +57,23 @@ export type ProcessQuestion = {
  * Base configuration shared by both process creation variants
  */
 interface BaseProcessConfig {
-  /** 
+  /**
    * Census - either a Census object (PlainCensus, WeightedCensus, CspCensus, PublishedCensus)
-   * or manual configuration. If a Census object is provided and not published, it will be 
+   * or manual configuration. If a Census object is provided and not published, it will be
    * automatically published.
    */
-  census: Census | {
-    /** Census type - MerkleTree or CSP */
-    type: CensusOrigin;
-    /** Census root */
-    root: string;
-    /** Census size */
-    size: number;
-    /** Census URI */
-    uri: string;
-  };
+  census:
+    | Census
+    | {
+        /** Census type - MerkleTree or CSP */
+        type: CensusOrigin;
+        /** Census root */
+        root: string;
+        /** Census size */
+        size: number;
+        /** Census URI */
+        uri: string;
+      };
 
   /**
    * Ballot configuration. Mutually exclusive with `electionPreset`:
@@ -100,7 +106,7 @@ interface BaseProcessConfig {
     endDate?: Date | string | number;
   };
 
-  /** 
+  /**
    * Maximum number of voters allowed for this process
    * Optional only if census is a published MerkleCensus (OffchainCensus/OffchainDynamicCensus)
    * - defaults to participant count from the census
@@ -255,17 +261,17 @@ export class ProcessOrchestrationService {
         if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
           throw new Error(
             'Census API URL is required to publish Merkle censuses (OffchainCensus, OffchainDynamicCensus). ' +
-            'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
+              'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
           );
         }
         // Type guard: if requiresPublishing is true, it must be a MerkleCensus
         await this.censusOrchestrator.publish(census as MerkleCensus);
       }
-      
+
       // Extract census data (includes contractAddress for onchain censuses)
       return this.censusOrchestrator.getCensusData(census);
     }
-    
+
     // It's manual config - return as-is (but remove size if present for backward compatibility)
     const { size, ...censusWithoutSize } = census;
     return censusWithoutSize;
@@ -500,7 +506,7 @@ export class ProcessOrchestrationService {
 
     // 5. Handle metadata - either use provided URI or create and upload new metadata
     let metadataUri: string;
-    
+
     if ('metadataUri' in config) {
       // Use the provided metadata URI directly
       metadataUri = config.metadataUri;
@@ -516,7 +522,7 @@ export class ProcessOrchestrationService {
 
     // 7. Determine maxVoters
     let maxVoters: number;
-    
+
     if (config.maxVoters !== undefined) {
       // User explicitly provided maxVoters
       maxVoters = config.maxVoters;
@@ -528,14 +534,14 @@ export class ProcessOrchestrationService {
       } else {
         throw new Error(
           'maxVoters is required when using OnchainCensus, CspCensus, or PublishedCensus. ' +
-          'It can only be auto-calculated for published MerkleCensus (OffchainCensus/OffchainDynamicCensus).'
+            'It can only be auto-calculated for published MerkleCensus (OffchainCensus/OffchainDynamicCensus).'
         );
       }
     } else {
       // Census is not published yet, or it's manual config
       throw new Error(
         'maxVoters is required. It can only be omitted when using a published MerkleCensus ' +
-        '(OffchainCensus/OffchainDynamicCensus), in which case it defaults to the participant count.'
+          '(OffchainCensus/OffchainDynamicCensus), in which case it defaults to the participant count.'
       );
     }
 
@@ -543,7 +549,7 @@ export class ProcessOrchestrationService {
     const census: CensusData = {
       censusOrigin: censusConfig.type,
       censusRoot,
-      contractAddress: censusConfig.contractAddress,  // Only set for onchain censuses
+      contractAddress: censusConfig.contractAddress, // Only set for onchain censuses
       censusURI: censusConfig.uri,
       // For onchain censuses (ERC20 token snapshots), allow any valid merkle root
       // For other census types, require the specific censusRoot
@@ -584,7 +590,7 @@ export class ProcessOrchestrationService {
     if (hasPreset) {
       if (!('questions' in config)) {
         throw new Error(
-          'electionPreset requires `questions`; use `ballot` directly for metadataUri configs',
+          'electionPreset requires `questions`; use `ballot` directly for metadataUri configs'
         );
       }
       return resolveElectionPreset(config.electionPreset!, config.questions);
@@ -695,7 +701,6 @@ export class ProcessOrchestrationService {
         meta: {},
       })),
     }));
-
 
     // Round-trip the preset through metadata.meta.electionPreset when
     // present. (We can't use metadata.type — the sequencer reserves it.)

@@ -23,7 +23,9 @@ describe('OnchainCensus', () => {
 
     it('should use 32-byte zero value as census root when contractAddress is set', () => {
       const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.censusRoot).toBe('0x0000000000000000000000000000000000000000000000000000000000000000');
+      expect(census.censusRoot).toBe(
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+      );
     });
 
     it('should use provided URI', () => {
@@ -45,15 +47,21 @@ describe('OnchainCensus', () => {
 
   describe('Validation', () => {
     it('should reject invalid contract address format', () => {
-      expect(() => new OnchainCensus('invalid', validUri)).toThrow('Contract address is missing or invalid');
+      expect(() => new OnchainCensus('invalid', validUri)).toThrow(
+        'Contract address is missing or invalid'
+      );
     });
 
     it('should reject empty contract address', () => {
-      expect(() => new OnchainCensus('', validUri)).toThrow('Contract address is missing or invalid');
+      expect(() => new OnchainCensus('', validUri)).toThrow(
+        'Contract address is missing or invalid'
+      );
     });
 
     it('should reject contract address with wrong length', () => {
-      expect(() => new OnchainCensus('0x1234', validUri)).toThrow('Contract address is missing or invalid');
+      expect(() => new OnchainCensus('0x1234', validUri)).toThrow(
+        'Contract address is missing or invalid'
+      );
     });
 
     it('should accept contract address without 0x prefix', () => {
@@ -66,7 +74,9 @@ describe('OnchainCensus', () => {
     });
 
     it('should reject empty URI', () => {
-      expect(() => new OnchainCensus(validContractAddress, '')).toThrow('URI is required for onchain census');
+      expect(() => new OnchainCensus(validContractAddress, '')).toThrow(
+        'URI is required for onchain census'
+      );
     });
   });
 
@@ -91,7 +101,7 @@ describe('OnchainCensus', () => {
   describe('Ready for process creation', () => {
     it('should be immediately ready for process creation', () => {
       const census = new OnchainCensus(validContractAddress, validUri);
-      
+
       // All required fields are available
       expect(census.isPublished).toBe(true);
       expect(census.censusRoot).toBeTruthy();

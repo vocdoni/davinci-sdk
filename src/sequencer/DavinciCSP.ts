@@ -214,7 +214,9 @@ export class DavinciCSP {
     }
 
     if (proof.censusOrigin !== CensusOrigin.CSP) {
-      throw new Error(`proof origin mismatch: expected ${CensusOrigin.CSP}, got ${proof.censusOrigin}`);
+      throw new Error(
+        `proof origin mismatch: expected ${CensusOrigin.CSP}, got ${proof.censusOrigin}`
+      );
     }
 
     const pubKey = publicKeyFromBytes(this.babyjub, proof.publicKey);
@@ -342,7 +344,7 @@ function poseidonToBigInt(poseidon: Poseidon, inputs: bigint[]): bigint {
     throw new Error('poseidon field is missing');
   }
 
-  const fieldInputs = inputs.map((value) => poseidon.F.e(value));
+  const fieldInputs = inputs.map(value => poseidon.F.e(value));
   const result = poseidon(fieldInputs);
   return poseidon.F.toObject(result);
 }
@@ -491,7 +493,11 @@ function decodeBytes(encodedBytes: Uint8Array): Uint8Array {
 }
 
 export const defaultCSPIndexFn: CSPIndexFn = (hashFn, processId, address, weight) => {
-  const hashValue = poseidonToBigInt(hashFn, [bytesToBigInt(processId), bytesToBigInt(address), weight]);
+  const hashValue = poseidonToBigInt(hashFn, [
+    bytesToBigInt(processId),
+    bytesToBigInt(address),
+    weight,
+  ]);
   const rangeSize = BALLOT_MAX - BALLOT_MIN + 1n;
   return (hashValue % rangeSize) + BALLOT_MIN;
 };

@@ -121,7 +121,7 @@ export class BaseService {
       const code =
         err instanceof Error && err.name === 'AbortError'
           ? 'ECONNABORTED'
-          : this.readErrorCode(err) ?? 500;
+          : (this.readErrorCode(err) ?? 500);
       const error = new Error(message);
       (error as ErrorWithCode).code = code;
       throw error;

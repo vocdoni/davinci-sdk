@@ -6,9 +6,9 @@ describe('CspCensus', () => {
     it('should create a CSP census with valid parameters', () => {
       const publicKey = '0x1234567890abcdef';
       const cspURI = 'https://csp-server.com';
-      
+
       const census = new CspCensus(publicKey, cspURI);
-      
+
       expect(census.publicKey).toBe(publicKey);
       expect(census.cspURI).toBe(cspURI);
     });
@@ -21,9 +21,9 @@ describe('CspCensus', () => {
     it('should be published immediately', () => {
       const publicKey = '0x1234567890abcdef';
       const cspURI = 'https://csp-server.com';
-      
+
       const census = new CspCensus(publicKey, cspURI);
-      
+
       expect(census.isPublished).toBe(true);
       expect(census.censusRoot).toBe(publicKey);
       expect(census.censusURI).toBe(cspURI);
@@ -79,28 +79,28 @@ describe('CspCensus', () => {
     it('should return public key', () => {
       const publicKey = '0x1234567890abcdef';
       const census = new CspCensus(publicKey, 'https://csp-server.com');
-      
+
       expect(census.publicKey).toBe(publicKey);
     });
 
     it('should return CSP URI', () => {
       const cspURI = 'https://csp-server.com';
       const census = new CspCensus('0x1234567890abcdef', cspURI);
-      
+
       expect(census.cspURI).toBe(cspURI);
     });
 
     it('should use public key as census root', () => {
       const publicKey = '0x1234567890abcdef';
       const census = new CspCensus(publicKey, 'https://csp-server.com');
-      
+
       expect(census.censusRoot).toBe(publicKey);
     });
 
     it('should use CSP URI as census URI', () => {
       const cspURI = 'https://csp-server.com';
       const census = new CspCensus('0x1234567890abcdef', cspURI);
-      
+
       expect(census.censusURI).toBe(cspURI);
     });
   });
@@ -126,7 +126,7 @@ describe('CspCensus', () => {
   describe('Ready for process creation', () => {
     it('should be immediately ready for process creation', () => {
       const census = new CspCensus('0x1234567890abcdef', 'https://csp-server.com');
-      
+
       // All required fields are available
       expect(census.isPublished).toBe(true);
       expect(census.censusRoot).toBeTruthy();

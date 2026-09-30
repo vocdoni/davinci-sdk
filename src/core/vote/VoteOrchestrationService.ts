@@ -79,7 +79,7 @@ export interface VoteOrchestrationConfig {
 export class VoteOrchestrationService {
   private readonly verifyCircuitFiles: boolean;
   private readonly verifyProof: boolean;
-  
+
   // Cache for circuit files
   private wasmCache = new Map<string, Uint8Array>();
   private zkeyCache = new Map<string, Uint8Array>();
@@ -128,15 +128,16 @@ export class VoteOrchestrationService {
     );
 
     // 4. Generate vote proof inputs
-    const { voteId, voteIdDecimal, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
-      config.processId,
-      voterAddress,
-      process.encryptionKey,
-      process.ballotMode,
-      config.choices,
-      censusProof.weight,
-      config.randomness
-    );
+    const { voteId, voteIdDecimal, cryptoOutput, circomInputs } =
+      await this.generateVoteProofInputs(
+        config.processId,
+        voterAddress,
+        process.encryptionKey,
+        process.ballotMode,
+        config.choices,
+        censusProof.weight,
+        config.randomness
+      );
 
     // 5. Generate zk-SNARK proof using snarkjs
     const { proof } = await this.generateZkProof(circomInputs);
@@ -330,14 +331,17 @@ export class VoteOrchestrationService {
       } else {
         // For MerkleTree, only the weight is needed - get it from sequencer
         const weight = await this.apiService.sequencer.getAddressWeight(processId, voterAddress);
-        
+
         // Return minimal census proof with just the weight
         // (full proof is not needed for MerkleTree voting)
         return {
           root: censusRoot,
           address: voterAddress,
           weight: weight,
-          censusOrigin: censusOrigin as CensusOrigin.OffchainStatic | CensusOrigin.OffchainDynamic | CensusOrigin.Onchain,
+          censusOrigin: censusOrigin as
+            | CensusOrigin.OffchainStatic
+            | CensusOrigin.OffchainDynamic
+            | CensusOrigin.Onchain,
           value: '',
           siblings: '',
         };
@@ -461,12 +465,12 @@ export class VoteOrchestrationService {
       }
       const buffer = await response.arrayBuffer();
       wasmBytes = new Uint8Array(buffer);
-      
+
       // Verify hash if enabled
       if (this.verifyCircuitFiles) {
         this.verifyHash(wasmBytes, info.circuitHash, 'circuit.wasm');
       }
-      
+
       this.wasmCache.set(info.circuitUrl, wasmBytes);
     }
 
@@ -479,12 +483,12 @@ export class VoteOrchestrationService {
       }
       const buffer = await response.arrayBuffer();
       zkeyBytes = new Uint8Array(buffer);
-      
+
       // Verify hash if enabled
       if (this.verifyCircuitFiles) {
         this.verifyHash(zkeyBytes, info.provingKeyHash, 'proving_key.zkey');
       }
-      
+
       this.zkeyCache.set(info.provingKeyUrl, zkeyBytes);
     }
 
@@ -505,17 +509,17 @@ export class VoteOrchestrationService {
           throw new Error(`Failed to fetch vkey at ${info.verificationKeyUrl}: ${response.status}`);
         }
         const vkeyText = await response.text();
-        
+
         // Verify hash if enabled
         if (this.verifyCircuitFiles) {
           const vkeyBytes = new TextEncoder().encode(vkeyText);
           this.verifyHash(vkeyBytes, info.verificationKeyHash, 'verification_key.json');
         }
-        
+
         vkey = JSON.parse(vkeyText);
         this.vkeyCache.set(info.verificationKeyUrl, vkey);
       }
-      
+
       const isValid = await snarkjs.groth16.verify(vkey, publicSignals, proof);
       if (!isValid) {
         throw new Error('Generated proof is invalid');

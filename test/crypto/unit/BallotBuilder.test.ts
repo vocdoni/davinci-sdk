@@ -14,16 +14,13 @@ describe('BallotBuilder coordinate transforms', () => {
     [1n, 2n],
     [SCALING_FACTOR, 0n],
     [FIELD_MODULUS - 1n, FIELD_MODULUS - 1n],
-    [
-      0x1234567890abcdef1234567890abcdefn,
-      0xfedcba0987654321fedcba0987654321n,
-    ],
-    [FIELD_MODULUS / 2n, (FIELD_MODULUS / 3n) + 1n],
+    [0x1234567890abcdef1234567890abcdefn, 0xfedcba0987654321fedcba0987654321n],
+    [FIELD_MODULUS / 2n, FIELD_MODULUS / 3n + 1n],
   ];
 
   it('FIELD_MODULUS is the BN254 scalar field modulus', () => {
     expect(FIELD_MODULUS).toBe(
-      21888242871839275222246405745257275088548364400416034343698204186575808495617n,
+      21888242871839275222246405745257275088548364400416034343698204186575808495617n
     );
   });
 

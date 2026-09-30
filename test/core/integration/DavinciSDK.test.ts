@@ -180,7 +180,9 @@ describe('DavinciSDK Integration Tests', () => {
     });
 
     it('should fetch sequencer addresses when no custom addresses', async () => {
-      const bareWallet = new Wallet('0x1234567890123456789012345678901234567890123456789012345678901234');
+      const bareWallet = new Wallet(
+        '0x1234567890123456789012345678901234567890123456789012345678901234'
+      );
       // Create SDK without custom addresses
       const sdk = new DavinciSDK({
         signer: bareWallet,

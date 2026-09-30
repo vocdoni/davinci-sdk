@@ -199,7 +199,11 @@ export class DavinciSDK {
     this.ensureProvider();
     if (!this._processOrchestrator) {
       const processRegistry = this.processes;
-      this._processOrchestrator = new ProcessOrchestrationService(processRegistry, this.apiService, this.config.signer);
+      this._processOrchestrator = new ProcessOrchestrationService(
+        processRegistry,
+        this.apiService,
+        this.config.signer
+      );
     }
     return this._processOrchestrator;
   }
@@ -340,9 +344,7 @@ export class DavinciSDK {
     return this.createProcessStreamInternal(config);
   }
 
-  private async *createProcessStreamInternal(
-    config: ProcessConfig
-  ): AsyncGenerator<any> {
+  private async *createProcessStreamInternal(config: ProcessConfig): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before creating processes. Call sdk.init() first.');
     }
@@ -738,9 +740,7 @@ export class DavinciSDK {
     return this.endProcessStreamInternal(processId);
   }
 
-  private async *endProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<any> {
+  private async *endProcessStreamInternal(processId: string): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
     }
@@ -813,9 +813,7 @@ export class DavinciSDK {
     return this.pauseProcessStreamInternal(processId);
   }
 
-  private async *pauseProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<any> {
+  private async *pauseProcessStreamInternal(processId: string): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
     }
@@ -888,9 +886,7 @@ export class DavinciSDK {
     return this.cancelProcessStreamInternal(processId);
   }
 
-  private async *cancelProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<any> {
+  private async *cancelProcessStreamInternal(processId: string): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
     }
@@ -962,9 +958,7 @@ export class DavinciSDK {
     return this.resumeProcessStreamInternal(processId);
   }
 
-  private async *resumeProcessStreamInternal(
-    processId: string
-  ): AsyncGenerator<any> {
+  private async *resumeProcessStreamInternal(processId: string): AsyncGenerator<any> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
     }
@@ -1094,9 +1088,7 @@ export class DavinciSDK {
     let resolvedChainId = chainId;
     if (resolvedChainId === undefined) {
       if (!this.config.signer.provider) {
-        throw new Error(
-          'chainId is required for listProcesses when signer has no provider.'
-        );
+        throw new Error('chainId is required for listProcesses when signer has no provider.');
       }
       const network = await this.config.signer.provider.getNetwork();
       resolvedChainId = Number(network.chainId);

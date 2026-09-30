@@ -88,17 +88,15 @@ export type ElectionPreset =
  */
 export function resolveElectionPreset(
   preset: ElectionPreset,
-  questions: ReadonlyArray<{ choices: ReadonlyArray<unknown> }>,
+  questions: ReadonlyArray<{ choices: ReadonlyArray<unknown> }>
 ): BallotMode {
   if (!questions || questions.length === 0) {
-    throw new Error(
-      `electionPreset '${preset.type}' requires at least one question`,
-    );
+    throw new Error(`electionPreset '${preset.type}' requires at least one question`);
   }
   const numFields = questions[0]?.choices?.length ?? 0;
   if (numFields === 0) {
     throw new Error(
-      `electionPreset '${preset.type}' requires questions[0].choices to be non-empty`,
+      `electionPreset '${preset.type}' requires questions[0].choices to be non-empty`
     );
   }
 
@@ -111,23 +109,21 @@ export function resolveElectionPreset(
       const min = preset.minSelections ?? 0;
       const max = preset.maxSelections;
       if (max < 1) {
-        throw new Error(
-          "electionPreset 'multiple_choice': maxSelections must be >= 1",
-        );
+        throw new Error("electionPreset 'multiple_choice': maxSelections must be >= 1");
       }
       if (max > numFields) {
         throw new Error(
-          `electionPreset 'multiple_choice': maxSelections (${max}) cannot exceed numFields (${numFields})`,
+          `electionPreset 'multiple_choice': maxSelections (${max}) cannot exceed numFields (${numFields})`
         );
       }
       if (min < 0) {
         throw new Error(
-          `electionPreset 'multiple_choice': minSelections (${min}) cannot be negative`,
+          `electionPreset 'multiple_choice': minSelections (${min}) cannot be negative`
         );
       }
       if (min > max) {
         throw new Error(
-          `electionPreset 'multiple_choice': minSelections (${min}) cannot exceed maxSelections (${max})`,
+          `electionPreset 'multiple_choice': minSelections (${min}) cannot exceed maxSelections (${max})`
         );
       }
       return makeBallotMode(numFields, 0, 1, false, 1, min, max);
@@ -140,7 +136,7 @@ export function resolveElectionPreset(
       const maxVal = preset.maxValue;
       if (maxVal <= minVal) {
         throw new Error(
-          `electionPreset 'rating': maxValue (${maxVal}) must be greater than minValue (${minVal})`,
+          `electionPreset 'rating': maxValue (${maxVal}) must be greater than minValue (${minVal})`
         );
       }
       return makeBallotMode(
@@ -150,7 +146,7 @@ export function resolveElectionPreset(
         false,
         1,
         numFields * minVal,
-        numFields * maxVal,
+        numFields * maxVal
       );
     }
     case 'ranking': {
@@ -160,15 +156,11 @@ export function resolveElectionPreset(
     case 'quadratic': {
       const budget = preset.budget;
       if (budget <= 0) {
-        throw new Error(
-          `electionPreset 'quadratic': budget (${budget}) must be > 0`,
-        );
+        throw new Error(`electionPreset 'quadratic': budget (${budget}) must be > 0`);
       }
       const minSum = preset.minValueSum ?? 0;
       if (minSum < 0) {
-        throw new Error(
-          `electionPreset 'quadratic': minValueSum (${minSum}) must be >= 0`,
-        );
+        throw new Error(`electionPreset 'quadratic': minValueSum (${minSum}) must be >= 0`);
       }
       return makeBallotMode(numFields, 0, budget, false, 2, minSum, budget);
     }
@@ -186,7 +178,7 @@ function makeBallotMode(
   uniqueValues: boolean,
   costExponent: number,
   minValueSum: number,
-  maxValueSum: number,
+  maxValueSum: number
 ): BallotMode {
   return {
     numFields,
@@ -215,7 +207,7 @@ function makeBallotMode(
  * validate the per-variant fields themselves.
  */
 export function parseElectionPresetFromMetadata(
-  metadata: { meta?: { electionPreset?: unknown } } | null | undefined,
+  metadata: { meta?: { electionPreset?: unknown } } | null | undefined
 ): ElectionPreset | undefined {
   const t = metadata?.meta?.electionPreset;
   if (!t || typeof t !== 'object') return undefined;

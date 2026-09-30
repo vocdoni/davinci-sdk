@@ -26,7 +26,7 @@ export class OnchainCensus extends Census {
     }
 
     this._contractAddress = contractAddress;
-    
+
     // For onchain census with contractAddress, censusRoot must be 32-byte zero value
     this._censusRoot = '0x0000000000000000000000000000000000000000000000000000000000000000';
     this._censusURI = uri;

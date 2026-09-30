@@ -1,8 +1,5 @@
 // src/ProcessRegistryService.ts
-import {
-  ProcessRegistry__factory,
-  type ProcessRegistry,
-} from '@vocdoni/davinci-contracts';
+import { ProcessRegistry__factory, type ProcessRegistry } from '@vocdoni/davinci-contracts';
 import { SmartContractService } from './SmartContractService';
 import type { ContractRunner } from 'ethers';
 import { BallotMode, CensusData, EncryptionKey } from '../core';

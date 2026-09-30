@@ -141,8 +141,7 @@ describe('Multichain Provider Switch Integration', () => {
     const envChainSet = new Set([chainA, chainB]);
     const infoChainSet = new Set(networks.map(n => Number(n.chainID)));
     const exactMatch =
-      envChainSet.size === infoChainSet.size &&
-      [...envChainSet].every(id => infoChainSet.has(id));
+      envChainSet.size === infoChainSet.size && [...envChainSet].every(id => infoChainSet.has(id));
 
     if (!exactMatch) {
       skipReason =
@@ -151,71 +150,69 @@ describe('Multichain Provider Switch Integration', () => {
       return;
     }
 
-    versionByChain = new Map(networks.map(n => [Number(n.chainID), n.processIDVersion.toLowerCase()]));
+    versionByChain = new Map(
+      networks.map(n => [Number(n.chainID), n.processIDVersion.toLowerCase()])
+    );
     shouldRun = true;
   }, 60_000);
 
-  it(
-    'creates processes on two chains and validates processIDVersion + getProcess with provider switch',
-    async () => {
-      if (!shouldRun) {
-        console.warn(`Skipping multichain integration test: ${skipReason}`);
-        return;
-      }
+  it('creates processes on two chains and validates processIDVersion + getProcess with provider switch', async () => {
+    if (!shouldRun) {
+      console.warn(`Skipping multichain integration test: ${skipReason}`);
+      return;
+    }
 
-      const privateKey = getRequiredEnv('PRIVATE_KEY');
-      const providerA = new JsonRpcProvider(rpcA);
-      const providerB = new JsonRpcProvider(rpcB);
-      const walletA = new Wallet(privateKey, providerA);
-      const walletB = new Wallet(privateKey, providerB);
+    const privateKey = getRequiredEnv('PRIVATE_KEY');
+    const providerA = new JsonRpcProvider(rpcA);
+    const providerB = new JsonRpcProvider(rpcB);
+    const walletA = new Wallet(privateKey, providerA);
+    const walletB = new Wallet(privateKey, providerB);
 
-      const sdkA = new DavinciSDK({
-        signer: walletA,
-        sequencerUrl,
-        censusUrl,
-      });
-      const sdkB = new DavinciSDK({
-        signer: walletB,
-        sequencerUrl,
-        censusUrl,
-      });
+    const sdkA = new DavinciSDK({
+      signer: walletA,
+      sequencerUrl,
+      censusUrl,
+    });
+    const sdkB = new DavinciSDK({
+      signer: walletB,
+      sequencerUrl,
+      censusUrl,
+    });
 
-      await sdkA.init();
-      await sdkB.init();
+    await sdkA.init();
+    await sdkB.init();
 
-      // Create one process per chain
-      const createdA = await sdkA.createProcess(createProcessConfig('A'));
-      const createdB = await sdkB.createProcess(createProcessConfig('B'));
+    // Create one process per chain
+    const createdA = await sdkA.createProcess(createProcessConfig('A'));
+    const createdB = await sdkB.createProcess(createProcessConfig('B'));
 
-      // Version in processId should match sequencer /info network mapping
-      const versionA = extractProcessIdVersion(createdA.processId);
-      const versionB = extractProcessIdVersion(createdB.processId);
-      const expectedVersionA = versionByChain.get(chainA);
-      const expectedVersionB = versionByChain.get(chainB);
-      expect(versionA).toBe(expectedVersionA);
-      expect(versionB).toBe(expectedVersionB);
+    // Version in processId should match sequencer /info network mapping
+    const versionA = extractProcessIdVersion(createdA.processId);
+    const versionB = extractProcessIdVersion(createdB.processId);
+    const expectedVersionA = versionByChain.get(chainA);
+    const expectedVersionB = versionByChain.get(chainB);
+    expect(versionA).toBe(expectedVersionA);
+    expect(versionB).toBe(expectedVersionB);
 
-      // getProcess should work for each process with its own chain provider
-      const processA = await sdkA.getProcess(createdA.processId);
-      const processB = await sdkB.getProcess(createdB.processId);
+    // getProcess should work for each process with its own chain provider
+    const processA = await sdkA.getProcess(createdA.processId);
+    const processB = await sdkB.getProcess(createdB.processId);
 
-      expect(processA.processId.toLowerCase()).toBe(createdA.processId.toLowerCase());
-      expect(processB.processId.toLowerCase()).toBe(createdB.processId.toLowerCase());
+    expect(processA.processId.toLowerCase()).toBe(createdA.processId.toLowerCase());
+    expect(processB.processId.toLowerCase()).toBe(createdB.processId.toLowerCase());
 
-      // listProcesses should also work with explicit chain filters
-      const listA = await waitForProcessInList(sdkA, chainA, createdA.processId);
-      const listB = await waitForProcessInList(sdkB, chainB, createdB.processId);
-      expect(Array.isArray(listA)).toBe(true);
-      expect(Array.isArray(listB)).toBe(true);
+    // listProcesses should also work with explicit chain filters
+    const listA = await waitForProcessInList(sdkA, chainA, createdA.processId);
+    const listB = await waitForProcessInList(sdkB, chainB, createdB.processId);
+    expect(Array.isArray(listA)).toBe(true);
+    expect(Array.isArray(listB)).toBe(true);
 
-      // If sequencer returns IDs for a chain, they must match that chain's processIDVersion.
-      listA.slice(0, 20).forEach(id => {
-        expect(extractProcessIdVersion(id)).toBe(expectedVersionA);
-      });
-      listB.slice(0, 20).forEach(id => {
-        expect(extractProcessIdVersion(id)).toBe(expectedVersionB);
-      });
-    },
-    300_000
-  );
+    // If sequencer returns IDs for a chain, they must match that chain's processIDVersion.
+    listA.slice(0, 20).forEach(id => {
+      expect(extractProcessIdVersion(id)).toBe(expectedVersionA);
+    });
+    listB.slice(0, 20).forEach(id => {
+      expect(extractProcessIdVersion(id)).toBe(expectedVersionB);
+    });
+  }, 300_000);
 });

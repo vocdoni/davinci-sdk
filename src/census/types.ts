@@ -119,8 +119,7 @@ export function isCSPCensusProof(proof: unknown): proof is CSPCensusProof {
     typeof (proof as any).processId === 'string' &&
     typeof (proof as any).publicKey === 'string' &&
     typeof (proof as any).signature === 'string' &&
-    (((proof as any).voterIndex === undefined &&
-      (proof as any).index === undefined) ||
+    (((proof as any).voterIndex === undefined && (proof as any).index === undefined) ||
       (typeof (proof as any).voterIndex === 'number' &&
         Number.isInteger((proof as any).voterIndex) &&
         (proof as any).voterIndex >= 0) ||

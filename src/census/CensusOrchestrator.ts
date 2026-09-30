@@ -32,11 +32,7 @@ export class CensusOrchestrator {
     const publishResponse = await this.censusService.publishCensus(censusId);
 
     // 4. Update census object with published data
-    census._setPublishedData(
-      publishResponse.root,
-      publishResponse.uri,
-      censusId
-    );
+    census._setPublishedData(publishResponse.root, publishResponse.uri, censusId);
   }
 
   /**
@@ -60,9 +56,8 @@ export class CensusOrchestrator {
     }
 
     // Extract contract address for onchain censuses
-    const contractAddress = 'contractAddress' in census 
-      ? (census as any).contractAddress 
-      : undefined;
+    const contractAddress =
+      'contractAddress' in census ? (census as any).contractAddress : undefined;
 
     return {
       type: census.censusOrigin,

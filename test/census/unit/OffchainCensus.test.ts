@@ -180,12 +180,8 @@ describe('OffchainCensus', () => {
   describe('Publishing state', () => {
     it('should update state after _setPublishedData', () => {
       census.add('0x1234567890123456789012345678901234567890');
-      
-      census._setPublishedData(
-        '0xabcdef1234567890',
-        'ipfs://QmTest',
-        'census123'
-      );
+
+      census._setPublishedData('0xabcdef1234567890', 'ipfs://QmTest', 'census123');
 
       expect(census.isPublished).toBe(true);
       expect(census.censusRoot).toBe('0xabcdef1234567890');
@@ -195,7 +191,7 @@ describe('OffchainCensus', () => {
 
     it('should handle _setPublishedData without censusId', () => {
       census.add('0x1234567890123456789012345678901234567890');
-      
+
       census._setPublishedData('0xabcdef1234567890', 'ipfs://QmTest');
 
       expect(census.isPublished).toBe(true);

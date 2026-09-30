@@ -3,7 +3,11 @@ import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainCensus } from '../../../src';
 import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
 import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
-import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+import {
+  createIntegrationProvider,
+  createIntegrationWallet,
+  getApiUrls,
+} from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const wallet: Wallet = createIntegrationWallet().connect(provider);
@@ -16,7 +20,10 @@ function randomHex(bytes: number): string {
   return '0x' + hex;
 }
 
-async function waitForProcessStartOnChain(startTimeSec: bigint | number, timeoutMs = 120000): Promise<void> {
+async function waitForProcessStartOnChain(
+  startTimeSec: bigint | number,
+  timeoutMs = 120000
+): Promise<void> {
   const target = Number(startTimeSec);
   const startedAt = Date.now();
 
@@ -1408,7 +1415,7 @@ describe('Simple Process Creation Integration', () => {
     // Create a process with initial maxVoters
     const censusRoot = randomHex(32);
     const initialMaxVoters = 100;
-    
+
     const processConfig: ProcessConfig = {
       title: 'MaxVoters Update Test',
       description: 'Testing maxVoters update functionality',
@@ -1463,7 +1470,7 @@ describe('Simple Process Creation Integration', () => {
     // Create a process with initial maxVoters
     const censusRoot = randomHex(32);
     const initialMaxVoters = 150;
-    
+
     const processConfig: ProcessConfig = {
       title: 'MaxVoters Stream Update Test',
       description: 'Testing maxVoters update with stream API',
@@ -1553,7 +1560,7 @@ describe('Simple Process Creation Integration', () => {
     // Upload metadata directly to the sequencer
     const metadataHash = await sdk.api.sequencer.pushMetadata(metadata);
     const uploadedMetadataUri = sdk.api.sequencer.getMetadataUrl(metadataHash);
-    
+
     expect(uploadedMetadataUri).toBeDefined();
     expect(uploadedMetadataUri).toBeTruthy();
 
@@ -1800,10 +1807,8 @@ describe('Simple Process Creation Integration', () => {
             minValueSum: '0',
           },
           electionPreset: { type: 'approval' },
-          questions: [
-            { title: 'Q', choices: [{ title: 'c', value: 0 }] },
-          ],
-        }),
+          questions: [{ title: 'Q', choices: [{ title: 'c', value: 0 }] }],
+        })
       ).rejects.toThrow(/Provide ballot OR electionPreset, not both/);
     });
 
@@ -1820,10 +1825,8 @@ describe('Simple Process Creation Integration', () => {
             startDate: new Date(Date.now() + 60_000),
             duration: 3600,
           },
-          questions: [
-            { title: 'Q', choices: [{ title: 'c', value: 0 }] },
-          ],
-        } as unknown as ProcessConfig),
+          questions: [{ title: 'Q', choices: [{ title: 'c', value: 0 }] }],
+        } as unknown as ProcessConfig)
       ).rejects.toThrow(/Either ballot or electionPreset is required/);
     });
   });

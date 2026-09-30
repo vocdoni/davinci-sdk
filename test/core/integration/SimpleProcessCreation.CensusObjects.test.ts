@@ -3,7 +3,11 @@ import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainCensus } from '../../../src';
 import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
 import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
-import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+import {
+  createIntegrationProvider,
+  createIntegrationWallet,
+  getApiUrls,
+} from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const wallet: Wallet = createIntegrationWallet().connect(provider);
@@ -85,9 +89,7 @@ describe('Simple Process Creation Integration', () => {
 
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);
-      expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(
-        census.censusRoot!.toLowerCase()
-      );
+      expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(census.censusRoot!.toLowerCase());
     });
 
     it('should create a process using OffchainCensus with string weights (auto-publishes)', async () => {
@@ -405,6 +407,4 @@ describe('Simple Process Creation Integration', () => {
       expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
     });
   });
-
-
 });

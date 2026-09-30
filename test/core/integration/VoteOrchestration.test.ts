@@ -8,7 +8,11 @@ import {
   MerkleCensusProofProvider,
   CSPCensusProofProvider,
 } from '../../../src/census/types';
-import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+import {
+  createIntegrationProvider,
+  createIntegrationWallet,
+  getApiUrls,
+} from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
@@ -284,7 +288,7 @@ describe('Vote Orchestration Integration', () => {
   describe('isAddressAbleToVote', () => {
     it('should return true for address in census', async () => {
       const testAddress = voters[0].address;
-      
+
       const isAble = await organizerSdk.isAddressAbleToVote(processId, testAddress);
 
       expect(typeof isAble).toBe('boolean');
@@ -293,16 +297,16 @@ describe('Vote Orchestration Integration', () => {
 
     it('should return false for address not in census', async () => {
       const randomAddress = Wallet.createRandom().address;
-      
+
       const isAble = await organizerSdk.isAddressAbleToVote(processId, randomAddress);
-      
+
       expect(typeof isAble).toBe('boolean');
       expect(isAble).toBe(false);
     });
 
     it('should throw error for invalid process ID', async () => {
       const testAddress = voters[0].address;
-      
+
       await expect(
         organizerSdk.isAddressAbleToVote('invalid-process-id', testAddress)
       ).rejects.toThrow();
@@ -318,7 +322,7 @@ describe('Vote Orchestration Integration', () => {
   describe('getAddressWeight', () => {
     it('should get weight for address in census', async () => {
       const testAddress = voters[0].address;
-      
+
       const weight = await organizerSdk.getAddressWeight(processId, testAddress);
 
       expect(typeof weight).toBe('string');
@@ -328,24 +332,20 @@ describe('Vote Orchestration Integration', () => {
 
     it('should throw error for address not in census', async () => {
       const randomAddress = Wallet.createRandom().address;
-      
-      await expect(
-        organizerSdk.getAddressWeight(processId, randomAddress)
-      ).rejects.toThrow();
+
+      await expect(organizerSdk.getAddressWeight(processId, randomAddress)).rejects.toThrow();
     });
 
     it('should throw error for invalid process ID', async () => {
       const testAddress = voters[0].address;
-      
+
       await expect(
         organizerSdk.getAddressWeight('invalid-process-id', testAddress)
       ).rejects.toThrow();
     });
 
     it('should throw error for invalid address format', async () => {
-      await expect(
-        organizerSdk.getAddressWeight(processId, 'invalid-address')
-      ).rejects.toThrow();
+      await expect(organizerSdk.getAddressWeight(processId, 'invalid-address')).rejects.toThrow();
     });
   });
 
@@ -554,5 +554,4 @@ describe('Vote Orchestration Integration', () => {
       );
     });
   });
-
 });

@@ -11,7 +11,6 @@
  */
 export type EntityCallback<T extends any[]> = (...args: T) => void;
 
-
 /**
  * Callback for when a process is created.
  * @param processID - The process ID
@@ -51,7 +50,9 @@ export type ProcessDurationChangedCallback = EntityCallback<[string, bigint]>;
  * @param newVotersCount - The number of single voters for the process updated after the state transition
  * @param newOverwrittenVotesCount - The number of votes that has been overwritten updated after the state transition
  */
-export type ProcessStateTransitionedCallback = EntityCallback<[string, string, bigint, bigint, bigint, bigint]>;
+export type ProcessStateTransitionedCallback = EntityCallback<
+  [string, string, bigint, bigint, bigint, bigint]
+>;
 
 /**
  * Callback for when process results are set.

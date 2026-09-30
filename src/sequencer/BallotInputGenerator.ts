@@ -73,10 +73,10 @@ export class BallotInputGenerator {
       weight: ballotInputs.weight.toString(),
       process_id: ballotInputs.process_id,
       vote_id: ballotInputs.vote_id,
-      encryption_pubkey: [
-        ballotInputs.encryption_pubkey[0],
-        ballotInputs.encryption_pubkey[1],
-      ] as [string, string],
+      encryption_pubkey: [ballotInputs.encryption_pubkey[0], ballotInputs.encryption_pubkey[1]] as [
+        string,
+        string,
+      ],
       k: ballotInputs.k,
       cipherfields: ballotInputs.cipherfields,
       inputs_hash: ballotInputs.inputs_hash,

@@ -123,22 +123,14 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
     // Use a fixed k for reproducibility
     const k = '12345678901234567890';
 
-    const voteId = builder.computeVoteID(
-      processIdBigInt.toString(),
-      addressBigInt.toString(),
-      k
-    );
+    const voteId = builder.computeVoteID(processIdBigInt.toString(), addressBigInt.toString(), k);
 
     // Vote ID should be truncated to 160 bits (max value is 2^160 - 1)
     const maxVoteId = (1n << 160n) - 1n;
     expect(BigInt(voteId)).toBeLessThanOrEqual(maxVoteId);
 
     // Running the same computation should produce the same result
-    const voteId2 = builder.computeVoteID(
-      processIdBigInt.toString(),
-      addressBigInt.toString(),
-      k
-    );
+    const voteId2 = builder.computeVoteID(processIdBigInt.toString(), addressBigInt.toString(), k);
     expect(voteId).toBe(voteId2);
   });
 
@@ -276,8 +268,10 @@ describe('Sequencer Integration: RTE/TE Coordinate Conversion', () => {
     // RTE.x = TE.x * (-f)
     // RTE.y = TE.y
 
-    const testX_RTE = 19485953556403312941904393378091455968053684322142533232252221507246354347357n;
-    const testY_RTE = 16219479350243308044593790248520319281271283090548119799482663113896815349782n;
+    const testX_RTE =
+      19485953556403312941904393378091455968053684322142533232252221507246354347357n;
+    const testY_RTE =
+      16219479350243308044593790248520319281271283090548119799482663113896815349782n;
 
     const [x_TE, y_TE] = fromRTEtoTE(testX_RTE, testY_RTE);
     const [x_back, y_back] = fromTEtoRTE(x_TE, y_TE);

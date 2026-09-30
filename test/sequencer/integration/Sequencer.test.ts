@@ -186,7 +186,7 @@ describe('VocdoniSequencerService Integration', () => {
       expect(Array.isArray(response.workers)).toBe(true);
 
       // Check each worker's structure
-      response.workers.forEach((worker) => {
+      response.workers.forEach(worker => {
         expect(typeof worker.name).toBe('string');
         expect(typeof worker.successCount).toBe('number');
         expect(typeof worker.failedCount).toBe('number');

@@ -1,5 +1,10 @@
 import { CensusOrchestrator } from '../../../src/census/CensusOrchestrator';
-import { OffchainCensus, OffchainDynamicCensus, CspCensus, OnchainCensus } from '../../../src/census/classes';
+import {
+  OffchainCensus,
+  OffchainDynamicCensus,
+  CspCensus,
+  OnchainCensus,
+} from '../../../src/census/classes';
 import { CensusOrigin } from '../../../src/census/types';
 import type { VocdoniCensusService } from '../../../src/census/CensusService';
 import { vi, type Mocked } from 'vitest';
@@ -90,9 +95,7 @@ describe('CensusOrchestrator', () => {
       census.add('0x1234567890123456789012345678901234567890');
       census._setPublishedData('0xroot', 'ipfs://uri', 'census-id');
 
-      await expect(orchestrator.publish(census)).rejects.toThrow(
-        'Census is already published'
-      );
+      await expect(orchestrator.publish(census)).rejects.toThrow('Census is already published');
 
       expect(mockCensusService.createCensus).not.toHaveBeenCalled();
     });
@@ -171,7 +174,7 @@ describe('CensusOrchestrator', () => {
       expect(data).toEqual({
         type: CensusOrigin.Onchain,
         contractAddress: contractAddress,
-        root: "0x0000000000000000000000000000000000000000000000000000000000000000",
+        root: '0x0000000000000000000000000000000000000000000000000000000000000000',
         uri: subgraphUri,
       });
     });
@@ -200,15 +203,18 @@ describe('CensusOrchestrator', () => {
     });
 
     it('should NOT throw error for OnchainCensus even if not "published"', () => {
-      const census = new OnchainCensus('0x1234567890123456789012345678901234567890', 'https://api.thegraph.com/subgraphs/name/token-holders');
-      
+      const census = new OnchainCensus(
+        '0x1234567890123456789012345678901234567890',
+        'https://api.thegraph.com/subgraphs/name/token-holders'
+      );
+
       // OnchainCensus is always ready, no publishing needed
       expect(() => orchestrator.getCensusData(census)).not.toThrow();
     });
 
     it('should NOT throw error for CspCensus even if not "published"', () => {
       const census = new CspCensus('0x1234567890abcdef', 'https://csp-server.com');
-      
+
       // CspCensus is always ready, no publishing needed
       expect(() => orchestrator.getCensusData(census)).not.toThrow();
     });
@@ -218,7 +224,10 @@ describe('CensusOrchestrator', () => {
     it('should identify which censuses require publishing', () => {
       const offchain = new OffchainCensus();
       const offchainDynamic = new OffchainDynamicCensus();
-      const onchain = new OnchainCensus('0x1234567890123456789012345678901234567890', 'https://api.thegraph.com/subgraphs/name/token-holders');
+      const onchain = new OnchainCensus(
+        '0x1234567890123456789012345678901234567890',
+        'https://api.thegraph.com/subgraphs/name/token-holders'
+      );
       const csp = new CspCensus('0xabcdef', 'https://csp.com');
 
       expect(offchain.requiresPublishing).toBe(true);

@@ -37,9 +37,7 @@ export function getIntegrationTimeoutMs(): number {
   loadIntegrationEnv();
 
   return (
-    toPositiveInt(process.env.TIME_OUT) ??
-    toPositiveInt(process.env.TIMEOUT) ??
-    DEFAULT_TIMEOUT_MS
+    toPositiveInt(process.env.TIME_OUT) ?? toPositiveInt(process.env.TIMEOUT) ?? DEFAULT_TIMEOUT_MS
   );
 }
 

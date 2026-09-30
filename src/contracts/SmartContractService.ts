@@ -214,10 +214,10 @@ export abstract class SmartContractService {
         try {
           // Test both creating the filter AND getting changes to ensure full support
           const filterId = await provider.send('eth_newFilter', [testFilter]);
-          
+
           // Try to get filter changes - this will fail if RPC doesn't maintain filters
           await provider.send('eth_getFilterChanges', [filterId]);
-          
+
           // If we get here, both eth_newFilter and eth_getFilterChanges work
           contract.on(eventFilter as ContractEventName, normalizedCallback);
           return;
@@ -269,8 +269,11 @@ export abstract class SmartContractService {
 
     // Check for error code -32000 with "filter not found" - RPC supports creating filters but doesn't maintain them
     const isFilterNotFound =
-      ((error?.code === -32000 || error?.error?.code === -32000 || (error?.code === 'UNKNOWN_ERROR' && error?.error?.code === -32000)) &&
-       (error?.message?.includes('filter not found') || error?.error?.message?.includes('filter not found')));
+      (error?.code === -32000 ||
+        error?.error?.code === -32000 ||
+        (error?.code === 'UNKNOWN_ERROR' && error?.error?.code === -32000)) &&
+      (error?.message?.includes('filter not found') ||
+        error?.error?.message?.includes('filter not found'));
 
     return isMethodNotFound || isFilterNotFound;
   }

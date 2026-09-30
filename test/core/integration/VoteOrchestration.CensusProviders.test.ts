@@ -9,7 +9,11 @@ import {
   CSPCensusProofProvider,
 } from '../../../src/census/types';
 import { DavinciCSP } from '../../../src/sequencer/DavinciCSP';
-import { createIntegrationProvider, createIntegrationWallet, getApiUrls } from '../../helpers/integrationRuntime';
+import {
+  createIntegrationProvider,
+  createIntegrationWallet,
+  getApiUrls,
+} from '../../helpers/integrationRuntime';
 const { sequencerUrl, censusUrl } = getApiUrls();
 const provider: JsonRpcProvider = createIntegrationProvider();
 const organizerWallet: Wallet = createIntegrationWallet().connect(provider);
@@ -279,10 +283,7 @@ describe('Vote Orchestration Integration', () => {
         const registry = organizerSdk.processes;
         cspProcessId = await registry.getNextProcessId(organizerWallet.address);
 
-        cspCensusRoot = await davinciCSP.cspCensusRoot(
-          CensusOrigin.CSP,
-          CSP_PRIVATE_KEY
-        );
+        cspCensusRoot = await davinciCSP.cspCensusRoot(CensusOrigin.CSP, CSP_PRIVATE_KEY);
 
         // Create CSP process
         const processConfig: ProcessConfig = {
@@ -542,7 +543,10 @@ describe('Vote Orchestration Integration', () => {
       expect(initialVoteResult.voterAddress).toBe(initialVoter.address);
 
       // Verify new voter cannot vote yet (not in census)
-      const newVoterCanVoteBefore = await organizerSdk.isAddressAbleToVote(testProcessId, newVoter.address);
+      const newVoterCanVoteBefore = await organizerSdk.isAddressAbleToVote(
+        testProcessId,
+        newVoter.address
+      );
       expect(newVoterCanVoteBefore).toBe(false);
 
       // Step 4: Create a new census that includes both voters
@@ -560,8 +564,11 @@ describe('Vote Orchestration Integration', () => {
         censusURI: updatedPublishResult.uri,
       };
 
-      const updateStream = organizerSdk.processes.setProcessCensus(testProcessId, updatedCensusData);
-      
+      const updateStream = organizerSdk.processes.setProcessCensus(
+        testProcessId,
+        updatedCensusData
+      );
+
       for await (const event of updateStream) {
         if (event.status === 'completed') {
           expect(event.response).toEqual({ success: true });
@@ -573,7 +580,10 @@ describe('Vote Orchestration Integration', () => {
       await new Promise(resolve => setTimeout(resolve, 60000));
 
       // Step 6: Verify new voter can now vote
-      const newVoterCanVoteAfter = await organizerSdk.isAddressAbleToVote(testProcessId, newVoter.address);
+      const newVoterCanVoteAfter = await organizerSdk.isAddressAbleToVote(
+        testProcessId,
+        newVoter.address
+      );
       expect(newVoterCanVoteAfter).toBe(true);
 
       // Step 7: New voter submits a vote
