@@ -73,6 +73,7 @@ davinci-sdk/
 ├── test/                  # Test files
 │   ├── <domain>/unit/     # Unit tests
 │   ├── anvil/             # The contracts on a local anvil chain
+│   ├── e2e/               # The live suite on Gnosis (see test/e2e/README.md)
 │   ├── fixtures/          # Test vectors
 │   ├── helpers/           # Shared test utilities
 │   └── setup/             # Vitest setup files
@@ -93,6 +94,7 @@ yarn clean                 # Clean build artifacts
 yarn test                  # Unit tests, then the anvil suite
 yarn test:unit             # Run unit tests only (offline)
 yarn test:anvil            # Run the contracts on a local anvil chain (needs Foundry)
+yarn test:e2e              # The live Gnosis suite; skipped unless DAVINCI_SDK_E2E is set
 yarn test:contracts        # Run contract unit tests
 yarn test:sequencer        # Run sequencer unit tests
 yarn test:census           # Run census unit tests
@@ -124,6 +126,10 @@ sequencer node. To use checkouts you already have, set their paths in
 DAVINCI_CONTRACTS_DIR=../davinci-contracts
 DAVINCI_CENSUS_CONTRACT_DIR=../davinci-onchain-census-contract
 ```
+
+The live suite (`yarn test:e2e`, run through `scripts/e2e-live.sh`) creates
+elections on the Gnosis deployment through real sequencer nodes; its phases,
+settings and costs are in `test/e2e/README.md`.
 
 ## 🤝 How to Contribute
 

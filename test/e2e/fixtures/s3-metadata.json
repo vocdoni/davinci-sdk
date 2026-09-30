@@ -1,0 +1,44 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 3: updatable census"
+  },
+  "description": {
+    "default": "The census grows from four to six members while voting runs, and drops one whose ballot is pending."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which activities do you approve?"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Choir"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Chess club"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Hiking"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "approval"
+    }
+  }
+}

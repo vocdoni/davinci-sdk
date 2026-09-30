@@ -1,0 +1,40 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 5: committee key"
+  },
+  "description": {
+    "default": "Two voters spend a quadratic budget; the DKG committee decrypts the tally."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Allocate your votes"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Solar panels"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Heat pumps"
+          },
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "quadratic",
+      "budget": 4,
+      "minValueSum": 0
+    }
+  }
+}

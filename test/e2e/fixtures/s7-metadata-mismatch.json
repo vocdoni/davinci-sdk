@@ -1,0 +1,46 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 7: metadata, updated"
+  },
+  "description": {
+    "default": "Pick up to two days; the clean-up happens on the most voted."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which days suit the clean-up?"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Saturday"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Sunday"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Never"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "multiple_choice",
+      "maxSelections": 2,
+      "minSelections": 0
+    }
+  }
+}

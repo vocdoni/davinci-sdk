@@ -29,6 +29,7 @@
     "test": "yarn test:unit && yarn test:anvil",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:anvil": "vitest run --config vitest.anvil.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:contracts": "vitest run --config vitest.unit.config.ts test/contracts",
     "test:sequencer": "vitest run --config vitest.unit.config.ts test/sequencer",
     "test:census": "vitest run --config vitest.unit.config.ts test/census",

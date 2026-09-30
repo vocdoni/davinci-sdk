@@ -1,0 +1,38 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 8: organizer refusals"
+  },
+  "description": {
+    "default": "A process the organizer tries to change outside the rules; it is then canceled."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Keep the current schedule?"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Yes"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "No"
+          },
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice"
+    }
+  }
+}

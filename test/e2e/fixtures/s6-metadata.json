@@ -1,0 +1,44 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 6: locked committee key"
+  },
+  "description": {
+    "default": "Two voters rank three candidates; the tally unlocks when the organizer reveals."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Rank the candidates"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Ada"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Grace"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Edsger"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "ranking"
+    }
+  }
+}

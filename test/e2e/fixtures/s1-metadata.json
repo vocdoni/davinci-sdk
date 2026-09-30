@@ -1,0 +1,52 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 1: static census"
+  },
+  "description": {
+    "default": "Eight weighted voters rate four proposals from 0 to 5; one of them votes twice."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Rate each proposal"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Bike lanes"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Longer library hours"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Tree planting"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Night buses"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "rating",
+      "maxValue": 5,
+      "minValue": 0
+    }
+  }
+}

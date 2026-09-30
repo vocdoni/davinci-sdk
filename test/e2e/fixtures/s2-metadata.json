@@ -1,0 +1,44 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "SDK live test 2: CSP census"
+  },
+  "description": {
+    "default": "Three voters attested by a census service provider pick one option each."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Where should the next meetup be?"
+      },
+      "description": {
+        "default": ""
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Library"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Park"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Online"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice"
+    }
+  }
+}

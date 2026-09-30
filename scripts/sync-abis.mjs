@@ -7,12 +7,14 @@
 //
 // The first form vendors the registry, DKG and verifier ABIs into abi/; the
 // second vendors the on-chain census contracts (the davinci-zkvm branch) into
-// abi/census/. The ABIs are read from the forge build output (`out/` by
-// default). The script refuses a checkout with uncommitted changes under src/
-// and a build whose sources differ from the checkout (every source a vendored
-// artifact's metadata names, plus the build-info sources when the build kept
-// them), so the recorded commit is the one the ABIs were compiled from. To
-// build without touching the checkout:
+// abi/census/, and the creation code of OwnedCensus and PoseidonT3 into
+// test/e2e/contracts/census.json, which the live suite deploys on Gnosis
+// (the anvil suite checks it against its own build). The ABIs are read from
+// the forge build output (`out/` by default). The script refuses a checkout
+// with uncommitted changes under src/ and a build whose sources differ from
+// the checkout (every source a vendored artifact's metadata names, plus the
+// build-info sources when the build kept them), so the recorded commit is the
+// one the ABIs were compiled from. To build without touching the checkout:
 //
 //   FOUNDRY_OUT=~/.cache/sdk-forge/out FOUNDRY_CACHE_PATH=~/.cache/sdk-forge/cache forge build
 //   node scripts/sync-abis.mjs <checkout> --out ~/.cache/sdk-forge/out
@@ -47,6 +49,14 @@ const SOURCES = {
     contracts: {
       OnchainCensus: 'OnchainCensus.sol/OnchainCensus.json',
       OwnedCensus: 'OwnedCensus.sol/OwnedCensus.json',
+    },
+    // Creation code for the live e2e suite, relative to the repository root.
+    bytecode: {
+      out: 'test/e2e/contracts/census.json',
+      contracts: {
+        PoseidonT3: 'PoseidonT3.sol/PoseidonT3.json',
+        OwnedCensus: 'OwnedCensus.sol/OwnedCensus.json',
+      },
     },
   },
 };
@@ -102,30 +112,65 @@ if (existsSync(buildInfoDir)) {
   }
 }
 
-const here = dirname(fileURLToPath(import.meta.url));
-const abiDir = join(here, '..', 'src', 'contracts', 'abi', source.dir);
-const files = {};
-for (const [name, artifact] of Object.entries(source.contracts)) {
+// A forge artifact, once every source it was compiled from matches the
+// checkout (by the keccak256 solc recorded).
+function checkedArtifact(artifact) {
   const path = join(outDir, artifact);
   if (!existsSync(path)) fail(`${path} is missing`);
-  const { abi, metadata } = JSON.parse(readFileSync(path, 'utf8'));
-  if (!Array.isArray(abi)) fail(`${path} has no abi`);
-  // Every source the artifact was compiled from, by the keccak256 solc recorded.
-  for (const [src, { keccak256: want }] of Object.entries(metadata?.sources ?? {})) {
+  const json = JSON.parse(readFileSync(path, 'utf8'));
+  for (const [src, { keccak256: want }] of Object.entries(json.metadata?.sources ?? {})) {
     const local = join(checkout, src);
     if (!existsSync(local) || keccak256(readFileSync(local)) !== want) {
       fail(`${src} differs from the build of ${artifact}; rebuild before syncing`);
     }
     checked++;
   }
+  return json;
+}
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, '..');
+const abiDir = join(root, 'src', 'contracts', 'abi', source.dir);
+const files = {};
+for (const [name, artifact] of Object.entries(source.contracts)) {
+  const { abi } = checkedArtifact(artifact);
+  if (!Array.isArray(abi)) fail(`${join(outDir, artifact)} has no abi`);
   const text = `${JSON.stringify(abi, null, 2)}\n`;
   writeFileSync(join(abiDir, `${name}.json`), text);
   files[`${name}.json`] = createHash('sha256').update(text).digest('hex');
+}
+
+// Creation code: the bytecode with its library link references, and the
+// keccak256 of the runtime code a deployment leaves.
+let codes = 0;
+if (source.bytecode) {
+  const contracts = {};
+  let compiler;
+  for (const [name, artifact] of Object.entries(source.bytecode.contracts)) {
+    const { bytecode, deployedBytecode, metadata } = checkedArtifact(artifact);
+    // Hex, with a `__$<hash>$__` placeholder per library link.
+    if (!/^0x[0-9a-f_$]+$/.test(bytecode?.object ?? '')) fail(`${artifact} has no bytecode`);
+    compiler ??= metadata?.compiler?.version;
+    const links = bytecode.linkReferences ?? {};
+    contracts[name] =
+      Object.keys(links).length > 0
+        ? { bytecode: bytecode.object, linkReferences: links }
+        : { bytecode: bytecode.object, deployedBytecodeHash: keccak256(deployedBytecode.object) };
+    codes++;
+  }
+  const text = JSON.stringify(
+    { repository: source.repository, commit, compiler, contracts },
+    null,
+    2
+  );
+  writeFileSync(join(root, source.bytecode.out), `${text}\n`);
 }
 if (checked === 0) fail(`no sources to check in ${outDir}; build with metadata or build_info`);
 
 const record = { repository: source.repository, commit, files };
 writeFileSync(join(abiDir, 'source.json'), `${JSON.stringify(record, null, 2)}\n`);
 console.log(
-  `sync-abis: ${Object.keys(files).length} ABIs from ${commit} (${checked} sources checked)`
+  `sync-abis: ${Object.keys(files).length} ABIs` +
+    (codes > 0 ? ` and ${codes} creation codes` : '') +
+    ` from ${commit} (${checked} sources checked)`
 );

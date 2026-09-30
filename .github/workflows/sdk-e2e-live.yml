@@ -1,0 +1,93 @@
+name: SDK live e2e (Gnosis)
+
+# The live suite (test/e2e/README.md): eight elections on the Gnosis
+# deployment, through the sequencer nodes of the DAVINCI_E2E_NODES secret.
+# Manual only; it spends the organizer's xDAI. The runner needs Docker and
+# must reach the nodes (a self-hosted runner next to them, or public node
+# URLs). Secrets:
+#   DAVINCI_E2E_NODES          node URLs, comma-separated
+#   DAVINCI_E2E_ORGANIZER_KEY  the organizer's private key (hex)
+#   DAVINCI_SDK_E2E_VOTERS     the voters.json that prepare wrote to the private
+#                              directory; the committed census files are built
+#                              from these keys
+#   DAVINCI_E2E_RPC            optional: Gnosis JSON-RPCs tried first
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner label (Docker, and a route to the nodes)
+        required: true
+        default: self-hosted
+      fixtures_commit:
+        description: Commit whose test/e2e/fixtures are served (default the dispatched one)
+        required: false
+
+permissions:
+  contents: read
+
+# One run at a time: every run spends from one organizer account.
+concurrency:
+  group: sdk-e2e-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live suite on Gnosis
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Write the keys and settings
+        env:
+          NODES: ${{ secrets.DAVINCI_E2E_NODES }}
+          RPC: ${{ secrets.DAVINCI_E2E_RPC }}
+          ORGANIZER_KEY: ${{ secrets.DAVINCI_E2E_ORGANIZER_KEY }}
+          VOTERS: ${{ secrets.DAVINCI_SDK_E2E_VOTERS }}
+          FIXTURES_COMMIT: ${{ inputs.fixtures_commit || github.sha }}
+        run: |
+          for v in NODES ORGANIZER_KEY VOTERS; do
+            if [ -z "${!v}" ]; then
+              echo "::error::a secret is missing: see the header of this workflow"
+              exit 1
+            fi
+          done
+          if ! [[ "$FIXTURES_COMMIT" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "::error::fixtures_commit is not a commit hash"
+            exit 1
+          fi
+          # Each URL on its own is masked in the log, not only the whole list.
+          IFS=, read -ra urls <<< "$NODES,$RPC"
+          for u in "${urls[@]}"; do
+            u="$(echo "$u" | xargs)"
+            [ -n "$u" ] && echo "::add-mask::$u"
+          done
+          dir="$RUNNER_TEMP/sdk-e2e"
+          umask 077
+          mkdir -p "$dir/private"
+          printf '%s\n' "$ORGANIZER_KEY" > "$dir/organizer.key"
+          printf '%s\n' "$VOTERS" > "$dir/private/voters.json"
+          {
+            echo "DAVINCI_E2E_NODES=$NODES"
+            [ -z "$RPC" ] || echo "DAVINCI_E2E_RPC=$RPC"
+            echo "DAVINCI_E2E_ORGANIZER_KEY=$dir/organizer.key"
+            echo "DAVINCI_SDK_E2E_DIR=$dir/private"
+            echo "DAVINCI_SDK_E2E_BASE_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${FIXTURES_COMMIT}/test/e2e/fixtures"
+          } >> "$GITHUB_ENV"
+
+      - name: Circuit files cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/davinci-sdk-e2e/artifacts
+          key: davinci-sdk-e2e-artifacts-${{ hashFiles('src/prover/artifacts.ts') }}
+
+      - name: Live suite
+        run: scripts/e2e-live.sh run
+
+      - name: Remove the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/sdk-e2e"
