@@ -31,15 +31,7 @@
       // deleted. Their type-aware findings are warnings until then; whoever
       // rewrites or deletes a file removes it from this list, and the block
       // goes once the list is empty. New code never goes here.
-      "files": [
-        "src/crypto/BallotBuilder.ts",
-        "src/crypto/ElGamal.ts",
-        "src/sequencer/BallotInputGenerator.ts",
-        "test/core/integration/SimpleProcessCreation.test.ts",
-        "test/crypto/integration/BallotBuilder.test.ts",
-        "test/crypto/integration/Sequencer.test.ts",
-        "test/crypto/unit/ElGamal.test.ts"
-      ],
+      "files": ["test/core/integration/SimpleProcessCreation.test.ts"],
       "rules": {
         "@typescript-eslint/no-floating-promises": "warn",
         "@typescript-eslint/no-misused-promises": "warn",

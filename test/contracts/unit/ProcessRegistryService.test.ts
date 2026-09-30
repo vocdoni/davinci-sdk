@@ -19,6 +19,7 @@ import {
   DeploymentPinError,
   DkgDisabledError,
   KeyMode,
+  LOG_BLOCK_RANGE,
   PROCESS_REGISTRY_ABI,
   ProcessCreateError,
   ProcessDurationError,
@@ -341,6 +342,47 @@ describe('ProcessRegistryService.queryEvents', () => {
     await other.queryEvents({ fromBlock: 5 });
     expect((chain.calls('eth_getLogs')[1].params as Record<string, unknown>[])[0].fromBlock).toBe(
       '0x5'
+    );
+  });
+
+  it('reads in windows public RPCs accept, newest first, and stops when told', async () => {
+    const { registry, chain, wallet } = setup();
+    chain.headBlock = 48_612_345;
+    chain.logRangeCap = LOG_BLOCK_RANGE;
+    chain.logs = [
+      { ...createdLog(PID, wallet.address), block: 48_600_010 },
+      { ...createdLog(PID, wallet.address), block: 48_611_000 },
+    ];
+    // One call over the whole range is refused.
+    await expect(registry.queryEvents({ processId: PID, fromBlock: 48_600_000 })).rejects.toThrow(
+      'max block range'
+    );
+
+    const ranges = () =>
+      chain.calls('eth_getLogs').map(c => {
+        const f = (c.params as { fromBlock: string; toBlock: string }[])[0];
+        return [Number(f.fromBlock), Number(f.toBlock)];
+      });
+    chain.requests.length = 0;
+    const found: number[][] = [];
+    for await (const events of registry.eventWindows({ processId: PID, fromBlock: 48_600_000 })) {
+      found.push(events.map(e => e.blockNumber));
+    }
+    expect(ranges()).toEqual([
+      [48_607_346, 48_612_345],
+      [48_602_346, 48_607_345],
+      [48_600_000, 48_602_345],
+    ]);
+    expect(found).toEqual([[48_611_000], [], [48_600_010]]);
+
+    // Stopping early asks for nothing more.
+    chain.requests.length = 0;
+    for await (const events of registry.eventWindows({ fromBlock: 48_600_000, blockRange: 100 })) {
+      if (events.length === 0) break;
+    }
+    expect(ranges()).toEqual([[48_612_246, 48_612_345]]);
+    await expect(registry.eventWindows({ blockRange: 0 }).next()).rejects.toThrow(
+      'blockRange 0 is not a positive integer'
     );
   });
 });

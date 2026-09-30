@@ -59,8 +59,15 @@ export class MockChain extends JsonRpcProvider {
   broadcastError?: { message: string; keep: boolean };
   /** Receipt of a mined transaction. */
   onMine: (tx: Transaction) => Mined = () => ({ status: 1 });
-  /** Logs `eth_getLogs` answers. */
-  logs: { address: string; topics: string[]; data: string }[] = [];
+  /** Number of the head block. */
+  headBlock = 16;
+  /**
+   * Logs `eth_getLogs` answers. One with a `block` is answered only for a
+   * range that holds it (and carries that number); one without, always.
+   */
+  logs: { address: string; topics: string[]; data: string; block?: number }[] = [];
+  /** Refuses an `eth_getLogs` over more blocks than this, as capped public RPCs do. */
+  logRangeCap?: number;
 
   private readonly contracts = new Map<
     string,
@@ -119,10 +126,10 @@ export class MockChain extends JsonRpcProvider {
       case 'eth_chainId':
         return toQuantity(this.chainId);
       case 'eth_blockNumber':
-        return '0x10';
+        return toQuantity(this.headBlock);
       case 'eth_getBlockByNumber':
         return {
-          number: '0x10',
+          number: toQuantity(this.headBlock),
           hash: BLOCK_HASH,
           parentHash: ZeroHash,
           timestamp: toQuantity(this.headTime),
@@ -154,7 +161,7 @@ export class MockChain extends JsonRpcProvider {
       case 'eth_getTransactionReceipt':
         return this.receiptJson(String(params[0]));
       case 'eth_getLogs':
-        return this.logs.map((l, i) => this.logJson(l, i, `0x${'cc'.repeat(32)}`));
+        return this.logsIn(params[0] as { fromBlock?: string; toBlock?: string });
       default:
         throw new RpcError(-32601, `method ${method} not found`);
     }
@@ -219,8 +226,21 @@ export class MockChain extends JsonRpcProvider {
     };
   }
 
+  private logsIn(filter: { fromBlock?: string; toBlock?: string }): unknown[] {
+    const block = (tag: string | undefined, dflt: number) =>
+      tag === undefined || tag === 'latest' ? dflt : Number(BigInt(tag));
+    const from = block(filter.fromBlock, 0);
+    const to = block(filter.toBlock, this.headBlock);
+    if (this.logRangeCap !== undefined && to - from + 1 > this.logRangeCap) {
+      throw new RpcError(-32005, `query exceeds max block range ${this.logRangeCap}`);
+    }
+    return this.logs
+      .filter(l => l.block === undefined || (l.block >= from && l.block <= to))
+      .map((l, i) => this.logJson(l, i, `0x${'cc'.repeat(32)}`));
+  }
+
   private logJson(
-    l: { address: string; topics: readonly string[]; data: string },
+    l: { address: string; topics: readonly string[]; data: string; block?: number },
     i: number,
     txHash: string
   ): unknown {
@@ -228,7 +248,7 @@ export class MockChain extends JsonRpcProvider {
       address: l.address,
       topics: l.topics,
       data: l.data,
-      blockNumber: '0x11',
+      blockNumber: toQuantity(l.block ?? 0x11),
       blockHash: BLOCK_HASH,
       transactionHash: txHash,
       transactionIndex: '0x0',

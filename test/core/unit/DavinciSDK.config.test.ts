@@ -18,7 +18,7 @@ import {
   TxStatus,
   ZISK_VERIFIER_ABI,
 } from '../../../src/contracts';
-import { CensusOrigin, PublishedCensus } from '../../../src/census';
+import { CensusOrigin, OffchainCensus, PublishedCensus } from '../../../src/census';
 import { bjjMulBase } from '../../../src/crypto';
 import {
   FailoverRpcProvider,
@@ -32,7 +32,10 @@ import {
   NodeMismatchError,
   SequencerError,
   SequencerUnavailableError,
+  decodeVoteRequest,
+  pickNode,
   type SequencerInfo,
+  type VoteRequest,
 } from '../../../src/sequencer';
 import { buildElectionMetadata, serializeMetadata } from '../../../src/core';
 import { DocumentHost } from '../../helpers/documentHost';
@@ -861,5 +864,176 @@ describe('DavinciSDK organizer controls', () => {
     for await (const e of sdk.setProcessGraceStream(pid, 10)) events.push(e);
     expect(events).toHaveLength(1);
     expect(events[0].status).toBe(TxStatus.Failed);
+  });
+});
+
+describe('DavinciSDK voting', () => {
+  const VOTER_KEY = `0x${'23'.repeat(32)}`;
+  const view = (root: string) => ({
+    id: PID,
+    status: 'ready',
+    isAcceptingVotes: true,
+    organizationId: `0x${'aa'.repeat(20)}`,
+    encryptionKey: { x: KEY_POINT.x.toString(), y: KEY_POINT.y.toString() },
+    ballotMode: {
+      numFields: 2,
+      groupSize: 1,
+      uniqueValues: false,
+      costExponent: 1,
+      maxValue: '5',
+      minValue: '0',
+      maxValueSum: '10',
+      minValueSum: '0',
+    },
+    census: { censusOrigin: 1, censusRoot: BigInt(root).toString(), censusURI: 'https://c.test' },
+    stateRoot: `0x${'04'.repeat(32)}`,
+    synced: true,
+    votersCount: 0,
+    overwrittenVotesCount: 0,
+    maxVoters: 100,
+    startTime: 1_700_000_000,
+    duration: 3600,
+  });
+
+  // A voter with a bare wallet, a Merkle census holding it, and two nodes that take votes.
+  async function voterSdk(status = ProcessStatus.READY) {
+    const signer = new Wallet(VOTER_KEY);
+    const census = new OffchainCensus();
+    census.add([{ key: signer.address, weight: 2 }, `0x${'01'.repeat(20)}`]);
+    const root = await census.root();
+    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+      getProcess: () => [
+        {
+          ...onchainProcess(),
+          status,
+          census: { ...(onchainProcess().census as object), censusRoot: root },
+          result: status === ProcessStatus.RESULTS ? [4n, 6n] : [],
+          votersCount: 2n,
+        },
+      ],
+    });
+    rpcRoutes({ 'rpc.test': chain });
+    const posted: VoteRequest[] = [];
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+      const path = url.pathname;
+      const reply = (body: unknown, code = 200) =>
+        new Response(JSON.stringify(body), { status: code });
+      if (path === '/info') {
+        return reply({
+          sequencerAddress: '0x70debac0bf6fcc5f99646fcbcffb6d8267184dec',
+          chainId: 100,
+          processRegistry: GNOSIS.processRegistry,
+          ballotVkHash: RELEASE_PINS.ballotVKHash,
+          batchProgramVk: RELEASE_PINS.batchProgramVK,
+          resultsProgramVk: RELEASE_PINS.resultsProgramVK,
+          observer: false,
+          settledBySelf: 0,
+          syncedFromOthers: 0,
+          lostRaces: 0,
+        });
+      }
+      if (path === `/processes/${PID}`) return reply(view(root));
+      if (path === `/processes/${PID}/participants/${signer.address.toLowerCase()}`) {
+        const p = await census.proof(signer.address);
+        return reply({
+          address: signer.address.toLowerCase(),
+          weight: '2',
+          censusProof: {
+            root: p.root.toString(),
+            leaf: p.leaf.toString(),
+            pathBits: Number(p.pathBits),
+            siblings: p.siblings.map(String),
+          },
+        });
+      }
+      if (path === '/votes' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { voteId: string };
+        posted.push(decodeVoteRequest(body));
+        return reply({ voteId: body.voteId });
+      }
+      if (path.startsWith(`/votes/${PID}/voteId/`)) return reply({ status: 'settled' });
+      return reply({ error: 'not found', code: 40401 }, 404);
+    }) as typeof fetch;
+    const sdk = new DavinciSDK({
+      signer,
+      sequencerUrls: [A, B],
+      rpcUrls: ['https://rpc.test'],
+      verifyDeployment: VERIFY,
+      sequencerConfig: { fetchImpl },
+    });
+    await sdk.init();
+    const prove = vi.spyOn(sdk.ballotProver, 'prove').mockImplementation(ballot =>
+      Promise.resolve({
+        proof: {
+          pi_a: ['1', '2', '1'],
+          pi_b: [
+            ['1', '0'],
+            ['1', '0'],
+            ['1', '0'],
+          ],
+          pi_c: ['1', '2', '1'],
+          protocol: 'groth16',
+        },
+        publicSignals: ballot.publicSignals.map(String) as [string, string, string],
+      })
+    );
+    return { sdk, signer, posted, prove };
+  }
+
+  it('casts a vote with a bare wallet, proving under the registry key', async () => {
+    const { sdk, signer, posted, prove } = await voterSdk();
+    const vote = await sdk.submitVote({ processId: PID, choices: [2, 3] });
+    expect(vote).toMatchObject({ processId: PID, voterAddress: signer.address, weight: 2n });
+    expect(prove).toHaveBeenCalledWith(expect.anything(), RELEASE_PINS.ballotVKHash);
+    expect(posted).toHaveLength(1);
+    expect(posted[0].weight).toBe(2n);
+    expect(pickNode(signer.address, PID, [A, B])[0]).toBe(vote.node);
+
+    const status = await sdk.getVoteStatus(PID, vote.voteId);
+    expect(status).toMatchObject({ status: 'settled', node: vote.node });
+    expect((await sdk.waitForVoteStatus(PID, vote.voteId)).status).toBe('settled');
+    expect(await sdk.getAddressWeight(PID, signer.address)).toBe(2n);
+    expect(await sdk.isAddressAbleToVote(PID, `0x${'02'.repeat(20)}`)).toBe(false);
+  });
+
+  it('reads the results of a process through the voter orchestration', async () => {
+    const { sdk } = await voterSdk(ProcessStatus.RESULTS);
+    const status = await sdk.getResultsStatus(PID);
+    expect(status.state).toBe('results');
+    const results = await sdk.waitForResults(PID);
+    expect(results.values).toEqual([4n, 6n]);
+    expect(results.questions[0].choices.map(c => c.mean)).toEqual([2, 3]);
+  });
+
+  it('refuses a process of another registry in every voter call', async () => {
+    const { sdk } = await voterSdk();
+    const other = pidWith('0x01020304');
+    const vid = `0x8${'0'.repeat(15)}`;
+    const refused = 'was not created by the gnosis registry';
+    await expect(sdk.submitVote({ processId: other, choices: [1] })).rejects.toThrow(refused);
+    await expect(sdk.getVoteStatus(other, vid)).rejects.toThrow(refused);
+    await expect(sdk.waitForVoteStatus(other, vid)).rejects.toThrow(refused);
+    await expect(sdk.getVoteReceipt(other, vid)).rejects.toThrow(refused);
+    await expect(sdk.hasAddressVoted(other, A)).rejects.toThrow(refused);
+    await expect(sdk.isAddressAbleToVote(other, A)).rejects.toThrow(refused);
+    await expect(sdk.getAddressWeight(other, A)).rejects.toThrow(refused);
+    await expect(sdk.getResultsStatus(other)).rejects.toThrow(refused);
+    await expect(sdk.waitForResults(other)).rejects.toThrow(refused);
+    expect(() => sdk.watchVoteStatus(other, vid)).toThrow(refused);
+    // Finalizing is a transaction: the voter's bare wallet cannot send it.
+    await expect(sdk.finalizeResults(PID)).rejects.toThrow('Provider required');
+  });
+
+  it('finalizes DKG results from an organizer signer', async () => {
+    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+      finalizeResultsFromDKG: () => [],
+    });
+    const { sdk } = sdkWith({ signer: new Wallet(KEY, chain) });
+    await expect(sdk.finalizeResults(PID)).rejects.toThrow('SDK must be initialized');
+    await sdk.init();
+    await sdk.finalizeResults(PID);
+    const tx = new Interface(PROCESS_REGISTRY_ABI).parseTransaction({ data: chain.sent[0].data });
+    expect([tx?.name, tx?.args[0]]).toEqual(['finalizeResultsFromDKG', PID]);
   });
 });

@@ -6,7 +6,6 @@ import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { DeploymentPinError } from './contracts/errors';
 import { SmartContractService, type TxStatusEvent } from './contracts/SmartContractService';
 import type { GraceParams } from './contracts/types';
-import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
   ProcessOrchestrationService,
   ProcessConfig,
@@ -19,7 +18,17 @@ import {
   type DurationChange,
   type MetadataUpdate,
 } from './core/process';
-import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
+import {
+  VoteOrchestrationService,
+  type ProcessResults,
+  type ResultsStatus,
+  type VoteConfig,
+  type VoteReceipt,
+  type VoteResult,
+  type VoteStatusInfo,
+  type VoteStatusWaitOptions,
+  type WaitForResultsOptions,
+} from './core/vote';
 import { VoteStatus, type SequencerInfo } from './sequencer/api/types';
 import { checkNodeInfo, type NodeExpectation } from './sequencer/api/helpers';
 import { SequencerApiError, SequencerNetworkError, SequencerError } from './sequencer/errors';
@@ -215,7 +224,6 @@ export class DavinciSDK {
   private _nodeChecks: readonly NodeCheck[] = [];
   // The signer provider's chain as init() saw it; undefined without a provider.
   private signerChainId?: bigint;
-  private ballotInputGenerator?: BallotInputGenerator;
   private initialized = false;
   private initializing?: Promise<void>;
   private censusProviders: CensusProviders;
@@ -502,18 +510,6 @@ export class DavinciSDK {
   }
 
   /**
-   * Get or initialize the BallotInputGenerator service for ballot input generation
-   */
-  async getBallotInputGenerator(): Promise<BallotInputGenerator> {
-    if (!this.ballotInputGenerator) {
-      this.ballotInputGenerator = new BallotInputGenerator();
-      await this.ballotInputGenerator.init();
-    }
-
-    return this.ballotInputGenerator;
-  }
-
-  /**
    * Get the process orchestration service for simplified process creation.
    * Requires `init()` and a signer with a provider for blockchain interactions.
    *
@@ -543,17 +539,19 @@ export class DavinciSDK {
   }
 
   /**
-   * Get the vote orchestration service for simplified voting; after `init()`.
+   * The voter's side, after `init()`: votes, their status and receipts,
+   * census membership and results. It reads the registry through the read
+   * provider and proves with {@link ballotProver}.
    */
   get voteOrchestrator(): VoteOrchestrationService {
     this.requireInit('voting');
-    this._voteOrchestrator ??= new VoteOrchestrationService(
-      this.api,
-      () => this.getBallotInputGenerator(),
-      this.signer,
-      this.censusProviders,
-      { verifyProof: this.settings.verifyProof }
-    );
+    this._voteOrchestrator ??= new VoteOrchestrationService(this.registry, this.api, this.signer, {
+      prove: ballot => this.proveBallot(ballot),
+      provider: this.provider,
+      censusProviders: this.censusProviders,
+      documents: this.documents,
+      writer: () => this.processes,
+    });
     return this._voteOrchestrator;
   }
 
@@ -722,243 +720,282 @@ export class DavinciSDK {
   }
 
   /**
-   * Submit a vote with simplified configuration.
-   * This is the ultra-easy method for end users that handles all the complex voting workflow internally.
+   * Casts a vote for the signer. A bare `Wallet` is enough: the election is
+   * read through the SDK's read provider.
    *
-   * Does NOT require a provider - can be used with a bare Wallet for signing only.
+   * 1. The process is read from the registry (never from a node) and must
+   *    take votes: from its start to its end, READY or PAUSED (a paused
+   *    process's votes settle once it resumes). It is cross-checked with the
+   *    view of the voter's node.
+   * 2. The voter's census witness: the nodes' proof for a static or
+   *    updatable Merkle census (at the registry's root), the census
+   *    contract's weight for an on-chain census, or the CSP's attestation
+   *    from `censusProviders.csp` for a CSP census.
+   * 3. The choices are checked against the ballot mode, then the 16-field
+   *    ballot is built under the registry's key, proved (the circuit files
+   *    are downloaded once and checked) and its vote id signed.
+   * 4. It goes to the voter's node (`pickNode`), failing over only when that
+   *    is safe. A revote goes to the node that took the voter's previous
+   *    ballot, so it queues behind it. This SDK remembers that node in memory
+   *    only: an app that reloads, or revotes from another tab or device,
+   *    stores {@link VoteResult.node} and passes it back as `node`.
    *
-   * The method automatically:
-   * - Fetches process information and validates voting is allowed
-   * - Gets census proof (Merkle tree based)
-   * - Generates cryptographic proofs and encrypts the vote
-   * - Signs and submits the vote to the sequencer
+   * Nodes batch votes, so a vote is `pending` for a while (minutes to a
+   * quarter of an hour on default nodes, until shortly before the end);
+   * follow it with {@link watchVoteStatus}.
    *
-   * @param config - Simplified vote configuration
-   * @returns Promise resolving to vote submission result
+   * @param config - The process, the choices (one value per ballot field),
+   *   and optionally the previous ballot's node and the ballot secret `k`
+   *   (random by default; a given one must be a random field element, and
+   *   one below 2^128 is refused)
+   * @returns The vote id, the node that took it, the weight, and the ballot
+   *   secret `k` (it opens the ballot: keep it private)
+   * @throws VoteError with a `reason`: `not-in-census`, `not-started`,
+   *   `closed`, `invalid` (choices outside the ballot mode, or a protocol
+   *   check), `duplicate`, `slot-busy` (retry once the voter's queued ballots
+   *   settle), `max-voters`, `busy` (retry shortly), `unavailable`
+   * @throws RangeError for a ballot secret `k` below 2^128
+   * @throws CensusWitnessError for a CSP census without `censusProviders.csp`,
+   *   or an attestation that is not the voter's
+   * @throws ArtifactError or BallotProofError when the ballot cannot be proved
    *
    * @example
    * ```typescript
-   * // Submit a vote with voter's private key
-   * const voteResult = await sdk.submitVote({
-   *   processId: "0x1234567890abcdef...",
-   *   choices: [1, 0], // Vote for option 1 in question 1, option 0 in question 2
-   *   voterKey: "0x1234567890abcdef..." // Voter's private key
-   * });
-   *
-   * console.log("Vote ID:", voteResult.voteId);
-   * console.log("Status:", voteResult.status);
-   *
-   * // Submit a vote with a Wallet instance
-   * import { Wallet } from "ethers";
-   * const voterWallet = new Wallet("0x...");
-   *
-   * const voteResult2 = await sdk.submitVote({
-   *   processId: "0x1234567890abcdef...",
-   *   choices: [2], // Single question vote
-   *   voterKey: voterWallet
-   * });
+   * const vote = await sdk.submitVote({ processId, choices: [0, 1, 0] });
+   * console.log(vote.voteId, vote.node);
+   * try {
+   *   await sdk.submitVote({ processId, choices: [1, 0, 0] }); // a revote
+   * } catch (err) {
+   *   if (err instanceof VoteError && err.reason === 'slot-busy') {
+   *     // the earlier ballots are still queued: try again later
+   *   }
+   * }
    * ```
    */
   async submitVote(config: VoteConfig): Promise<VoteResult> {
     this.requireInit('submitting votes');
-
+    this.checkProcessId(config.processId);
     return this.voteOrchestrator.submitVote(config);
   }
 
   /**
-   * Get the status of a submitted vote.
-   *
-   * Does NOT require a provider - uses API calls only.
+   * The status of a vote and the node that reports it: the node that took
+   * it is asked first. A vote in `error` carries the node's reason (`process
+   * closed`, `census changed, recast`, a guest check).
    *
    * @param processId - The process ID
    * @param voteId - The vote ID returned from submitVote()
-   * @returns Promise resolving to vote status information
+   * @param node - The node that took the vote; default the one this SDK sent it to
    *
    * @example
    * ```typescript
-   * const statusInfo = await sdk.getVoteStatus(processId, voteId);
-   * console.log("Vote status:", statusInfo.status);
-   * // Possible statuses: "pending", "aggregated", "processed", "settled", "error"
+   * const { status, error, node } = await sdk.getVoteStatus(processId, voteId);
+   * // "pending", "aggregated", "processed", "settled" or "error"
    * ```
    */
-  async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
+  async getVoteStatus(processId: string, voteId: string, node?: string): Promise<VoteStatusInfo> {
     this.requireInit('getting vote status');
-
-    return this.voteOrchestrator.getVoteStatus(processId, voteId);
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.getVoteStatus(processId, voteId, node);
   }
 
   /**
-   * Check if an address has voted in a process.
-   *
-   * Does NOT require a provider - uses API calls only.
-   *
-   * @param processId - The process ID
-   * @param address - The voter's address
-   * @returns Promise resolving to boolean indicating if the address has voted
+   * Whether a ballot sits in the address's slot: its vote settled. Every node
+   * is asked. For a CSP census only the nodes that took the voter's ballot
+   * know its slot, so every node must answer.
    *
    * @example
    * ```typescript
-   * const hasVoted = await sdk.hasAddressVoted(processId, "0x1234567890abcdef...");
-   * if (hasVoted) {
-   *   console.log("This address has already voted");
-   * }
+   * if (await sdk.hasAddressVoted(processId, address)) console.log('already voted');
    * ```
    */
   async hasAddressVoted(processId: string, address: string): Promise<boolean> {
     this.requireInit('checking vote status');
-
+    this.checkProcessId(processId);
     return this.voteOrchestrator.hasAddressVoted(processId, address);
   }
 
   /**
-   * Check if an address is able to vote in a process (i.e., is in the census).
-   *
-   * Does NOT require a provider - uses API calls only.
-   *
-   * @param processId - The process ID
-   * @param address - The voter's address
-   * @returns Promise resolving to boolean indicating if the address can vote
+   * Whether an address can vote: a member of the process's census. A Merkle
+   * census is asked of the nodes (their proof must be at the registry's
+   * root), an on-chain census of its contract, and a CSP census of
+   * `censusProviders.csp` (its errors propagate).
    *
    * @example
    * ```typescript
-   * const canVote = await sdk.isAddressAbleToVote(processId, "0x1234567890abcdef...");
-   * if (canVote) {
-   *   console.log("This address can vote");
-   * } else {
-   *   console.log("This address is not in the census");
-   * }
+   * const canVote = await sdk.isAddressAbleToVote(processId, address);
    * ```
    */
   async isAddressAbleToVote(processId: string, address: string): Promise<boolean> {
     this.requireInit('checking if address can vote');
-
-    return this.api.nodes.firstAnswer(n => n.isAddressAbleToVote(processId, address));
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.isAddressAbleToVote(processId, address);
   }
 
   /**
-   * Get the voting weight for an address in a process.
-   *
-   * Does NOT require a provider - uses API calls only.
-   *
-   * @param processId - The process ID
-   * @param address - The voter's address
-   * @returns Promise resolving to the address weight as a string
+   * The census weight an address votes with; 0 for a non-member. When the
+   * ballot mode's `maxValueSum` is 0 it is the voter's budget.
    *
    * @example
    * ```typescript
-   * const weight = await sdk.getAddressWeight(processId, "0x1234567890abcdef...");
-   * console.log("Address weight:", weight);
+   * const weight = await sdk.getAddressWeight(processId, address); // bigint
    * ```
    */
-  async getAddressWeight(processId: string, address: string): Promise<string> {
+  async getAddressWeight(processId: string, address: string): Promise<bigint> {
     this.requireInit('getting address weight');
-
-    const weight = await this.api.nodes.firstAnswer(n => n.getAddressWeight(processId, address));
-    return weight.toString();
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.getAddressWeight(processId, address);
   }
 
   /**
-   * Watch vote status changes in real-time using an async generator.
-   * This method yields each status change as it happens, perfect for showing
-   * progress indicators in UI applications.
+   * Follows a vote's status, yielding each change, until it reaches the
+   * target (default `settled`; a later step counts too) or `error`.
    *
-   * Does NOT require a provider - uses API calls only.
+   * By default the wait lasts until the process's grace window closes, plus
+   * a few minutes: by then every vote cast before the end has settled or
+   * failed (`process closed`). Nodes batch votes every few minutes to a
+   * quarter of an hour, and flush them from shortly before the end.
    *
-   * @param processId - The process ID
-   * @param voteId - The vote ID
-   * @param options - Optional configuration
-   * @returns AsyncGenerator yielding vote status updates
+   * @throws VoteError `timeout` when the wait runs out
    *
    * @example
    * ```typescript
-   * // Submit vote
-   * const voteResult = await sdk.submitVote({
-   *   processId: "0x1234567890abcdef...",
-   *   choices: [1]
-   * });
-   *
-   * // Watch status changes in real-time
-   * for await (const statusInfo of sdk.watchVoteStatus(voteResult.processId, voteResult.voteId)) {
-   *   console.log(`Vote status: ${statusInfo.status}`);
-   *
-   *   switch (statusInfo.status) {
-   *     case VoteStatus.Pending:
-   *       console.log("⏳ Processing...");
-   *       break;
-   *     case VoteStatus.Aggregated:
-   *       console.log("📊 Vote aggregated");
-   *       break;
-   *     case VoteStatus.Settled:
-   *       console.log("✅ Vote settled");
-   *       break;
-   *   }
+   * for await (const s of sdk.watchVoteStatus(processId, voteId)) {
+   *   console.log(s.status, s.error ?? '');
    * }
    * ```
    */
   watchVoteStatus(
     processId: string,
     voteId: string,
-    options?: {
-      targetStatus?: VoteStatus;
-      timeoutMs?: number;
-      pollIntervalMs?: number;
-    }
-  ) {
+    options: VoteStatusWaitOptions = {}
+  ): AsyncGenerator<VoteStatusInfo> {
     this.requireInit('watching vote status');
-
+    this.checkProcessId(processId);
     return this.voteOrchestrator.watchVoteStatus(processId, voteId, options);
   }
 
   /**
-   * Wait for a vote to reach a specific status.
-   * This is a simpler alternative to watchVoteStatus() that returns only the final status.
-   * Useful for waiting for vote confirmation and processing without needing to handle each intermediate status.
+   * {@link watchVoteStatus}, returning the last status: the target (or a
+   * later step), or `error` with its reason.
    *
-   * Does NOT require a provider - uses API calls only.
-   *
-   * @param processId - The process ID
-   * @param voteId - The vote ID
-   * @param targetStatus - The target status to wait for (default: "settled")
-   * @param timeoutMs - Maximum time to wait in milliseconds (default: 300000 = 5 minutes)
-   * @param pollIntervalMs - Polling interval in milliseconds (default: 5000 = 5 seconds)
-   * @returns Promise resolving to final vote status
+   * @param targetStatus - Default `settled`
+   * @param timeoutMs - Default: until the grace window closes, plus a few minutes
+   * @param pollIntervalMs - Default 5 s
+   * @throws VoteError `timeout` when the wait runs out
    *
    * @example
    * ```typescript
-   * // Submit vote and wait for it to be settled
-   * const voteResult = await sdk.submitVote({
-   *   processId: "0x1234567890abcdef...",
-   *   choices: [1]
-   * });
-   *
-   * // Wait for the vote to be fully processed
-   * const finalStatus = await sdk.waitForVoteStatus(
-   *   voteResult.processId,
-   *   voteResult.voteId,
-   *   VoteStatus.Settled, // Wait until vote is settled
-   *   300000,    // 5 minute timeout
-   *   5000       // Check every 5 seconds
-   * );
-   *
-   * console.log("Vote final status:", finalStatus.status);
+   * const final = await sdk.waitForVoteStatus(processId, voteId);
+   * if (final.status === VoteStatus.Error) console.error(final.error);
    * ```
    */
   async waitForVoteStatus(
     processId: string,
     voteId: string,
     targetStatus: VoteStatus = VoteStatus.Settled,
-    timeoutMs: number = 300000,
-    pollIntervalMs: number = 5000
+    timeoutMs?: number,
+    pollIntervalMs?: number
   ): Promise<VoteStatusInfo> {
     this.requireInit('waiting for vote status');
-
-    return this.voteOrchestrator.waitForVoteStatus(
-      processId,
-      voteId,
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.waitForVoteStatus(processId, voteId, {
       targetStatus,
       timeoutMs,
-      pollIntervalMs
+      pollIntervalMs,
+    });
+  }
+
+  /**
+   * A settled vote's receipt (recorded-as-cast): a node's tracker proof that
+   * the vote id is in the process's state, checked against the registry's
+   * latest state root, or a root of one of its transitions.
+   *
+   * @param node - The node to ask first; default the one that took the vote
+   * @throws VoteReceiptError when no node holds the vote yet (it has not
+   *   settled), or the proof reaches no state root of the process
+   *
+   * @example
+   * ```typescript
+   * const receipt = await sdk.getVoteReceipt(processId, voteId);
+   * console.log(receipt.root, receipt.latest);
+   * ```
+   */
+  async getVoteReceipt(processId: string, voteId: string, node?: string): Promise<VoteReceipt> {
+    this.requireInit('getting vote receipts');
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.getVoteReceipt(processId, voteId, node);
+  }
+
+  /**
+   * Where a process stands on the way to its results: `voting`, `grace`
+   * (past the end, batches still land), `awaiting-key-holder` (a sequencer
+   * key), `awaiting-request`, `locked` (a DKG-locked key not revealed),
+   * `decrypting` or `finalizable` (a DKG committee), `results` (decoded in
+   * `results`) or `canceled`.
+   */
+  async getResultsStatus(processId: string): Promise<ResultsStatus> {
+    this.requireInit('reading results');
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.getResultsStatus(processId);
+  }
+
+  /**
+   * Waits for a process's results and returns them decoded per ballot kind.
+   * Results unlock when the grace window after the end closes (see
+   * `getGraceEnd`; every late landing pushes it out). Then the node holding a
+   * sequencer key publishes them, usually within a couple of minutes, or a
+   * DKG committee decrypts them in 1 to 5 more; a DKG-locked key first needs
+   * the organizer's `revealProcessKey`.
+   *
+   * By default it waits until the grace window closes, plus 15 minutes.
+   * `finalize: true` sends the permissionless `finalizeResultsFromDKG` from
+   * the signer (which pays its gas) when the committee's plaintexts are
+   * ready but no node stored them.
+   *
+   * @throws ResultsError `canceled`, `locked` (unless `waitForReveal`) or `timeout`
+   *
+   * @example
+   * ```typescript
+   * const results = await sdk.waitForResults(processId, {
+   *   onStatus: s => console.log(s.state),
+   * });
+   * for (const c of results.questions[0].choices) console.log(c.title, c.total);
+   * ```
+   */
+  async waitForResults(
+    processId: string,
+    options: WaitForResultsOptions = {}
+  ): Promise<ProcessResults> {
+    this.requireInit('waiting for results');
+    this.checkProcessId(processId);
+    return this.voteOrchestrator.waitForResults(processId, options);
+  }
+
+  /**
+   * Stores a DKG process's decrypted tally (`finalizeResultsFromDKG`) and
+   * returns an async generator of transaction status events. Anyone may
+   * send it once the committee's plaintexts are ready; nodes normally do
+   * within seconds. The registry refuses it before the grace end
+   * (`GraceOpen`) and before the committee is done (`ResultsNotReady`).
+   *
+   * @throws Error when the stream is first read, before any event: the SDK is
+   *   not initialized, the process id is not the network's, or the signer has
+   *   no provider or is on another chain. Refusals come as `Failed` events.
+   */
+  finalizeResultsStream(processId: string): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    return this.organizerStream('finalizing results', processId, () =>
+      this.processes.finalizeResultsFromDKG(processId)
     );
+  }
+
+  /**
+   * {@link finalizeResultsStream}, waiting for the transaction.
+   *
+   * @throws ProcessResultError, with the registry error in `revertName`
+   */
+  async finalizeResults(processId: string): Promise<void> {
+    await SmartContractService.executeTx(this.finalizeResultsStream(processId));
   }
 
   // An organizer stream: init, the signer's chain and the process id checked first.

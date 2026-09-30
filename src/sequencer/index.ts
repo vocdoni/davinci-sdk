@@ -4,5 +4,3 @@ export * from './routing';
 export * from './SequencerService';
 export * from './SequencerNodes';
 export * from './types';
-
-export { BallotInputGenerator } from './BallotInputGenerator';

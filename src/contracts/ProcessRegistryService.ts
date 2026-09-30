@@ -22,6 +22,7 @@ import {
 } from './SmartContractService';
 import {
   DAVINCI_DKG_ADAPTER_ABI,
+  DKG_APP_MANAGER_ABI,
   PROCESS_REGISTRY_ABI,
   ZISK_VERIFIER_ABI,
   type DavinciErrorDescription,
@@ -50,6 +51,7 @@ import {
   type DkgParams,
   type GraceParams,
   type NewProcessParams,
+  type OnchainDkg,
   type OnchainProcess,
   type ProcessCensusUpdatedCallback,
   type ProcessCreatedCallback,
@@ -74,6 +76,12 @@ import { NETWORKS } from '../networks';
 
 /** Seconds a shortened end leaves past the notice for the transaction's own inclusion. */
 export const SHORTEN_SLACK_SECONDS = 45;
+
+/**
+ * Blocks per `eth_getLogs` of {@link ProcessRegistryService.eventWindows}:
+ * under the caps of public RPCs (Gnosis providers commonly allow 10,000).
+ */
+export const LOG_BLOCK_RANGE = 5_000;
 
 const registryInterface = new Interface(PROCESS_REGISTRY_ABI);
 
@@ -633,6 +641,52 @@ export class ProcessRegistryService extends SmartContractService {
   }
 
   /**
+   * The committee's decryption of a DKG process's tally
+   * (`adapter.plaintexts`): `ready` once every ciphertext the decryption
+   * request submitted is combined, and then the plaintexts in submission
+   * order. A request with no active field submitted none, so it is ready with
+   * none. `finalizeResultsFromDKG` stores them.
+   *
+   * @param dkg - The process's `dkg` (`getProcess`), after the request
+   * @throws DkgDisabledError on a registry without DKG
+   */
+  async getDkgPlaintexts(dkg: OnchainDkg): Promise<{ ready: boolean; values: bigint[] }> {
+    if (dkg.count === 0) return { ready: true, values: [] };
+    const adapter = await this.adapter('plaintexts');
+    const r = tuple(
+      await adapter
+        .getFunction('plaintexts')
+        .staticCallResult(dkg.epochId, dkg.aid, dkg.firstIndex, dkg.count),
+      'plaintexts'
+    );
+    return {
+      ready: bool(field(r, 'ready'), 'ready'),
+      values: tuple(field(r, 'values'), 'values').map((v, i) => big(v, `values[${i}]`)),
+    };
+  }
+
+  /**
+   * Whether the organizer of a DKG_LOCKED process revealed its secret
+   * (`revealProcessKey`), read from the DKG application manager: the
+   * committee combines nothing before. Always false for DKG_AUTOMATIC.
+   *
+   * @param dkg - The process's `dkg` (`getProcess`)
+   * @throws DkgDisabledError on a registry without DKG
+   */
+  async isProcessKeyRevealed(dkg: OnchainDkg): Promise<boolean> {
+    const adapter = await this.adapter('appManager');
+    const manager = getAddress(
+      text(await adapter.getFunction('appManager').staticCall(), 'appManager')
+    );
+    const apps = new Contract(manager, DKG_APP_MANAGER_ABI, this.contract.runner);
+    const app = tuple(
+      await apps.getFunction('getApplication').staticCall(dkg.epochId, dkg.aid),
+      'application'
+    );
+    return big(field(app, 'organizerSecret'), 'organizerSecret') !== 0n;
+  }
+
+  /**
    * Checks the registry settles what this SDK release proves and verifies,
    * as the Rust organizer does before trusting a deployment: the batch and
    * results program vks, `rootCVadcopFinal` and the ballot VK hash equal the
@@ -680,40 +734,71 @@ export class ProcessRegistryService extends SmartContractService {
     return { chainId, verifier, dkgAdapter };
   }
 
+  // The deployment block of a known network's registry, when `fromBlock` is not given.
+  private async startBlock(fromBlock: number | undefined, what: string): Promise<number> {
+    if (fromBlock !== undefined) return fromBlock;
+    const { chainId } = await this.provider().getNetwork();
+    const known = NETWORKS.find(
+      n =>
+        BigInt(n.chainId) === chainId &&
+        n.processRegistry.toLowerCase() === this.address.toLowerCase()
+    )?.startBlock;
+    if (known === undefined) {
+      throw new Error(`${what}: fromBlock is required for a registry outside the known networks`);
+    }
+    return known;
+  }
+
   /**
    * The registry events of a block range, optionally of one process, decoded
    * and in order. `fromBlock` defaults to the deployment block of a known
    * network's registry and is required for any other registry. The range is
    * one `eth_getLogs` call: public RPCs cap it, so narrow it to the process's
-   * `creationBlock` onwards for long-lived deployments.
+   * `creationBlock` onwards, or use {@link eventWindows}.
    */
   async queryEvents(
     options: { processId?: string; fromBlock?: number; toBlock?: number | 'latest' } = {}
   ): Promise<RegistryEvent[]> {
-    const provider = this.provider();
-    let fromBlock = options.fromBlock;
-    if (fromBlock === undefined) {
-      const { chainId } = await provider.getNetwork();
-      fromBlock = NETWORKS.find(
-        n =>
-          BigInt(n.chainId) === chainId &&
-          n.processRegistry.toLowerCase() === this.address.toLowerCase()
-      )?.startBlock;
-      if (fromBlock === undefined) {
-        throw new Error(
-          'queryEvents: fromBlock is required for a registry outside the known networks'
-        );
-      }
-    }
+    const fromBlock = await this.startBlock(options.fromBlock, 'queryEvents');
     // An indexed bytes31 is its 31 bytes padded on the right.
     const topic = options.processId ? zeroPadBytes(normalizePid(options.processId), 32) : null;
-    const logs = await provider.getLogs({
+    const logs = await this.provider().getLogs({
       address: this.address,
       fromBlock,
       toBlock: options.toBlock ?? 'latest',
       topics: topic ? [null, topic] : undefined,
     });
     return parseRegistryLogs(logs, this.address);
+  }
+
+  /**
+   * {@link queryEvents} in windows of `blockRange` blocks (default
+   * {@link LOG_BLOCK_RANGE}), newest window first, from `toBlock` (default the
+   * head) down to `fromBlock`: public RPCs cap the range of one `eth_getLogs`.
+   * Each window's events are in order; stop iterating once found.
+   *
+   * @example
+   * ```typescript
+   * for await (const events of registry.eventWindows({ processId, fromBlock })) {
+   *   const found = events.find(e => e.name === 'ProcessResultsSet');
+   *   if (found) break;
+   * }
+   * ```
+   */
+  async *eventWindows(
+    options: { processId?: string; fromBlock?: number; toBlock?: number; blockRange?: number } = {}
+  ): AsyncGenerator<RegistryEvent[], void, unknown> {
+    const range = options.blockRange ?? LOG_BLOCK_RANGE;
+    if (!Number.isSafeInteger(range) || range < 1) {
+      throw new RangeError(`blockRange ${String(range)} is not a positive integer`);
+    }
+    const fromBlock = await this.startBlock(options.fromBlock, 'eventWindows');
+    let to = options.toBlock ?? (await this.provider().getBlockNumber());
+    while (to >= fromBlock) {
+      const from = Math.max(fromBlock, to - range + 1);
+      yield await this.queryEvents({ processId: options.processId, fromBlock: from, toBlock: to });
+      to = from - 1;
+    }
   }
 
   // ─── WRITES ────────────────────────────────────────────────────────
