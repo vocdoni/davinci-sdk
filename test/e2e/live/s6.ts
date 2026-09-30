@@ -10,8 +10,9 @@
 import { expect } from 'vitest';
 import { KeyMode, ProcessStatus } from '../../../src/contracts/types';
 import { ResultsError } from '../../../src/core/vote/errors';
+import { BJJ_SUBGROUP_ORDER } from '../../../src/crypto/babyjubjub';
 import type { ResultsState } from '../../../src/core/vote/results';
-import { refusedByCall } from './negatives';
+import { callOnly, refusedByCall } from './negatives';
 import { say } from '../env';
 import type { Row } from '../report';
 import { S6, S6_BALLOTS, plainCensus, tally } from '../spec';
@@ -98,10 +99,11 @@ export async function s6(live: Live, row: Row): Promise<void> {
   if (!dkg) throw new Error('s6: the process has no DKG record');
   expect(await live.sdk.registry.isProcessKeyRevealed(dkg)).toBe(false);
 
-  // A wrong secret: refused by the simulation, nothing sent.
-  const wrong = secret === 1n ? 2n : secret - 1n;
-  const refused = await refusedByCall(live, 's6 wrong secret', () =>
-    live.sdk.processes.revealProcessKey(e.processId, wrong)
+  // A wrong secret (another scalar in [1, L)): refused by the simulation.
+  const wrong = (secret % (BJJ_SUBGROUP_ORDER - 1n)) + 1n;
+  expect(wrong).not.toBe(secret);
+  const refused = await refusedByCall('s6 wrong secret', () =>
+    callOnly(live).revealProcessKey(e.processId, wrong)
   );
   expect(refused.revertName).toBe('InvalidOrganizerSecret');
 

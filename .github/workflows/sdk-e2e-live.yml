@@ -35,7 +35,7 @@ jobs:
   live:
     name: Live suite on Gnosis
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,15 +56,26 @@ jobs:
               exit 1
             fi
           done
+          # They go into GITHUB_ENV as single lines.
+          if [[ "$NODES$RPC" == *$'\n'* || "$NODES$RPC" == *$'\r'* ]]; then
+            echo "::error::DAVINCI_E2E_NODES and DAVINCI_E2E_RPC must be single lines"
+            exit 1
+          fi
           if ! [[ "$FIXTURES_COMMIT" =~ ^[0-9a-f]{7,40}$ ]]; then
             echo "::error::fixtures_commit is not a commit hash"
             exit 1
           fi
-          # Each URL on its own is masked in the log, not only the whole list.
+          # Each URL and its host are masked in the log, not only the whole list:
+          # transport errors name hosts.
           IFS=, read -ra urls <<< "$NODES,$RPC"
           for u in "${urls[@]}"; do
             u="$(echo "$u" | xargs)"
-            [ -n "$u" ] && echo "::add-mask::$u"
+            [ -n "$u" ] || continue
+            echo "::add-mask::$u"
+            host="${u#*://}"
+            host="${host%%/*}"
+            echo "::add-mask::$host"
+            echo "::add-mask::${host%:*}"
           done
           dir="$RUNNER_TEMP/sdk-e2e"
           umask 077

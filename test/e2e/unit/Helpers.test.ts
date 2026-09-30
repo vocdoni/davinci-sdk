@@ -277,5 +277,10 @@ describe('the settings', () => {
     const err = redactError(new Error('down: http://10.0.0.1:90/info'));
     expect(err.message).toBe('down: <node 2>/info');
     expect(err.stack).not.toMatch(/10\.0\.0\.1/);
+    // Transport errors name the host, with or without the port.
+    expect(
+      redact('connect ECONNREFUSED 10.0.0.1:9090; getaddrinfo ENOTFOUND rpc.example.org')
+    ).toBe('connect ECONNREFUSED <node 1>; getaddrinfo ENOTFOUND <rpc 1>');
+    expect(redact('socket hang up (10.0.0.1)')).toBe('socket hang up (<node>)');
   });
 });

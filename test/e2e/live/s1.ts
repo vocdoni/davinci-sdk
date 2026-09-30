@@ -69,6 +69,21 @@ async function sendWithWeight(
   );
 }
 
+// The vote went to `want`, the voter's node, unless `want` was down: then
+// the SDK fails over, and `want` does not answer now either.
+async function routedTo(live: Live, label: string, got: string, want: string): Promise<void> {
+  if (got === want) return;
+  const answers = await live.sdk.api.nodes
+    .node(want)
+    .getInfo()
+    .then(
+      () => true,
+      () => false
+    );
+  expect(answers, `${label}: sent to ${got} while its node ${want} answers`).toBe(false);
+  say(`${label}: ${want} did not answer; the vote failed over to ${got}`);
+}
+
 export async function s1(live: Live, row: Row): Promise<void> {
   const voters = live.voters.s1;
   const e = await createElection(live, 's1', S1, { census: s1Census(live.voters) });
@@ -102,7 +117,8 @@ export async function s1(live: Live, row: Row): Promise<void> {
       choices: b.choices,
     });
     expect(cast.weight).toBe(weight);
-    expect(cast.node).toBe(pickNode(cast.voterAddress, e.processId, live.settings.nodes)[0]);
+    const pick = pickNode(cast.voterAddress, e.processId, live.settings.nodes)[0];
+    await routedTo(live, cast.label, cast.node, pick);
     casts.push(cast);
   }
   const nodesUsed = new Set(casts.map(c => c.node)).size;
@@ -122,7 +138,7 @@ export async function s1(live: Live, row: Row): Promise<void> {
     processId: e.processId,
     choices: S1_REVOTE.choices,
   });
-  expect(revote.node).toBe(casts[0].node);
+  await routedTo(live, revote.label, revote.node, casts[0].node);
 
   const outsider = await live.voterSdk(Wallet.createRandom());
   const refused = await outsider.submitVote({ processId: e.processId, choices: [1, 1, 1, 1] }).then(

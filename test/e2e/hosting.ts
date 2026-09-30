@@ -75,6 +75,29 @@ export async function checkServed(
   }
 }
 
+/**
+ * Whether `uri` names one of this suite's fixtures: a file of the directory
+ * `baseUrl` serves or, for a raw GitHub base, of that directory at any
+ * commit of the same repository.
+ */
+export function isFixtureUrl(uri: string, baseUrl: string): boolean {
+  let u: URL;
+  let base: URL;
+  try {
+    u = new URL(uri);
+    base = new URL(baseUrl);
+  } catch {
+    return false;
+  }
+  if (u.origin !== base.origin || u.search !== '' || u.hash !== '') return false;
+  const dir = base.pathname.replace(/\/+$/, '').split('/');
+  const path = u.pathname.split('/');
+  if (path.length !== dir.length + 1 || !/^[\w.-]+$/.test(path[path.length - 1])) return false;
+  // raw.githubusercontent.com/<owner>/<repo>/<commit>/<dir>: any commit.
+  const anyCommit = base.hostname === 'raw.githubusercontent.com' && dir.length > 4;
+  return dir.every((segment, i) => (anyCommit && i === 3) || path[i] === segment);
+}
+
 /** The committed fixtures at their public URL. */
 export class FixtureHost {
   private readonly byHash = new Map<string, string>();
@@ -87,7 +110,16 @@ export class FixtureHost {
     readonly baseUrl: string,
     files: ReadonlyMap<string, Uint8Array>
   ) {
-    for (const [name, bytes] of files) this.byHash.set(fileHash(bytes), name);
+    for (const [name, bytes] of files) {
+      const hash = fileHash(bytes);
+      const other = this.byHash.get(hash);
+      if (other !== undefined) {
+        throw new Error(
+          `fixtures ${other} and ${name} are the same bytes: the uploader could not tell them apart`
+        );
+      }
+      this.byHash.set(hash, name);
+    }
   }
 
   /** The public URL of a fixture. */

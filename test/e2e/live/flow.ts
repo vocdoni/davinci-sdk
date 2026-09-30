@@ -89,9 +89,19 @@ export async function createElection(
     ? await live.org.sendWithKey(`${label} create`, stream)
     : await live.org.send(`${label} create`, stream);
   expect(created.graceError, `${label}: grace`).toBeUndefined();
-  const receipt = await live.sdk.provider.getTransactionReceipt(created.transactionHash);
-  say(`${label}: created ${created.processId} in block ${receipt?.blockNumber ?? '?'}`);
-  return { ...created, label, block: receipt?.blockNumber ?? 0 };
+  // The creation block, as the registry records it (a read RPC may trail a little).
+  let block = 0;
+  await until(
+    `${label}: ${created.processId} readable`,
+    async () => {
+      block = Number((await live.sdk.registry.getProcess(created.processId)).creationBlock);
+      return block > 0;
+    },
+    60_000,
+    2_000
+  );
+  say(`${label}: created ${created.processId} in block ${block}`);
+  return { ...created, label, block };
 }
 
 /**

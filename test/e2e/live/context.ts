@@ -11,12 +11,12 @@ import { Wallet, formatEther, parseEther, type BaseWallet } from 'ethers';
 import { DavinciSDK } from '../../../src/DavinciSDK';
 import { checkCensusUrl } from '../../../src/census/publish';
 import type { CensusProviders } from '../../../src/census/types';
-import type { GraceParams } from '../../../src/contracts/types';
+import { ProcessStatus, type GraceParams } from '../../../src/contracts/types';
 import { FailoverRpcProvider, GNOSIS, computeProcessId } from '../../../src/networks';
 import { BallotProver } from '../../../src/prover/BallotProver';
 import { DirArtifactCache } from '../artifactCache';
 import { FIXTURES_DIR, redact, say, type RunSettings } from '../env';
-import { FixtureHost, checkServed, fixtureDiff, readFixtures } from '../hosting';
+import { FixtureHost, checkServed, fixtureDiff, isFixtureUrl, readFixtures } from '../hosting';
 import { Organizer, formatBill } from '../organizer';
 import { formatTable, type Row } from '../report';
 import { fixtureFiles, votersOf, type Voters } from '../spec';
@@ -115,7 +115,7 @@ export async function connect(settings: RunSettings): Promise<Live> {
   );
 
   const org = new Organizer();
-  await cancelLeftovers(sdk, wallet.address, org);
+  await cancelLeftovers(sdk, wallet.address, settings.baseUrl, org);
   const startNonce = await provider.getTransactionCount(wallet.address, 'latest');
   const startBalance = await provider.getBalance(wallet.address);
 
@@ -145,17 +145,31 @@ export async function connect(settings: RunSettings): Promise<Live> {
   };
 }
 
-// An interrupted run leaves its processes open; the account is this suite's,
-// so any of its latest processes still READY or PAUSED is one.
-async function cancelLeftovers(sdk: DavinciSDK, organizer: string, org: Organizer): Promise<void> {
+// An interrupted run leaves its processes open. Among the account's latest
+// processes, only those still READY or PAUSED whose metadata is one of this
+// suite's fixtures are canceled: never anything else the account created.
+async function cancelLeftovers(
+  sdk: DavinciSDK,
+  organizer: string,
+  baseUrl: string,
+  org: Organizer
+): Promise<void> {
   const nonce = Number(await sdk.registry.getProcessNonce(organizer));
-  const processIds = Array.from({ length: Math.min(nonce, LEFTOVER_WINDOW) }, (_, i) =>
+  const latest = Array.from({ length: Math.min(nonce, LEFTOVER_WINDOW) }, (_, i) =>
     computeProcessId(organizer, sdk.network.processIdPrefix, nonce - 1 - i)
   );
+  const processIds: string[] = [];
+  for (const pid of latest) {
+    const p = await sdk.registry.getProcess(pid);
+    const open = p.status === ProcessStatus.READY || p.status === ProcessStatus.PAUSED;
+    if (open && isFixtureUrl(p.metadataUri, baseUrl)) processIds.push(pid);
+    else if (open) say(`leftover check: ${pid} is open but not this suite's; left alone`);
+  }
   if (processIds.length === 0) return;
   const { canceled, failed } = await org.exclusive(() => sdk.cancelOpenProcesses({ processIds }));
-  if (canceled.length > 0)
+  if (canceled.length > 0) {
     say(`canceled ${canceled.length} leftovers of an earlier run: ${canceled.join(', ')}`);
+  }
   for (const f of failed) say(`leftover ${f.processId} not canceled: ${f.error.message}`);
 }
 
@@ -167,9 +181,15 @@ export async function finish(live: Live | undefined, rows: readonly Row[]): Prom
   try {
     if (!live) return;
     if (rows.some(r => r.result !== 'pass')) {
-      const { canceled, failed } = await live.org.exclusive(() => live.sdk.cancelOpenProcesses());
-      say(`after the failure: canceled ${canceled.length} open processes`);
-      for (const f of failed) say(`  ${f.processId} not canceled: ${f.error.message}`);
+      try {
+        const { canceled, failed } = await live.org.exclusive(() => live.sdk.cancelOpenProcesses());
+        say(`after the failure: canceled ${canceled.length} open processes`);
+        for (const f of failed) say(`  ${f.processId} not canceled: ${f.error.message}`);
+      } catch (err) {
+        say(
+          `after the failure: canceling failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
     const sorted = [...rows].sort((a, b) => a.scenario.localeCompare(b.scenario));
     process.stderr.write(`\n${redact(formatTable(sorted))}\n\n`);

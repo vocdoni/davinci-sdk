@@ -109,18 +109,33 @@ export function runSettings(): RunSettings {
 
 /**
  * `text` without the node and RPC URLs of the environment, which are not
- * public (an RPC URL may carry an API key): each reads `<node N>` or
- * `<rpc N>`, in the order configured.
+ * public (an RPC URL may carry an API key): each URL, and its host, reads
+ * `<node N>` or `<rpc N>` in the order configured; a host several of them
+ * share reads `<node>` or `<rpc>`. Transport errors name hosts, not URLs.
  */
 export function redact(text: string): string {
+  const names = new Map<string, string>();
+  const add = (urls: string[], kind: string) =>
+    urls.forEach((u, i) => {
+      const name = `<${kind} ${i + 1}>`;
+      const forms = [u];
+      try {
+        const url = new URL(u);
+        forms.push(url.host, url.hostname);
+      } catch {
+        // Not a URL: only the text itself is replaced.
+      }
+      for (const form of forms.filter(f => f !== '')) {
+        const had = names.get(form);
+        names.set(form, had === undefined || had === name ? name : `<${kind}>`);
+      }
+    });
+  add(list(process.env.DAVINCI_E2E_NODES), 'node');
+  add(list(process.env.DAVINCI_E2E_RPC), 'rpc');
+  // Longest first, so a URL is replaced whole before its host.
   let out = text;
-  const names: [string, string][] = [
-    ...list(process.env.DAVINCI_E2E_NODES).map((u, i): [string, string] => [u, `<node ${i + 1}>`]),
-    ...list(process.env.DAVINCI_E2E_RPC).map((u, i): [string, string] => [u, `<rpc ${i + 1}>`]),
-  ];
-  // Longest first, so a URL that extends another is replaced whole.
-  for (const [url, name] of names.sort((a, b) => b[0].length - a[0].length)) {
-    out = out.split(url).join(name);
+  for (const [form, name] of [...names].sort((a, b) => b[0].length - a[0].length)) {
+    out = out.split(form).join(name);
   }
   return out;
 }

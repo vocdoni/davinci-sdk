@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { toUtf8Bytes } from 'ethers';
-import { FixtureHost, checkServed, fixtureDiff, readFixtures } from '../hosting';
+import { FixtureHost, checkServed, fixtureDiff, isFixtureUrl, readFixtures } from '../hosting';
 import { fileHash } from '../spec';
 
 const BASE = 'https://raw.githubusercontent.com/vocdoni/davinci-sdk/0123abc/test/e2e/fixtures';
@@ -39,6 +39,37 @@ describe('the fixture host', () => {
     await expect(upload(bytes('{"b":3}\n'))).rejects.toThrow(/not a committed fixture/);
     expect(host.url('a.json')).toBe(`${BASE}/a.json`);
     expect(() => host.url('c.json')).toThrow(/no fixture c.json/);
+  });
+
+  it('refuses two fixtures with the same bytes', () => {
+    const twins = new Map(files);
+    twins.set('c.json', bytes('{"a":1}\n'));
+    expect(() => new FixtureHost(BASE, twins)).toThrow(/a\.json and c\.json are the same bytes/);
+  });
+
+  it("recognizes the suite's documents at any commit of the repository", () => {
+    const at = (commit: string, name = 's1-metadata.json') =>
+      `https://raw.githubusercontent.com/vocdoni/davinci-sdk/${commit}/test/e2e/fixtures/${name}`;
+    expect(isFixtureUrl(at('0123abc'), BASE)).toBe(true);
+    expect(isFixtureUrl(at('ffffffffffffffffffffffffffffffffffffffff'), BASE)).toBe(true);
+    for (const other of [
+      'https://raw.githubusercontent.com/vocdoni/davinci-node/0123abc/test/e2e/fixtures/s1-metadata.json',
+      'https://raw.githubusercontent.com/someone/davinci-sdk/0123abc/test/e2e/fixtures/s1-metadata.json',
+      'https://raw.githubusercontent.com/vocdoni/davinci-sdk/0123abc/test/fixtures/s1-metadata.json',
+      `${at('0123abc')}?x=1`,
+      at('0123abc', 'sub/s1-metadata.json'),
+      'https://files.example.org/s1-metadata.json',
+      'not a url',
+    ]) {
+      expect(isFixtureUrl(other, BASE), other).toBe(false);
+    }
+    // Any other host: only files right under the base.
+    expect(
+      isFixtureUrl('https://files.example.org/e2e/a.json', 'https://files.example.org/e2e')
+    ).toBe(true);
+    expect(
+      isFixtureUrl('https://files.example.org/other/a.json', 'https://files.example.org/e2e')
+    ).toBe(false);
   });
 
   it('checks every file is served as committed, with no redirect', async () => {
