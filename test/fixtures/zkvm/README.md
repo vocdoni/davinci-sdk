@@ -12,9 +12,9 @@ checksums below identify the copy.
 | `poseidon.json` | `rust-sdk/testdata/` (go-iden3-crypto) | `test/crypto/unit/Poseidon.test.ts` |
 | `babyjubjub.json`, `elgamal.json` | `rust-sdk/testdata/` | `BabyJubJub.test.ts`, `Ballot.test.ts` |
 | `ballot_mode.json`, `ballots.json` | `rust-sdk/testdata/` | `Ballot.test.ts` |
-| `real_proof.json`, `real_proof_v1.json` | `rust-sdk/testdata/` (rapidsnark proofs under the current and the v1.0.0 key) | `Ballot.test.ts`, `VkHash.test.ts` |
+| `real_proof.json`, `real_proof_v1.json` | `rust-sdk/testdata/` (rapidsnark proofs under the current and the v1.0.0 key) | `Ballot.test.ts`, `VkHash.test.ts`, `test/prover/unit/*` |
 | `hashes.json`, `genesis.json` | `rust-sdk/testdata/` | `VkHash.test.ts` |
-| `ballot_proof_vkey.json` | `rust-sdk/assets/` (davinci-circom `artifacts/ballot_proof_vkey.json` at a39a9f9) | `VkHash.test.ts` |
+| `ballot_proof_vkey.json` | `rust-sdk/assets/` (davinci-circom `artifacts/ballot_proof_vkey.json` at a39a9f9) | `VkHash.test.ts`, `test/prover/unit/*` (its sha256 is the artifact table's) |
 | `leanimt.json`, `census.json`, `slot.json` | `rust-sdk/testdata/` (lean-imt-go, Go reference) | `Census.test.ts`, `Ecdsa.test.ts` |
 | `voteid_sig.json` | `rust-sdk/testdata/` (go-ethereum) | `Ecdsa.test.ts` |
 | `dkg_schnorr.json` | `rust-sdk/testdata/` (davinci-dkg) | `Dkg.test.ts` |

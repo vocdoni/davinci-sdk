@@ -16,6 +16,31 @@ const pkg = require('./package.json');
  */
 const FORCE_BUNDLE_DEPS = new Set(['buffer', 'circomlibjs', 'blake-hash']);
 
+/**
+ * ffjavascript's browser build (bundled through circomlibjs) inlines the
+ * `web-worker` shim as `var browser = Worker;`, which reads the global when
+ * the bundle loads, so the bundle throws on import in Node, which has no
+ * global Worker. circomlibjs only builds single-threaded curves and never
+ * starts a worker: read the global when a worker is created instead.
+ */
+const WORKER_SHIM = 'var browser = Worker;';
+const lazyWebWorker = {
+  name: 'lazy-web-worker',
+  transform(code, id) {
+    if (!/[\\/]ffjavascript[\\/]build[\\/]browser\.esm\.js$/.test(id)) return null;
+    if (code.split(WORKER_SHIM).length !== 2) {
+      this.error(`${id}: expected one "${WORKER_SHIM}" to patch`);
+    }
+    return {
+      code: code.replace(
+        WORKER_SHIM,
+        'var browser = function Worker(url, options) { return new globalThis.Worker(url, options); };'
+      ),
+      map: null,
+    };
+  },
+};
+
 const createBundle = (config, options) => ({
   ...config,
   input: options.input,
@@ -58,6 +83,7 @@ export default [
   createBundle(
     {
       plugins: [
+        lazyWebWorker,
         json(),
         commonjs(),
         resolve({ browser: true, preferBuiltins: false }),

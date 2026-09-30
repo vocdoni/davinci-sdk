@@ -105,7 +105,7 @@ export class VoteOrchestrationService {
    * @returns Promise resolving to vote status information, with the error text of an `error` vote
    */
   async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
-    const status = await this.apiService.sequencer.getVoteStatus(processId, voteId);
+    const status = await this.apiService.nodes.getVoteStatus(processId, voteId);
 
     return {
       voteId,
@@ -123,7 +123,7 @@ export class VoteOrchestrationService {
    * @returns Promise resolving to boolean indicating if the address has voted
    */
   async hasAddressVoted(processId: string, address: string): Promise<boolean> {
-    return this.apiService.sequencer.hasAddressVoted(processId, address);
+    return this.apiService.nodes.firstAnswer(n => n.hasAddressVoted(processId, address));
   }
 
   /**

@@ -103,3 +103,52 @@ export class SequencerDecodeError extends SequencerError {}
 export function hasSequencerErrorCode(err: unknown, code: SequencerErrorCode): boolean {
   return err instanceof SequencerApiError && err.code === code;
 }
+
+/**
+ * A node that serves another deployment or release than the one configured:
+ * its `/info` names another chain, registry, ballot VK or program vk.
+ */
+export class NodeMismatchError extends SequencerError {
+  /**
+   * @param field - The `/info` field that differs
+   * @param expected - What the registry (or the configuration) says
+   * @param got - What the node reports
+   * @param node - Base URL of the node
+   */
+  constructor(
+    public readonly field: string,
+    public readonly expected: string,
+    public readonly got: string,
+    node?: string
+  ) {
+    super(`sequencer ${node ?? '(unknown)'}: ${field} is ${got}, expected ${expected}`, node);
+  }
+}
+
+/** A configured node the client cannot use, and why (`observer`, `unavailable: …`). */
+export interface UnusableNode {
+  url: string;
+  reason: string;
+}
+
+/**
+ * No node can serve the call: every node for the role is down or an
+ * observer, or none is configured. `nodes` lists them with the reason.
+ */
+export class SequencerUnavailableError extends SequencerError {
+  /**
+   * @param role - What the node was needed for
+   * @param nodes - The nodes of that role and why each is not used
+   */
+  constructor(
+    role: string,
+    public readonly nodes: readonly UnusableNode[]
+  ) {
+    super(
+      nodes.length === 0
+        ? `no ${role} is configured`
+        : `no usable ${role}: ${nodes.map(n => `${n.url} (${n.reason})`).join(', ')}`,
+      nodes.length === 1 ? nodes[0].url : undefined
+    );
+  }
+}

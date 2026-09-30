@@ -1,6 +1,10 @@
-import { Signer } from 'ethers';
+import { getAddress, type Provider, type Signer } from 'ethers';
 import { VocdoniApiService } from './core/api/ApiService';
+import type { BaseServiceConfig } from './core/api/BaseService';
+import type { Uploader } from './core/types/uploader';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
+import { DeploymentPinError } from './contracts/errors';
+import type { TxStatusEvent } from './contracts/SmartContractService';
 import { DavinciCSP } from './sequencer/DavinciCSP';
 import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
@@ -10,159 +14,473 @@ import {
   ProcessInfo,
 } from './core/process';
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
-import { VoteStatus } from './sequencer/api/types';
+import { VoteStatus, type SequencerInfo } from './sequencer/api/types';
+import { checkNodeInfo, type NodeExpectation } from './sequencer/api/helpers';
+import { SequencerApiError, SequencerNetworkError, SequencerError } from './sequencer/errors';
+import { VocdoniSequencerService } from './sequencer/SequencerService';
 import { CensusProviders } from './census/types';
-import { NETWORKS, processIdPrefix } from './networks';
+import {
+  FailoverRpcProvider,
+  networkOfProcessId,
+  processIdPrefixOf,
+  resolveNetwork,
+  type CustomNetwork,
+  type ResolvedNetwork,
+} from './networks';
+import type { RELEASE_PINS } from './protocol/release';
+import { BallotProver, type BallotProof, type ProvableBallot } from './prover/BallotProver';
+import { checkArtifactsConfig, type ArtifactsConfig } from './prover/artifacts';
+
+/** Pins to check a deployment against instead of this release's (a local deployment). */
+export type DeploymentPins = Partial<Record<keyof typeof RELEASE_PINS, string>>;
 
 /**
- * Configuration interface for the DavinciSDK
+ * Configuration of a {@link DavinciSDK}. Only `signer` and the sequencer node
+ * URLs are required; the network defaults to Gnosis.
  */
 export interface DavinciSDKConfig {
   /**
-   * Ethers.js Signer for signing operations.
-   * - For voting only: Can be a bare Wallet (no provider needed)
-   * - For process operations: Must be connected to a provider
+   * Signs votes, and transactions for organizer work. A voter can use a bare
+   * `Wallet`; an organizer's signer needs a provider on the network's chain.
    */
   signer: Signer;
 
-  /** Sequencer API URL for Vocdoni services (required) */
-  sequencerUrl: string;
+  /**
+   * The deployment: a known network by name (default `'gnosis'`), or a custom
+   * one, `{ chainId, processRegistry, startBlock?, rpcUrls? }`.
+   */
+  network?: string | CustomNetwork;
 
-  /** Census API URL for census management (optional, only needed when creating censuses from scratch) */
+  /**
+   * Base URLs of the deployment's sequencer nodes. Votes are routed among them
+   * per voter, with failover; reads ask them in order. The SDK embeds none.
+   */
+  sequencerUrls?: readonly string[];
+
+  /**
+   * The node that issues the encryption key of a sequencer-key election, and
+   * later publishes its results. Default: the first usable node of
+   * `sequencerUrls`.
+   */
+  keySequencerUrl?: string;
+
+  /**
+   * JSON-RPCs for registry reads, in order of preference. Default: the
+   * signer's provider when it is on the network's chain, else the network's
+   * RPCs.
+   */
+  rpcUrls?: readonly string[];
+
+  /** Publishes census files and metadata documents; the SDK ships no hosting. */
+  uploader?: Uploader;
+
+  /** Where the ballot circuit files come from; default the pinned table URLs. */
+  artifacts?: ArtifactsConfig;
+
+  /**
+   * Checks at init that the registry pins what this release proves and
+   * verifies (`ProcessRegistryService.verifyDeployment`): the program vks, the
+   * vadcop root, the ballot VK hash, the verifier's code and the DKG adapter.
+   * Default true; `{ pins }` checks other pins (a local deployment), false
+   * skips the check.
+   */
+  verifyDeployment?: boolean | { pins: DeploymentPins };
+
+  /** Verify every ballot proof locally before it is used; default true. */
+  verifyProof?: boolean;
+
+  /** Headers, `fetchImpl`, timeout and body cap of the sequencer clients. */
+  sequencerConfig?: BaseServiceConfig;
+
+  /** Custom census proof providers. */
+  censusProviders?: CensusProviders;
+
+  /** URL of a legacy census service, used to publish Merkle censuses. */
   censusUrl?: string;
 
-  /** Custom contract addresses (optional, fetched from sequencer if not provided) */
+  /** @deprecated Use `sequencerUrls`; this URL is added to them. */
+  sequencerUrl?: string;
+
+  /**
+   * @deprecated Use `network: { chainId, processRegistry }`. The registry of a
+   * custom deployment, on the chain the read RPC serves.
+   */
   addresses?: {
     processRegistry?: string;
   };
 
-  /** Custom census proof providers (optional) */
-  censusProviders?: CensusProviders;
-
-  /** Whether to verify downloaded circuit files match expected hashes (optional, defaults to true) */
+  /** @deprecated Ignored: circuit files are always checked against their pinned sha256. */
   verifyCircuitFiles?: boolean;
-
-  /** Whether to verify the generated proof is valid before submission (optional, defaults to true) */
-  verifyProof?: boolean;
 }
 
-/**
- * Internal configuration interface
- */
-interface InternalDavinciSDKConfig {
-  signer: Signer;
-  sequencerUrl: string;
-  censusUrl?: string;
-  customAddresses: {
-    processRegistry?: string;
-  };
-  fetchAddressesFromSequencer: boolean;
-  verifyCircuitFiles: boolean;
+/** The settings a {@link DavinciSDK} runs with, defaults applied. */
+export interface DavinciSDKSettings {
+  /** The deployment; for the deprecated `addresses` form, known after `init()`. */
+  network?: ResolvedNetwork;
+  /** Vote and read nodes, as configured. */
+  sequencerUrls: readonly string[];
+  keySequencerUrl?: string;
+  rpcUrls?: readonly string[];
+  verifyDeployment: boolean | { pins: DeploymentPins };
   verifyProof: boolean;
+  censusUrl?: string;
+}
+
+/** What `init()` found at a configured sequencer node. */
+export interface NodeCheck {
+  url: string;
+  /**
+   * `usable`; `observer` (it takes no votes and issues no keys); or `down`:
+   * no answer, or a 408, 429 or 5xx. Nodes that are not usable are left out
+   * for the session.
+   */
+  status: 'usable' | 'observer' | 'down';
+  /** Its `/info`, when it answered; it matched the deployment, or `init()` failed. */
+  info?: SequencerInfo;
+  /** Why it is not used, for an observer or a node that is down. */
+  reason?: string;
+}
+
+// Errors that say the node is down or busy rather than not a sequencer.
+function unreachable(err: unknown): boolean {
+  return (
+    err instanceof SequencerNetworkError ||
+    (err instanceof SequencerApiError &&
+      (err.status >= 500 || err.status === 408 || err.status === 429))
+  );
+}
+
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+// Freezes plain data (objects and arrays) all the way down.
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object') {
+    for (const v of Object.values(value)) deepFreeze(v);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 /**
- * Simplified SDK class that encapsulates all Vocdoni DaVinci functionality
+ * The DAVINCI SDK: one deployment (a registry on a chain) and its sequencer
+ * nodes. `init()` resolves the network, builds the read provider, checks the
+ * registry pins (unless disabled) and checks every node's `/info` against the
+ * registry; everything else needs it first.
+ *
+ * @example
+ * ```typescript
+ * const sdk = new DavinciSDK({
+ *   signer: wallet,
+ *   network: 'gnosis',
+ *   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
+ * });
+ * await sdk.init();
+ * ```
  */
 export class DavinciSDK {
-  private config: InternalDavinciSDKConfig;
-  private apiService: VocdoniApiService;
+  private readonly settings: DavinciSDKSettings;
+  private readonly signer: Signer;
+  private readonly uploaderImpl?: Uploader;
+  private readonly artifactsConfig?: ArtifactsConfig;
+  private readonly sequencerConfig?: BaseServiceConfig;
+  // The registry of the deprecated `addresses` form, before its chain is known.
+  private readonly aliasRegistry?: string;
+  private _network?: ResolvedNetwork;
+  private apiService?: VocdoniApiService;
+  private readProvider?: Provider;
+  private _registry?: ProcessRegistryService;
   private _processRegistry?: ProcessRegistryService;
   private _processOrchestrator?: ProcessOrchestrationService;
-  private processRegistryByChainId = new Map<string, ProcessRegistryService>();
-  private processOrchestratorByChainId = new Map<string, ProcessOrchestrationService>();
-  private processRegistryByVersion = new Map<string, ProcessRegistryService>();
-  private processOrchestratorByVersion = new Map<string, ProcessOrchestrationService>();
+  private _readOrchestrator?: ProcessOrchestrationService;
   private _voteOrchestrator?: VoteOrchestrationService;
+  private _ballotProver?: BallotProver;
+  // What the registry pins, which every node must report.
+  private registryPins?: NodeExpectation;
+  private _nodeChecks: readonly NodeCheck[] = [];
+  // The signer provider's chain as init() saw it; undefined without a provider.
+  private signerChainId?: bigint;
   private davinciCSP?: DavinciCSP;
   private ballotInputGenerator?: BallotInputGenerator;
   private initialized = false;
+  private initializing?: Promise<void>;
   private censusProviders: CensusProviders;
 
+  /**
+   * Reads and checks the configuration; nothing is fetched until `init()`.
+   * Later changes to `config` do not reach the SDK.
+   *
+   * @throws Error for an unknown network, no sequencer URL, or a deprecated
+   *   `addresses.processRegistry` that contradicts `network`
+   * @throws ArtifactError for a malformed `artifacts` table or timeout
+   */
   constructor(config: DavinciSDKConfig) {
-    const hasCustomAddresses = !!config.addresses && Object.keys(config.addresses).length > 0;
-    this.config = {
-      signer: config.signer,
-      sequencerUrl: config.sequencerUrl,
-      censusUrl: config.censusUrl,
-      customAddresses: config.addresses || {},
-      fetchAddressesFromSequencer: !hasCustomAddresses,
-      verifyCircuitFiles: config.verifyCircuitFiles ?? true, // Default to true for security
-      verifyProof: config.verifyProof ?? true, // Default to true for security
-    };
-
-    // Initialize API service
-    this.apiService = new VocdoniApiService({
-      sequencerURL: this.config.sequencerUrl,
-      censusURL: this.config.censusUrl || '', // Use empty string if not provided
-    });
-
-    // Store census providers
+    const sequencerUrls = [
+      ...new Set([
+        ...(config.sequencerUrls ?? []),
+        ...(config.sequencerUrl ? [config.sequencerUrl] : []),
+      ]),
+    ];
+    if (sequencerUrls.length === 0 && !config.keySequencerUrl) {
+      throw new Error(
+        "sequencerUrls is required: the base URLs of the deployment's sequencer nodes"
+      );
+    }
+    checkArtifactsConfig(config.artifacts);
+    const alias = config.addresses?.processRegistry;
+    if (config.network !== undefined || alias === undefined) {
+      this._network = deepFreeze(resolveNetwork(config.network ?? 'gnosis'));
+      if (alias !== undefined && getAddress(alias) !== this._network.processRegistry) {
+        throw new Error(
+          `addresses.processRegistry ${alias} is not the ${this._network.name} registry ${this._network.processRegistry}`
+        );
+      }
+    } else {
+      this.aliasRegistry = getAddress(alias);
+    }
+    this.signer = config.signer;
+    this.uploaderImpl = config.uploader;
+    this.artifactsConfig = config.artifacts;
+    this.sequencerConfig = config.sequencerConfig;
     this.censusProviders = config.censusProviders || {};
-
-    // Contract services will be initialized lazily when accessed
+    const verify = config.verifyDeployment ?? true;
+    this.settings = {
+      network: this._network,
+      sequencerUrls: deepFreeze(sequencerUrls),
+      keySequencerUrl: config.keySequencerUrl,
+      rpcUrls: config.rpcUrls && deepFreeze([...config.rpcUrls]),
+      verifyDeployment:
+        typeof verify === 'boolean' ? verify : deepFreeze({ pins: { ...verify.pins } }),
+      verifyProof: config.verifyProof ?? true,
+      censusUrl: config.censusUrl,
+    };
   }
 
   /**
-   * Initialize the SDK and all its components
-   * This must be called before using any SDK functionality
+   * Connects the SDK to its deployment; call it once before anything else.
+   *
+   * 1. Picks the read provider: `rpcUrls`, else the signer's provider when it
+   *    is on the network's chain, else the network's RPCs.
+   * 2. Reads the registry, which must report the network's chain id.
+   * 3. Unless `verifyDeployment` is false, checks the registry pins.
+   * 4. Asks every node for `/info`: a node of another chain, registry, ballot
+   *    VK or program vk fails `init()` (`NodeMismatchError`), and so does a
+   *    URL that answers but is not a sequencer. Observers and nodes that are
+   *    down (no answer, or a 408, 429 or 5xx) are recorded in
+   *    {@link nodeChecks} and left out for the session. `init()` succeeds
+   *    even with none left, so organizer work that needs no node goes on;
+   *    a call that needs a node then fails with `SequencerUnavailableError`
+   *    naming the nodes left out and why.
+   *
+   * @throws Error, DeploymentPinError or NodeMismatchError naming what does not match
    */
-  async init(): Promise<void> {
-    if (this.initialized) return;
+  init(): Promise<void> {
+    if (this.initialized) return Promise.resolve();
+    this.initializing ??= this.connect().catch((err: unknown) => {
+      this.initializing = undefined;
+      throw err;
+    });
+    return this.initializing;
+  }
 
-    // Pre-resolve process registry for current signer chain when possible.
-    // This keeps `sdk.processes` and `sdk.processOrchestrator` usable after init()
-    // without requiring explicit addresses.processRegistry.
-    if (this.config.fetchAddressesFromSequencer && this.config.signer.provider) {
-      try {
-        const processRegistry = await this.getProcessRegistryForCurrentChain();
-        if (!this._processRegistry) {
-          this._processRegistry = processRegistry;
-        }
-      } catch (error) {
-        throw new Error(
-          `Failed to fetch contract addresses from sequencer: ${error instanceof Error ? error.message : String(error)}. ` +
-            `You can provide custom addresses in the SDK config to avoid this error.`
-        );
-      }
+  private async connect(): Promise<void> {
+    const provider = await this.pickReadProvider();
+    const network =
+      this._network ??
+      resolveNetwork({
+        chainId: Number((await provider.getNetwork()).chainId),
+        processRegistry: this.aliasRegistry as string,
+      });
+    const registry = new ProcessRegistryService(network.processRegistry, provider);
+
+    let chain: string;
+    try {
+      chain = await registry.getChainID();
+    } catch (err) {
+      throw new Error(
+        `cannot read the ${network.name} ProcessRegistry at ${network.processRegistry} ` +
+          `(is the read RPC on chain ${network.chainId}?): ${message(err)}`
+      );
     }
-
-    // Validate census URL if needed
-    if (!this.config.censusUrl) {
-      // Census URL is optional, but we'll check if it's needed later when actually used
+    if (chain !== String(network.chainId)) {
+      throw new DeploymentPinError('chainID', String(network.chainId), chain);
     }
+    const [ballotVkHash, batchProgramVk, resultsProgramVk] = await Promise.all([
+      registry.getBallotVKHash(),
+      registry.getBatchProgramVK(),
+      registry.getResultsProgramVK(),
+    ]);
+    const verify = this.settings.verifyDeployment;
+    if (verify !== false) {
+      await registry.verifyDeployment(verify === true ? {} : verify.pins);
+    }
+    const pins: NodeExpectation = {
+      chainId: network.chainId,
+      processRegistry: network.processRegistry,
+      ballotVkHash,
+      batchProgramVk,
+      resultsProgramVk,
+    };
+    const checks = await this.checkNodes(pins);
+    const signerChainId = this.signer.provider
+      ? await this.signer.provider.getNetwork().then(
+          n => n.chainId,
+          () => undefined
+        )
+      : undefined;
 
+    const { sequencerUrls, keySequencerUrl } = this.settings;
+    this.apiService = new VocdoniApiService({
+      sequencerURLs: sequencerUrls,
+      keySequencerURL: keySequencerUrl,
+      censusURL: this.settings.censusUrl,
+      sequencerConfig: this.sequencerConfig,
+      unusable: checks.flatMap(c =>
+        c.reason === undefined ? [] : [{ url: c.url, reason: c.reason }]
+      ),
+    });
+    this._network = deepFreeze(network);
+    this.settings.network = this._network;
+    this.readProvider = provider;
+    this._registry = registry;
+    this.registryPins = pins;
+    this._nodeChecks = deepFreeze(checks);
+    this.signerChainId = signerChainId;
     this.initialized = true;
   }
 
-  /**
-   * Get the API service for direct access to sequencer and census APIs
-   */
-  get api(): VocdoniApiService {
-    return this.apiService;
+  // `rpcUrls`, else the signer's provider on the network's chain, else the network's RPCs.
+  private async pickReadProvider(): Promise<Provider> {
+    const net = this._network;
+    const rpcUrls = this.settings.rpcUrls;
+    if (rpcUrls && rpcUrls.length > 0) return new FailoverRpcProvider(rpcUrls, net?.chainId);
+    const own = this.signer.provider;
+    if (own) {
+      if (!net) return own;
+      const { chainId } = await own.getNetwork();
+      if (chainId === BigInt(net.chainId)) return own;
+    }
+    if (net && net.rpcUrls.length > 0) return new FailoverRpcProvider(net.rpcUrls, net.chainId);
+    const where = net ? `the ${net.name} registry (chain ${net.chainId})` : 'the registry';
+    throw new Error(
+      `no RPC to read ${where}: set rpcUrls, or connect the signer to a provider on that chain`
+    );
+  }
+
+  // Every configured node's /info against the registry. A node of another
+  // deployment, or a URL that is not a sequencer, fails init; one that is
+  // down or an observer is recorded and left out.
+  private async checkNodes(pins: NodeExpectation): Promise<NodeCheck[]> {
+    const { sequencerUrls, keySequencerUrl } = this.settings;
+    const urls = [...new Set([...sequencerUrls, ...(keySequencerUrl ? [keySequencerUrl] : [])])];
+    return Promise.all(
+      urls.map(async (url): Promise<NodeCheck> => {
+        let info: SequencerInfo;
+        try {
+          info = await new VocdoniSequencerService(url, this.sequencerConfig).getInfo();
+        } catch (err) {
+          if (unreachable(err)) return { url, status: 'down', reason: `down: ${message(err)}` };
+          if (err instanceof SequencerError) {
+            throw new SequencerError(`sequencer ${url}: /info: ${err.message}`, url);
+          }
+          throw err;
+        }
+        checkNodeInfo(info, pins, url);
+        return info.observer
+          ? { url, status: 'observer', info, reason: 'observer' }
+          : { url, status: 'usable', info };
+      })
+    );
+  }
+
+  private requireInit(what: string): void {
+    if (!this.initialized) {
+      throw new Error(`SDK must be initialized before ${what}. Call sdk.init() first.`);
+    }
   }
 
   /**
-   * Get the process registry service for process management.
-   * Requires a signer with a provider for blockchain interactions.
+   * The sequencer clients: `sequencer` issues keys, `nodes` routes votes and
+   * reads. Available after `init()`, with the nodes that passed its checks;
+   * a role with no usable node throws `SequencerUnavailableError` naming the
+   * nodes left out.
+   */
+  get api(): VocdoniApiService {
+    this.requireInit('using the sequencer API');
+    return this.apiService as VocdoniApiService;
+  }
+
+  /** The deployment the SDK works with; after `init()`. */
+  get network(): ResolvedNetwork {
+    this.requireInit('reading the network');
+    return this._network as ResolvedNetwork;
+  }
+
+  /** What `init()` found at each configured sequencer node. */
+  get nodeChecks(): readonly NodeCheck[] {
+    return this._nodeChecks;
+  }
+
+  /** The provider registry reads go through (see `rpcUrls`); after `init()`. */
+  get provider(): Provider {
+    this.requireInit('reading the chain');
+    return this.readProvider as Provider;
+  }
+
+  /** The configured uploader, if any. */
+  get uploader(): Uploader | undefined {
+    return this.uploaderImpl;
+  }
+
+  /**
+   * The registry for reads, through the read provider; after `init()`. Voters
+   * read election parameters here, never from a sequencer.
+   */
+  get registry(): ProcessRegistryService {
+    this.requireInit('reading the registry');
+    return this._registry as ProcessRegistryService;
+  }
+
+  /**
+   * The network's registry with the signer as runner, for organizer writes;
+   * after `init()`. The signer's provider must be on the network's chain, as
+   * `init()` saw it. This raw service does not re-check the signer's chain
+   * or the process id prefix on each write, as the facade methods do.
    *
-   * @throws Error if signer does not have a provider
+   * @throws Error before `init()`, without a signer provider, or with the
+   *   signer on another chain
    */
   get processes(): ProcessRegistryService {
+    this.requireInit('using the process registry');
     this.ensureProvider();
-    if (!this._processRegistry) {
-      if (!this.config.customAddresses.processRegistry) {
-        throw new Error(
-          "Contract address for 'processRegistry' not found. " +
-            'Use an on-chain SDK method (which resolves by signer chain), or provide addresses.processRegistry explicitly.'
-        );
-      }
-      this._processRegistry = new ProcessRegistryService(
-        this.config.customAddresses.processRegistry,
-        this.config.signer
+    const network = this.network;
+    if (this.signerChainId !== undefined && this.signerChainId !== BigInt(network.chainId)) {
+      throw new Error(
+        `The signer is on chain ${this.signerChainId}; the ${network.name} registry is on chain ${network.chainId}.`
       );
     }
+    this._processRegistry ??= new ProcessRegistryService(network.processRegistry, this.signer);
     return this._processRegistry;
+  }
+
+  /** The ballot prover, with the configured artifacts and `verifyProof`. */
+  get ballotProver(): BallotProver {
+    this._ballotProver ??= new BallotProver({
+      artifacts: this.artifactsConfig,
+      verifyProof: this.settings.verifyProof,
+    });
+    return this._ballotProver;
+  }
+
+  /**
+   * Proves a built ballot (`buildBallot`) under the registry's ballot VK:
+   * the circuit files are downloaded once and checked, and the proof must
+   * carry the ballot's public signals.
+   *
+   * @throws ArtifactError or BallotProofError
+   */
+  async proveBallot(ballot: ProvableBallot): Promise<BallotProof> {
+    this.requireInit('proving ballots');
+    return this.ballotProver.prove(ballot, (this.registryPins as NodeExpectation).ballotVkHash);
   }
 
   /**
@@ -192,39 +510,43 @@ export class DavinciSDK {
 
   /**
    * Get the process orchestration service for simplified process creation.
-   * Requires a signer with a provider for blockchain interactions.
+   * Requires `init()` and a signer with a provider for blockchain interactions.
    *
    * @throws Error if signer does not have a provider
    */
   get processOrchestrator(): ProcessOrchestrationService {
+    this.requireInit('creating or managing processes');
     this.ensureProvider();
-    if (!this._processOrchestrator) {
-      const processRegistry = this.processes;
-      this._processOrchestrator = new ProcessOrchestrationService(
-        processRegistry,
-        this.apiService,
-        this.config.signer
-      );
-    }
+    this._processOrchestrator ??= new ProcessOrchestrationService(
+      this.processes,
+      this.api,
+      this.signer
+    );
     return this._processOrchestrator;
   }
 
+  // Process reads through the read provider: no signer provider needed.
+  private get readOrchestrator(): ProcessOrchestrationService {
+    this._readOrchestrator ??= new ProcessOrchestrationService(
+      this.registry,
+      this.api,
+      this.signer
+    );
+    return this._readOrchestrator;
+  }
+
   /**
-   * Get the vote orchestration service for simplified voting
+   * Get the vote orchestration service for simplified voting; after `init()`.
    */
   get voteOrchestrator(): VoteOrchestrationService {
-    if (!this._voteOrchestrator) {
-      this._voteOrchestrator = new VoteOrchestrationService(
-        this.apiService,
-        () => this.getBallotInputGenerator(),
-        this.config.signer,
-        this.censusProviders,
-        {
-          verifyCircuitFiles: this.config.verifyCircuitFiles,
-          verifyProof: this.config.verifyProof,
-        }
-      );
-    }
+    this.requireInit('voting');
+    this._voteOrchestrator ??= new VoteOrchestrationService(
+      this.api,
+      () => this.getBallotInputGenerator(),
+      this.signer,
+      this.censusProviders,
+      { verifyProof: this.settings.verifyProof }
+    );
     return this._voteOrchestrator;
   }
 
@@ -233,11 +555,11 @@ export class DavinciSDK {
    * This method fetches raw contract data and transforms it into a user-friendly format
    * that matches the ProcessConfig interface used for creation, plus additional runtime data.
    *
-   * Requires a signer with a provider for blockchain interactions.
+   * Reads through the SDK's read provider: a voter's bare wallet is enough.
    *
-   * @param processId - The process ID to fetch
+   * @param processId - The process ID to fetch; it must be one of the network's registry
    * @returns Promise resolving to user-friendly process information
-   * @throws Error if signer does not have a provider
+   * @throws Error for a process id of another registry
    *
    * @example
    * ```typescript
@@ -263,12 +585,9 @@ export class DavinciSDK {
    * ```
    */
   async getProcess(processId: string): Promise<ProcessInfo> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before getting processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
-    return processOrchestrator.getProcess(processId);
+    this.requireInit('getting processes');
+    this.checkProcessId(processId);
+    return this.readOrchestrator.getProcess(processId);
   }
 
   /**
@@ -345,12 +664,11 @@ export class DavinciSDK {
     return this.createProcessStreamInternal(config);
   }
 
-  private async *createProcessStreamInternal(config: ProcessConfig): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before creating processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+  private async *createProcessStreamInternal(
+    config: ProcessConfig
+  ): AsyncGenerator<TxStatusEvent<ProcessCreationResult>> {
+    this.requireInit('creating processes');
+    const processOrchestrator = await this.organizer();
     yield* processOrchestrator.createProcessStream(config);
   }
 
@@ -420,11 +738,8 @@ export class DavinciSDK {
    * ```
    */
   async createProcess(config: ProcessConfig): Promise<ProcessCreationResult> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before creating processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForCurrentChain();
+    this.requireInit('creating processes');
+    const processOrchestrator = await this.organizer();
     return processOrchestrator.createProcess(config);
   }
 
@@ -433,7 +748,6 @@ export class DavinciSDK {
    * This is the ultra-easy method for end users that handles all the complex voting workflow internally.
    *
    * Does NOT require a provider - can be used with a bare Wallet for signing only.
-   * IMPORTANT: Requires censusUrl to be configured in the SDK for fetching census proofs (unless using custom census providers).
    *
    * The method automatically:
    * - Fetches process information and validates voting is allowed
@@ -443,7 +757,6 @@ export class DavinciSDK {
    *
    * @param config - Simplified vote configuration
    * @returns Promise resolving to vote submission result
-   * @throws Error if censusUrl is not configured (unless using custom census providers)
    *
    * @example
    * ```typescript
@@ -469,17 +782,7 @@ export class DavinciSDK {
    * ```
    */
   async submitVote(config: VoteConfig): Promise<VoteResult> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before submitting votes. Call sdk.init() first.');
-    }
-
-    // Check if censusUrl is configured (unless using custom census providers)
-    if (!this.config.censusUrl && !this.censusProviders.merkle && !this.censusProviders.csp) {
-      throw new Error(
-        'Census URL is required for voting. ' +
-          'Provide censusUrl in the SDK constructor config, or use custom census providers.'
-      );
-    }
+    this.requireInit('submitting votes');
 
     return this.voteOrchestrator.submitVote(config);
   }
@@ -501,9 +804,7 @@ export class DavinciSDK {
    * ```
    */
   async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before getting vote status. Call sdk.init() first.');
-    }
+    this.requireInit('getting vote status');
 
     return this.voteOrchestrator.getVoteStatus(processId, voteId);
   }
@@ -526,11 +827,7 @@ export class DavinciSDK {
    * ```
    */
   async hasAddressVoted(processId: string, address: string): Promise<boolean> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before checking vote status. Call sdk.init() first.'
-      );
-    }
+    this.requireInit('checking vote status');
 
     return this.voteOrchestrator.hasAddressVoted(processId, address);
   }
@@ -555,13 +852,9 @@ export class DavinciSDK {
    * ```
    */
   async isAddressAbleToVote(processId: string, address: string): Promise<boolean> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before checking if address can vote. Call sdk.init() first.'
-      );
-    }
+    this.requireInit('checking if address can vote');
 
-    return this.apiService.sequencer.isAddressAbleToVote(processId, address);
+    return this.api.nodes.firstAnswer(n => n.isAddressAbleToVote(processId, address));
   }
 
   /**
@@ -580,13 +873,10 @@ export class DavinciSDK {
    * ```
    */
   async getAddressWeight(processId: string, address: string): Promise<string> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before getting address weight. Call sdk.init() first.'
-      );
-    }
+    this.requireInit('getting address weight');
 
-    return (await this.apiService.sequencer.getAddressWeight(processId, address)).toString();
+    const weight = await this.api.nodes.firstAnswer(n => n.getAddressWeight(processId, address));
+    return weight.toString();
   }
 
   /**
@@ -636,11 +926,7 @@ export class DavinciSDK {
       pollIntervalMs?: number;
     }
   ) {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before watching vote status. Call sdk.init() first.'
-      );
-    }
+    this.requireInit('watching vote status');
 
     return this.voteOrchestrator.watchVoteStatus(processId, voteId, options);
   }
@@ -686,11 +972,7 @@ export class DavinciSDK {
     timeoutMs: number = 300000,
     pollIntervalMs: number = 5000
   ): Promise<VoteStatusInfo> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before waiting for vote status. Call sdk.init() first.'
-      );
-    }
+    this.requireInit('waiting for vote status');
 
     return this.voteOrchestrator.waitForVoteStatus(
       processId,
@@ -738,12 +1020,11 @@ export class DavinciSDK {
     return this.endProcessStreamInternal(processId);
   }
 
-  private async *endProcessStreamInternal(processId: string): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+  private async *endProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('ending processes');
+    const processOrchestrator = await this.organizer(processId);
     yield* processOrchestrator.endProcessStream(processId);
   }
 
@@ -766,11 +1047,8 @@ export class DavinciSDK {
    * ```
    */
   async endProcess(processId: string): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before ending processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+    this.requireInit('ending processes');
+    const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.endProcess(processId);
   }
 
@@ -811,12 +1089,11 @@ export class DavinciSDK {
     return this.pauseProcessStreamInternal(processId);
   }
 
-  private async *pauseProcessStreamInternal(processId: string): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+  private async *pauseProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('pausing processes');
+    const processOrchestrator = await this.organizer(processId);
     yield* processOrchestrator.pauseProcessStream(processId);
   }
 
@@ -839,11 +1116,8 @@ export class DavinciSDK {
    * ```
    */
   async pauseProcess(processId: string): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before pausing processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+    this.requireInit('pausing processes');
+    const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.pauseProcess(processId);
   }
 
@@ -884,12 +1158,11 @@ export class DavinciSDK {
     return this.cancelProcessStreamInternal(processId);
   }
 
-  private async *cancelProcessStreamInternal(processId: string): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+  private async *cancelProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('canceling processes');
+    const processOrchestrator = await this.organizer(processId);
     yield* processOrchestrator.cancelProcessStream(processId);
   }
 
@@ -912,11 +1185,8 @@ export class DavinciSDK {
    * ```
    */
   async cancelProcess(processId: string): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before canceling processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+    this.requireInit('canceling processes');
+    const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.cancelProcess(processId);
   }
 
@@ -956,12 +1226,11 @@ export class DavinciSDK {
     return this.resumeProcessStreamInternal(processId);
   }
 
-  private async *resumeProcessStreamInternal(processId: string): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+  private async *resumeProcessStreamInternal(
+    processId: string
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('resuming processes');
+    const processOrchestrator = await this.organizer(processId);
     yield* processOrchestrator.resumeProcessStream(processId);
   }
 
@@ -985,11 +1254,8 @@ export class DavinciSDK {
    * ```
    */
   async resumeProcess(processId: string): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before resuming processes. Call sdk.init() first.');
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+    this.requireInit('resuming processes');
+    const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.resumeProcess(processId);
   }
 
@@ -1034,14 +1300,9 @@ export class DavinciSDK {
   private async *setProcessMaxVotersStreamInternal(
     processId: string,
     maxVoters: number
-  ): AsyncGenerator<any> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before setting process maxVoters. Call sdk.init() first.'
-      );
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('setting process maxVoters');
+    const processOrchestrator = await this.organizer(processId);
     yield* processOrchestrator.setProcessMaxVotersStream(processId, maxVoters);
   }
 
@@ -1065,222 +1326,68 @@ export class DavinciSDK {
    * ```
    */
   async setProcessMaxVoters(processId: string, maxVoters: number): Promise<void> {
-    if (!this.initialized) {
-      throw new Error(
-        'SDK must be initialized before setting process maxVoters. Call sdk.init() first.'
-      );
-    }
-    this.ensureProvider();
-    const processOrchestrator = await this.getProcessOrchestratorForProcessId(processId);
+    this.requireInit('setting process maxVoters');
+    const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.setProcessMaxVoters(processId, maxVoters);
   }
 
   /**
-   * List the process IDs the sequencer knows. A node serves one deployment:
-   * when `chainId` is given, or the signer has a provider, it must be the
-   * node's chain.
+   * The process ids the sequencer nodes know (the first node that answers).
+   * A node serves one deployment: a `chainId` other than the network's is
+   * refused.
    */
   async listProcesses(chainId?: number): Promise<string[]> {
-    if (!this.initialized) {
-      throw new Error('SDK must be initialized before listing processes. Call sdk.init() first.');
-    }
-
-    let expected = chainId;
-    if (expected === undefined && this.config.signer.provider) {
-      const network = await this.config.signer.provider.getNetwork();
-      expected = Number(network.chainId);
-    }
-    if (expected !== undefined) {
-      const info = await this.apiService.sequencer.getInfo();
-      if (info.chainId !== expected) {
-        throw new Error(`The sequencer serves chainId ${info.chainId}, not ${expected}.`);
-      }
-    }
-
-    return this.apiService.sequencer.listProcesses();
-  }
-
-  /**
-   * The registry of a chain: a known network's, else the sequencer's own
-   * deployment when it is on that chain.
-   */
-  private async registryForChain(chainId: string): Promise<string> {
-    const preset = NETWORKS.find(n => n.chainId.toString() === chainId);
-    if (preset) return preset.processRegistry;
-    const info = await this.apiService.sequencer.getInfo();
-    if (info.chainId.toString() === chainId) return info.processRegistry;
-    const available = [...new Set([...NETWORKS.map(n => n.chainId), info.chainId])].join(',');
-    throw new Error(
-      `Signer chainId ${chainId} is not supported by sequencer. Available chainIds: ${available}`
-    );
-  }
-
-  /**
-   * Resolve the process registry for current signer chain.
-   */
-  private async getProcessRegistryForCurrentChain(): Promise<ProcessRegistryService> {
-    if (this.config.customAddresses.processRegistry) {
-      if (!this._processRegistry) {
-        this._processRegistry = new ProcessRegistryService(
-          this.config.customAddresses.processRegistry,
-          this.config.signer
-        );
-      }
-      return this._processRegistry;
-    }
-
-    this.ensureProvider();
-    const provider = this.config.signer.provider;
-    if (!provider) {
-      throw new Error('Provider required for blockchain operations (process management).');
-    }
-    const network = await provider.getNetwork();
-    const chainId = network.chainId.toString();
-
-    const cached = this.processRegistryByChainId.get(chainId);
-    if (cached) {
-      if (!this._processRegistry) {
-        this._processRegistry = cached;
-      }
-      return cached;
-    }
-
-    const processRegistryAddress = await this.registryForChain(chainId);
-    const processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
-    this.processRegistryByChainId.set(chainId, processRegistry);
-    if (!this._processRegistry) {
-      this._processRegistry = processRegistry;
-    }
-    return processRegistry;
-  }
-
-  /**
-   * Resolve process orchestrator for current signer chain.
-   */
-  private async getProcessOrchestratorForCurrentChain(): Promise<ProcessOrchestrationService> {
-    const processRegistry = await this.getProcessRegistryForCurrentChain();
-    if (this.config.customAddresses.processRegistry) {
-      if (!this._processOrchestrator) {
-        this._processOrchestrator = new ProcessOrchestrationService(
-          processRegistry,
-          this.apiService,
-          this.config.signer
-        );
-      }
-      return this._processOrchestrator;
-    }
-
-    const provider = this.config.signer.provider;
-    if (!provider) {
-      throw new Error('Provider required for blockchain operations (process management).');
-    }
-    const network = await provider.getNetwork();
-    const chainId = network.chainId.toString();
-    const cached = this.processOrchestratorByChainId.get(chainId);
-    if (cached) {
-      if (!this._processOrchestrator) {
-        this._processOrchestrator = cached;
-      }
-      return cached;
-    }
-
-    const processOrchestrator = new ProcessOrchestrationService(
-      processRegistry,
-      this.apiService,
-      this.config.signer
-    );
-    this.processOrchestratorByChainId.set(chainId, processOrchestrator);
-    if (!this._processOrchestrator) {
-      this._processOrchestrator = processOrchestrator;
-    }
-    return processOrchestrator;
-  }
-
-  /**
-   * Extract process version (4 bytes) from a 31-byte process ID.
-   * Format: [20-byte address][4-byte version][7-byte nonce]
-   */
-  private extractProcessIdVersion(processIdHex: string): string {
-    const hex = processIdHex.startsWith('0x') ? processIdHex.slice(2) : processIdHex;
-    if (hex.length !== 62) {
-      throw new Error(`Invalid process ID hex length ${hex.length}, expected 62`);
-    }
-    if (!/^[0-9a-fA-F]+$/.test(hex)) {
-      throw new Error('Invalid process ID hex string');
-    }
-    return `0x${hex.slice(40, 48).toLowerCase()}`;
-  }
-
-  /**
-   * Resolve the process registry from the process ID prefix (bytes 20..23),
-   * which each registry derives from its chain and address: the known
-   * networks first, then the sequencer's own deployment.
-   */
-  private async getProcessRegistryForProcessId(processId: string): Promise<ProcessRegistryService> {
-    if (this.config.customAddresses.processRegistry) {
-      if (!this._processRegistry) {
-        this._processRegistry = new ProcessRegistryService(
-          this.config.customAddresses.processRegistry,
-          this.config.signer
-        );
-      }
-      return this._processRegistry;
-    }
-
-    const processVersion = this.extractProcessIdVersion(processId);
-    const cached = this.processRegistryByVersion.get(processVersion);
-    if (cached) return cached;
-
-    const candidates = NETWORKS.map(n => ({ chainId: n.chainId, registry: n.processRegistry }));
-    let registry = candidates.find(
-      c => processIdPrefix(c.chainId, c.registry) === processVersion
-    )?.registry;
-    if (!registry) {
-      const info = await this.apiService.sequencer.getInfo();
-      candidates.push({ chainId: info.chainId, registry: info.processRegistry });
-      if (processIdPrefix(info.chainId, info.processRegistry) === processVersion) {
-        registry = info.processRegistry;
-      }
-    }
-    if (!registry) {
-      const availableVersions = candidates
-        .map(c => processIdPrefix(c.chainId, c.registry))
-        .join(',');
+    this.requireInit('listing processes');
+    const network = this.network;
+    if (chainId !== undefined && chainId !== network.chainId) {
       throw new Error(
-        `Process ID version ${processVersion} is not supported by sequencer. Available versions: ${availableVersions}`
+        `This SDK works with ${network.name} (chain ${network.chainId}), not chain ${chainId}.`
       );
     }
-
-    const processRegistry = new ProcessRegistryService(registry, this.config.signer);
-    this.processRegistryByVersion.set(processVersion, processRegistry);
-    return processRegistry;
+    return this.api.nodes.firstAnswer(n => n.listProcesses());
   }
 
   /**
-   * Resolve process orchestrator from processId version.
+   * Checks the registry prefix of a process id (bytes 20..23) is the
+   * network's, naming the known network it belongs to otherwise.
    */
-  private async getProcessOrchestratorForProcessId(
-    processId: string
-  ): Promise<ProcessOrchestrationService> {
-    const processVersion = this.extractProcessIdVersion(processId);
-    const cached = this.processOrchestratorByVersion.get(processVersion);
-    if (cached) return cached;
-
-    const processRegistry = await this.getProcessRegistryForProcessId(processId);
-    const processOrchestrator = new ProcessOrchestrationService(
-      processRegistry,
-      this.apiService,
-      this.config.signer
+  private checkProcessId(processId: string): void {
+    const network = this.network;
+    const prefix = processIdPrefixOf(processId);
+    if (prefix === network.processIdPrefix) return;
+    const other = networkOfProcessId(processId);
+    throw new Error(
+      other
+        ? `Process ${processId} belongs to ${other.name} (chain ${other.chainId}); ` +
+          `this SDK works with ${network.name} (chain ${network.chainId}).`
+        : `Process ${processId} was not created by the ${network.name} registry ` +
+          `(prefix ${prefix}, want ${network.processIdPrefix}).`
     );
-    this.processOrchestratorByVersion.set(processVersion, processOrchestrator);
-    return processOrchestrator;
   }
 
   /**
-   * Get the current configuration
+   * The organizer's orchestrator, once the signer is checked to be on the
+   * network's chain (and the process to be the network's).
    */
-  getConfig(): Readonly<InternalDavinciSDKConfig> {
-    return { ...this.config };
+  private async organizer(processId?: string): Promise<ProcessOrchestrationService> {
+    const provider = this.ensureProvider();
+    const network = this.network;
+    if (processId !== undefined) this.checkProcessId(processId);
+    const { chainId } = await provider.getNetwork();
+    if (chainId !== BigInt(network.chainId)) {
+      throw new Error(
+        `The signer is on chain ${chainId}; the ${network.name} registry is on chain ${network.chainId}.`
+      );
+    }
+    return this.processOrchestrator;
+  }
+
+  /**
+   * The settings the SDK runs with, defaults applied: a snapshot, frozen all
+   * the way down.
+   */
+  getConfig(): Readonly<DavinciSDKSettings> {
+    return Object.freeze({ ...this.settings });
   }
 
   /**
@@ -1291,12 +1398,13 @@ export class DavinciSDK {
   }
 
   /**
-   * Ensures that the signer has a provider for blockchain operations.
+   * The signer's provider.
    * @throws Error if the signer does not have a provider
    * @private
    */
-  private ensureProvider(): void {
-    if (!this.config.signer.provider) {
+  private ensureProvider(): Provider {
+    const provider = this.signer.provider;
+    if (!provider) {
       throw new Error(
         'Provider required for blockchain operations (process management). ' +
           'The signer must be connected to a provider. ' +
@@ -1304,5 +1412,6 @@ export class DavinciSDK {
           'Note: Voting operations do not require a provider.'
       );
     }
+    return provider;
   }
 }

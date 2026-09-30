@@ -44,7 +44,6 @@
         "test/census/unit/CspCensus.test.ts",
         "test/census/unit/OffchainCensus.test.ts",
         "test/census/unit/OnchainCensus.test.ts",
-        "test/core/integration/DavinciSDK.test.ts",
         "test/core/integration/SimpleProcessCreation.test.ts",
         "test/core/integration/VoteOrchestration.CensusProviders.test.ts",
         "test/core/integration/VoteOrchestration.test.ts",

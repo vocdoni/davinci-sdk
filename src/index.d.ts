@@ -16,6 +16,9 @@ export * from './crypto';
 // Export protocol limits and release pins
 export * from './protocol';
 
+// Export ballot proving
+export * from './prover';
+
 // Export known networks
 export * from './networks';
 

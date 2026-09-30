@@ -1,8 +1,8 @@
 import type { OnchainProcess } from '../../contracts/types';
 import type { BallotModeValues } from '../../crypto/ballot';
 import { VOTE_ID_MIN } from '../../protocol/limits';
-import { SequencerDecodeError } from '../errors';
-import type { ProcessView } from './types';
+import { NodeMismatchError, SequencerDecodeError } from '../errors';
+import type { ProcessView, SequencerInfo } from './types';
 
 /**
  * Validates that a process ID is a valid 62-character hex string (31 bytes).
@@ -102,5 +102,41 @@ export function checkProcessView(view: ProcessView, onchain: OnchainProcess): vo
   else if (view.census.censusRoot !== BigInt(onchain.census.root)) differs = 'census root';
   if (differs) {
     throw new SequencerDecodeError(`process view differs from the registry: ${differs}`);
+  }
+}
+
+/** What a node of a deployment must report in `/info`: the registry's chain, address and pins. */
+export interface NodeExpectation {
+  chainId: number;
+  /** `ProcessRegistry` address. */
+  processRegistry: string;
+  /** The registry's `ballotVKHash()`. */
+  ballotVkHash: string;
+  /** The registry's `batchProgramVK()`. */
+  batchProgramVk: string;
+  /** The registry's `resultsProgramVK()`. */
+  resultsProgramVk: string;
+}
+
+/**
+ * Checks a node's `/info` against the deployment it is configured for: the
+ * same chain and registry, and the ballot VK and program vks the registry
+ * pins. The observer flag is not a mismatch; the caller decides what an
+ * observer may do.
+ *
+ * @param node - Base URL of the node, for the error
+ * @throws NodeMismatchError naming the first field that differs
+ */
+export function checkNodeInfo(info: SequencerInfo, expected: NodeExpectation, node?: string): void {
+  const fields: [string, string, string][] = [
+    ['chainId', String(expected.chainId), String(info.chainId)],
+    ['processRegistry', expected.processRegistry, info.processRegistry],
+    ['ballotVkHash', expected.ballotVkHash, info.ballotVkHash],
+    ['batchProgramVk', expected.batchProgramVk, info.batchProgramVk],
+    ['resultsProgramVk', expected.resultsProgramVk, info.resultsProgramVk],
+  ];
+  for (const [field, want, got] of fields) {
+    if (want.toLowerCase() !== got.toLowerCase())
+      throw new NodeMismatchError(field, want, got, node);
   }
 }
