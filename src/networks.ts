@@ -213,6 +213,8 @@ export function computeProcessId(creator: string, prefix: string, nonce: number 
 
 /** `User-Agent` of RPC requests from Node: some public RPCs answer 403 without one. */
 const RPC_USER_AGENT = 'davinci-sdk';
+/** How long a nonce read waits for the other endpoints once one has answered. */
+const NONCE_WINDOW_MS = 1_500;
 /** Tries of a rate-limited (429) request on an RPC before the next one is asked. */
 const RPC_FAILOVER_ATTEMPTS = 4;
 
@@ -229,8 +231,8 @@ function rateLimited(answer: JsonRpcResult | JsonRpcError): boolean {
 }
 
 /**
- * A read provider over several JSON-RPC endpoints of one chain. Each request
- * goes to the endpoints in order and the first answer is taken; an endpoint
+ * A provider over several JSON-RPC endpoints of one chain, for reads and for
+ * a signer's transactions. Each request goes to the endpoints in order and the first answer is taken; an endpoint
  * that does not answer, answers with an HTTP error or rate-limits the request
  * hands it to the next. A 429 is retried a few times on the same endpoint
  * first (ethers' backoff), and more times on the last one. Requests from
@@ -238,6 +240,15 @@ function rateLimited(answer: JsonRpcResult | JsonRpcError): boolean {
  *
  * A JSON-RPC error answer (a revert, an unknown method) is an answer: it is
  * not retried elsewhere.
+ *
+ * What a signer needs is asked of every endpoint at once. A signed
+ * transaction (`eth_sendRawTransaction`) is answered by the first endpoint
+ * that takes it: a public endpoint may hold a transaction for minutes before
+ * it relays it, and the same bytes through another land in the next block.
+ * When none takes it, the first error answer is returned (an "already known"
+ * there means another endpoint relayed it). A nonce (`eth_getTransactionCount`)
+ * is the highest any endpoint reports: one that trails the chain by a block
+ * would hand out a nonce a mined transaction already took.
  */
 export class FailoverRpcProvider extends JsonRpcProvider {
   /** The endpoints, in order of preference. */
@@ -254,20 +265,47 @@ export class FailoverRpcProvider extends JsonRpcProvider {
     this.urls = [...urls];
   }
 
+  // One endpoint's answers to `payload`; throws on no answer or an HTTP error.
+  private async post(
+    url: string,
+    payload: JsonRpcPayload | JsonRpcPayload[],
+    final: boolean
+  ): Promise<(JsonRpcResult | JsonRpcError)[]> {
+    const req = new FetchRequest(url);
+    if (!final) req.setThrottleParams({ maxAttempts: RPC_FAILOVER_ATTEMPTS });
+    if (isNode()) req.setHeader('user-agent', RPC_USER_AGENT);
+    req.setHeader('content-type', 'application/json');
+    req.body = JSON.stringify(payload);
+    const res = await req.send();
+    res.assertOk();
+    const json = res.bodyJson as unknown;
+    return (Array.isArray(json) ? json : [json]) as (JsonRpcResult | JsonRpcError)[];
+  }
+
   override async _send(payload: JsonRpcPayload | JsonRpcPayload[]): Promise<JsonRpcResult[]> {
+    const calls = Array.isArray(payload) ? payload : [payload];
+    const spread = calls.filter(
+      c => c.method === 'eth_sendRawTransaction' || c.method === 'eth_getTransactionCount'
+    );
+    if (spread.length === 0 || this.urls.length === 1) return this.inOrder(payload);
+    const rest = calls.filter(c => !spread.includes(c));
+    const answers = await Promise.all([
+      ...spread.map(c =>
+        c.method === 'eth_sendRawTransaction' ? this.firstTaker(c) : this.highestCount(c)
+      ),
+      ...(rest.length > 0 ? [this.inOrder(rest)] : []),
+    ]);
+    // ethers matches the answers to the calls by id.
+    return answers.flat();
+  }
+
+  // The endpoints in order, as the class describes.
+  private async inOrder(payload: JsonRpcPayload | JsonRpcPayload[]): Promise<JsonRpcResult[]> {
     let last: unknown;
     for (const [i, url] of this.urls.entries()) {
       const final = i === this.urls.length - 1;
-      const req = new FetchRequest(url);
-      if (!final) req.setThrottleParams({ maxAttempts: RPC_FAILOVER_ATTEMPTS });
-      if (isNode()) req.setHeader('user-agent', RPC_USER_AGENT);
-      req.setHeader('content-type', 'application/json');
-      req.body = JSON.stringify(payload);
       try {
-        const res = await req.send();
-        res.assertOk();
-        const json = res.bodyJson as unknown;
-        const answers = (Array.isArray(json) ? json : [json]) as (JsonRpcResult | JsonRpcError)[];
+        const answers = await this.post(url, payload, final);
         if (!final && answers.some(rateLimited)) continue;
         // Errors travel in the same array as results; ethers types it as results only.
         return answers as JsonRpcResult[];
@@ -276,5 +314,75 @@ export class FailoverRpcProvider extends JsonRpcProvider {
       }
     }
     throw last;
+  }
+
+  // A signed transaction to every endpoint at once: the first answer that
+  // took it, else (once all have answered) the first refusal that is not a
+  // rate limit, else any refusal, else the last failure.
+  private firstTaker(call: JsonRpcPayload): Promise<JsonRpcResult[]> {
+    return new Promise((resolve, reject) => {
+      const refused: (JsonRpcResult | JsonRpcError)[] = [];
+      let last: unknown;
+      let left = this.urls.length;
+      const settle = () => {
+        if (--left > 0) return;
+        const answer = refused.find(a => !rateLimited(a)) ?? refused[0];
+        if (answer) resolve([answer as JsonRpcResult]);
+        else reject(last);
+      };
+      for (const url of this.urls) {
+        this.post(url, call, false).then(
+          ([answer]) => {
+            if (answer && !('error' in answer)) resolve([answer]);
+            else if (answer) refused.push(answer);
+            settle();
+          },
+          (err: unknown) => {
+            last = err;
+            settle();
+          }
+        );
+      }
+    });
+  }
+
+  // A nonce read from every endpoint: the highest count any reports, once
+  // all have answered or {@link NONCE_WINDOW_MS} after the first did. An
+  // endpoint that trails the chain by a block would hand out a nonce a mined
+  // transaction already took.
+  private highestCount(call: JsonRpcPayload): Promise<JsonRpcResult[]> {
+    return new Promise((resolve, reject) => {
+      let best: JsonRpcResult | undefined;
+      let refusal: JsonRpcError | undefined;
+      let last: unknown;
+      let left = this.urls.length;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finish = () => {
+        clearTimeout(timer);
+        if (best) resolve([best]);
+        else if (refusal) resolve([refusal as unknown as JsonRpcResult]);
+        else reject(last);
+      };
+      const settle = () => {
+        if (--left === 0) finish();
+      };
+      for (const url of this.urls) {
+        this.post(url, call, false).then(
+          ([answer]) => {
+            if (answer && 'result' in answer && typeof answer.result === 'string') {
+              if (!best || BigInt(answer.result) > BigInt(best.result as string)) best = answer;
+              timer ??= setTimeout(finish, NONCE_WINDOW_MS);
+            } else if (answer && 'error' in answer && !rateLimited(answer)) {
+              refusal ??= answer;
+            }
+            settle();
+          },
+          (err: unknown) => {
+            last = err;
+            settle();
+          }
+        );
+      }
+    });
   }
 }

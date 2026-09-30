@@ -1,6 +1,7 @@
 import {
   FetchRequest,
   Interface,
+  Wallet,
   getAddress,
   toUtf8Bytes,
   toUtf8String,
@@ -211,5 +212,127 @@ describe('FailoverRpcProvider', () => {
 
   it('needs an endpoint', () => {
     expect(() => new FailoverRpcProvider([])).toThrow('at least one RPC URL');
+  });
+
+  describe('a signed transaction', () => {
+    // Answers each call of a (possibly batched) request with `answer(call)`;
+    // `hold` keeps a host's eth_sendRawTransaction answer back until released.
+    function hosts(
+      answer: (host: string, call: JsonRpcPayload) => unknown,
+      hold: Record<string, Promise<void>> = {}
+    ) {
+      const seen: string[] = [];
+      FetchRequest.registerGetUrl(async req => {
+        const host = new URL(req.url).host;
+        const body = JSON.parse(toUtf8String(req.body ?? new Uint8Array())) as
+          | JsonRpcPayload
+          | JsonRpcPayload[];
+        const calls = Array.isArray(body) ? body : [body];
+        for (const c of calls) seen.push(`${host} ${c.method}`);
+        if (calls.some(c => c.method === 'eth_sendRawTransaction')) await hold[host];
+        const answers = calls.map(c => ({
+          jsonrpc: '2.0',
+          id: c.id,
+          ...(answer(host, c) as object),
+        }));
+        const r = json(Array.isArray(body) ? answers : answers[0]);
+        if (host === 'down.rpc.test') throw new Error('connect ECONNREFUSED');
+        return r;
+      });
+      return seen;
+    }
+
+    const signed = () =>
+      Wallet.createRandom().signTransaction({
+        type: 2,
+        chainId: 100,
+        nonce: 0,
+        gasLimit: 21_000,
+        to: LOCAL_REGISTRY,
+        value: 0,
+        maxFeePerGas: 20,
+        maxPriorityFeePerGas: 2,
+      });
+
+    it('goes to every endpoint at once; the first that takes it answers', async () => {
+      const raw = await signed();
+      let release = () => undefined as void;
+      const held = new Promise<void>(ok => (release = ok));
+      const hash = (await import('ethers')).keccak256(raw);
+      const seen = hosts(
+        (host, c) => {
+          if (c.method !== 'eth_sendRawTransaction') return { result: '0x10' };
+          if (host === 'b.rpc.test') return { error: { code: -32000, message: 'already known' } };
+          return { result: hash };
+        },
+        { 'a.rpc.test': held }
+      );
+      const provider = new FailoverRpcProvider(urls, 100);
+      // The first endpoint holds it; the third takes it at once.
+      const tx = await provider.broadcastTransaction(raw);
+      expect(tx.hash).toBe(hash);
+      const sends = seen
+        .filter(s => s.endsWith('eth_sendRawTransaction'))
+        .map(s => s.split(' ')[0]);
+      expect(sends.sort()).toEqual(['a.rpc.test', 'b.rpc.test', 'c.rpc.test']);
+      // A read on its own still goes to the first endpoint only.
+      seen.length = 0;
+      expect(await provider.send('eth_blockNumber', [])).toBe('0x10');
+      expect(seen).toEqual(['a.rpc.test eth_blockNumber']);
+      release();
+    });
+
+    it('reads the nonce from every endpoint and takes the highest', async () => {
+      const account = Wallet.createRandom().address;
+      const counts: Record<string, string> = { 'a.rpc.test': '0x5', 'b.rpc.test': '0x7' };
+      const seen = hosts(host =>
+        host === 'c.rpc.test'
+          ? { error: { code: -32005, message: 'limit exceeded' } }
+          : { result: counts[host] }
+      );
+      const provider = new FailoverRpcProvider(urls, 100);
+      expect(await provider.getTransactionCount(account, 'pending')).toBe(7);
+      expect(seen.map(s => s.split(' ')[0]).sort()).toEqual([
+        'a.rpc.test',
+        'b.rpc.test',
+        'c.rpc.test',
+      ]);
+
+      // An endpoint that does not answer delays the read by a moment only.
+      let release = () => undefined as void;
+      const held = new Promise<void>(ok => (release = ok));
+      FetchRequest.registerGetUrl(async req => {
+        const host = new URL(req.url).host;
+        const call = JSON.parse(toUtf8String(req.body ?? new Uint8Array())) as JsonRpcPayload;
+        if (host === 'b.rpc.test') await held;
+        return json({ jsonrpc: '2.0', id: call.id, result: host === 'b.rpc.test' ? '0x9' : '0x5' });
+      });
+      const t0 = Date.now();
+      expect(await provider.getTransactionCount(account, 'latest')).toBe(5);
+      expect(Date.now() - t0).toBeLessThan(5_000);
+      release();
+    });
+
+    it('when no endpoint takes it, answers with the first refusal that is not a rate limit', async () => {
+      const raw = await signed();
+      hosts((host, c) => {
+        if (c.method !== 'eth_sendRawTransaction') return { result: '0x10' };
+        if (host === 'a.rpc.test') return { error: { code: -32005, message: 'limit exceeded' } };
+        return { error: { code: -32000, message: 'insufficient funds for gas * price + value' } };
+      });
+      await expect(
+        new FailoverRpcProvider(
+          ['https://a.rpc.test', 'https://b.rpc.test', 'https://down.rpc.test'],
+          100
+        ).broadcastTransaction(raw)
+      ).rejects.toMatchObject({ code: 'INSUFFICIENT_FUNDS' });
+      hosts(() => ({}));
+      await expect(
+        new FailoverRpcProvider(
+          ['https://down.rpc.test', 'https://down.rpc.test'],
+          100
+        ).broadcastTransaction(raw)
+      ).rejects.toThrow('ECONNREFUSED');
+    });
   });
 });
