@@ -97,11 +97,13 @@ function errorsOf(ErrorType: ErrorClass, method: string): ContractErrorFactory {
   return (message, revert, cause) => new ErrorType(message, method, revert, cause);
 }
 
-// A process creation failure as a ContractServiceError.
+// A process creation failure as a ContractServiceError; a revert of one of
+// its reads (the DKG registration epoch) keeps its decoded error.
 function createError(err: unknown): ContractServiceError {
   if (err instanceof ContractServiceError) return err;
   const message = err instanceof Error ? err.message : String(err);
-  return new ProcessCreateError(`newProcess: ${message}`, 'newProcess', undefined, err);
+  const revert = decodeRevert(err) ?? undefined;
+  return new ProcessCreateError(`newProcess: ${message}`, 'newProcess', revert, err);
 }
 
 // Typed readers of an ethers `Result`; a value of the wrong type is a decoding bug.

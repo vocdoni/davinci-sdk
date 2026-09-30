@@ -72,7 +72,8 @@ davinci-sdk/
 │   └── census/            # Census management
 ├── test/                  # Test files
 │   ├── <domain>/unit/     # Unit tests
-│   ├── <domain>/integration/ # Integration tests
+│   ├── anvil/             # The contracts on a local anvil chain
+│   ├── fixtures/          # Test vectors
 │   ├── helpers/           # Shared test utilities
 │   └── setup/             # Vitest setup files
 ├── examples/              # Usage examples
@@ -89,14 +90,14 @@ yarn build                 # Production build
 yarn clean                 # Clean build artifacts
 
 # Testing
-yarn test                  # Run all tests
-yarn test:unit             # Run unit tests only
-yarn test:integration      # Run integration tests only
-yarn test:contracts        # Run contract tests
-yarn test:sequencer        # Run sequencer tests
-yarn test:census           # Run census tests
-yarn test:core             # Run core tests
-yarn test:crypto           # Run crypto tests
+yarn test                  # Unit tests, then the anvil suite
+yarn test:unit             # Run unit tests only (offline)
+yarn test:anvil            # Run the contracts on a local anvil chain (needs Foundry)
+yarn test:contracts        # Run contract unit tests
+yarn test:sequencer        # Run sequencer unit tests
+yarn test:census           # Run census unit tests
+yarn test:core             # Run core unit tests
+yarn test:crypto           # Run crypto unit tests
 
 # Code Quality
 yarn lint                  # Run ESLint
@@ -110,14 +111,18 @@ yarn lint-staged           # Run pre-commit checks
 
 ### Environment Setup
 
-For integration tests, create a `.env` file in the `test/` directory:
+Unit tests need nothing. The anvil suite (`yarn test:anvil`) needs git and
+[Foundry](https://getfoundry.sh) 1.8.3 (`forge` and `anvil`). It deploys the
+registry with davinci-contracts' `script/DeployAll.s.sol` and an `OwnedCensus`
+of davinci-onchain-census-contract, at the commits the vendored ABIs come from
+(`src/contracts/abi/source.json`, cloned once into `~/.cache/davinci-sdk-anvil`),
+then runs the organizer flows against them with a local stand-in for a
+sequencer node. To use checkouts you already have, set their paths in
+`test/.env` (see `test/.env.example`):
 
 ```env
-RPC_URL=https://sepolia.infura.io/v3/your-key
-SEQUENCER_API_URL=https://your-sequencer.example
-CENSUS_API_URL=https://your-census.example
-PRIVATE_KEY=0x...
-TIME_OUT=600000
+DAVINCI_CONTRACTS_DIR=../davinci-contracts
+DAVINCI_CENSUS_CONTRACT_DIR=../davinci-onchain-census-contract
 ```
 
 ## 🤝 How to Contribute

@@ -660,6 +660,18 @@ describe('ProcessRegistryService.createProcess', () => {
     }
     expect(simulations(stale.chain)).toHaveLength(0);
   });
+
+  it('names the revert of a read the creation needs', async () => {
+    const { registry, chain } = setup();
+    chain.contract(ADAPTER, DAVINCI_DKG_ADAPTER_ABI, {
+      registrationEpoch: () => revertWith(DAVINCI_DKG_ADAPTER_ABI, 'NoLiveEpoch'),
+      registry: () => [REGISTRY],
+    });
+    const err = failure(await drain(registry.createProcess(params(KeyMode.DkgLocked))));
+    expect(err).toBeInstanceOf(ProcessCreateError);
+    expect(err.revertName).toBe('NoLiveEpoch');
+    expect(chain.sent).toHaveLength(0);
+  });
 });
 
 describe('ProcessRegistryService transaction path', () => {

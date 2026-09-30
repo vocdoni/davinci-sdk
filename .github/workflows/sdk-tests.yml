@@ -1,4 +1,4 @@
-name: SDK E2E Election Cycle
+name: SDK tests
 
 on:
   push:
@@ -12,18 +12,18 @@ on:
 
 permissions:
   contents: read
-  packages: read
+
+# A new push to a pull request supersedes its running checks; every push to a
+# branch keeps its own verdict.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  sdk-e2e-election-cycle:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: [self-hosted]
-    timeout-minutes: 90
-    env:
-      COMPOSE_PROJECT_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}
-    defaults:
-      run:
-        shell: bash
+  checks:
+    name: Lint, types, unit tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,117 +38,94 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@1.22.22 --activate
-          yarn --version
-
-      - name: Select free host ports
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const net = require('net');
-
-          const envPath = process.env.GITHUB_ENV;
-          if (!envPath) {
-            throw new Error('GITHUB_ENV is not set');
-          }
-
-          function reserveRandomPort() {
-            return new Promise((resolve, reject) => {
-              const server = net.createServer();
-              server.unref();
-              server.on('error', reject);
-              server.listen(0, '127.0.0.1', () => {
-                const address = server.address();
-                if (!address || typeof address === 'string') {
-                  reject(new Error('Unable to resolve reserved port'));
-                  return;
-                }
-                resolve({ server, port: address.port });
-              });
-            });
-          }
-
-          (async () => {
-            const names = ['ANVIL_PORT', 'DEPLOYER_PORT', 'SEQUENCER_PORT', 'CENSUS_PORT'];
-            const reserved = {};
-            for (const name of names) {
-              reserved[name] = await reserveRandomPort();
-            }
-
-            const envLines = [
-              `ANVIL_PORT=${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_PORT=${reserved.DEPLOYER_PORT.port}`,
-              `SEQUENCER_PORT=${reserved.SEQUENCER_PORT.port}`,
-              `CENSUS_PORT=${reserved.CENSUS_PORT.port}`,
-              `ANVIL_RPC_URL=http://127.0.0.1:${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_URL=http://127.0.0.1:${reserved.DEPLOYER_PORT.port}/addresses.env`,
-              `RPC_URL=http://127.0.0.1:${reserved.ANVIL_PORT.port}`,
-              `DEPLOYER_ADDRESSES_URL=http://127.0.0.1:${reserved.DEPLOYER_PORT.port}/addresses.env`,
-              `SEQUENCER_INFO_URL=http://127.0.0.1:${reserved.SEQUENCER_PORT.port}/info`,
-              `CENSUS_HEALTH_URL=http://127.0.0.1:${reserved.CENSUS_PORT.port}/health`,
-              `SEQUENCER_API_URL=http://127.0.0.1:${reserved.SEQUENCER_PORT.port}`,
-              `CENSUS_API_URL=http://127.0.0.1:${reserved.CENSUS_PORT.port}`,
-            ];
-
-            fs.appendFileSync(envPath, `${envLines.join('\n')}\n`);
-
-            for (const key of Object.keys(reserved)) {
-              reserved[key].server.close();
-            }
-
-            console.log(
-              `Selected ports: anvil=${reserved.ANVIL_PORT.port} deployer=${reserved.DEPLOYER_PORT.port} sequencer=${reserved.SEQUENCER_PORT.port} census=${reserved.CENSUS_PORT.port}`
-            );
-          })().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
-          NODE
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Run unit tests
+      - name: Lint
+        run: yarn lint
+
+      - name: Check formatting
+        run: yarn format:check
+
+      - name: Type check
+        run: yarn tsc --noEmit
+
+      - name: Unit tests
         run: yarn test:unit
 
-      - name: Set stack refs
+      - name: Build
+        run: yarn build
+
+  anvil:
+    name: Contracts on anvil
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DAVINCI_CONTRACTS_DIR: ${{ github.workspace }}/.deps/davinci-contracts
+      DAVINCI_CENSUS_CONTRACT_DIR: ${{ github.workspace }}/.deps/davinci-onchain-census-contract
+      DAVINCI_ANVIL_CACHE: ${{ github.workspace }}/.deps/cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The contracts the vendored ABIs were built from: the suite deploys the same commits.
+      - name: Read the pinned contract commits
+        id: pins
         run: |
-          NODE_TAG="${DAVINCI_NODE_TAG:-main}"
-          NODE_REF="${DAVINCI_NODE_REF:-${NODE_TAG}}"
-          RESOLVED_CONTRACTS_REF="${CONTRACTS_REF:-auto}"
+          for pin in contracts:src/contracts/abi/source.json census:src/contracts/abi/census/source.json; do
+            name="${pin%%:*}"
+            file="${pin#*:}"
+            repository="$(jq -r .repository "$file")"
+            commit="$(jq -r .commit "$file")"
+            if ! [[ "$repository" =~ ^https://github\.com/vocdoni/[A-Za-z0-9._-]+$ && "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error file=$file::not a vocdoni repository at a full commit"
+              exit 1
+            fi
+            echo "${name}-repository=${repository#https://github.com/}" >> "$GITHUB_OUTPUT"
+            echo "${name}-commit=${commit}" >> "$GITHUB_OUTPUT"
+          done
 
-          {
-            echo "DAVINCI_NODE_TAG=${NODE_TAG}"
-            echo "DAVINCI_NODE_REF=${NODE_REF}"
-            echo "CONTRACTS_REF=${RESOLVED_CONTRACTS_REF}"
-          } >> "$GITHUB_ENV"
-
-          echo "Using stack refs: DAVINCI_NODE_TAG=${NODE_TAG} DAVINCI_NODE_REF=${NODE_REF} CONTRACTS_REF=${RESOLVED_CONTRACTS_REF}"
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - name: Checkout davinci-contracts
+        uses: actions/checkout@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ steps.pins.outputs.contracts-repository }}
+          ref: ${{ steps.pins.outputs.contracts-commit }}
+          path: .deps/davinci-contracts
+          submodules: recursive
+          persist-credentials: false
 
-      - name: Start local Anvil + Sequencer stack
-        run: docker compose -f test/ci/docker-compose.yml up -d --build --pull always
+      - name: Checkout davinci-onchain-census-contract
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.census-repository }}
+          ref: ${{ steps.pins.outputs.census-commit }}
+          path: .deps/davinci-onchain-census-contract
+          submodules: recursive
+          persist-credentials: false
 
-      - name: Wait for stack readiness
-        run: bash test/ci/wait-for-stack.sh
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.3
 
-      - name: Generate integration env file
-        run: bash test/ci/write-test-env.sh
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
 
-      - name: Run full election cycle integration test
-        run: yarn test:integration:e2e:ci
-
-      - name: Print stack logs on failure
-        if: failure()
+      - name: Enable Corepack
         run: |
-          docker compose -f test/ci/docker-compose.yml ps
-          docker compose -f test/ci/docker-compose.yml logs --no-color --tail=400 anvil deployer sequencer census
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
 
-      - name: Stop local stack
-        if: always()
-        run: docker compose -f test/ci/docker-compose.yml down -v --remove-orphans
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Anvil suite
+        run: yarn test:anvil
+
+      - name: Print the anvil log on failure
+        if: failure()
+        run: tail -n 300 "$DAVINCI_ANVIL_CACHE/anvil.log" || true
