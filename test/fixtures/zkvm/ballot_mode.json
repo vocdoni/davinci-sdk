@@ -1,0 +1,57 @@
+[
+ {
+  "num_fields": 1,
+  "group_size": 1,
+  "unique_values": false,
+  "cost_exponent": 0,
+  "max_value": 1,
+  "min_value": 0,
+  "max_value_sum": 1,
+  "min_value_sum": 0,
+  "packed": "2658455991569831745807614120594243841"
+ },
+ {
+  "num_fields": 2,
+  "group_size": 1,
+  "unique_values": false,
+  "cost_exponent": 1,
+  "max_value": 3,
+  "min_value": 0,
+  "max_value_sum": 6,
+  "min_value_sum": 0,
+  "packed": "15950735949418990474845684723464929538"
+ },
+ {
+  "num_fields": 6,
+  "group_size": 6,
+  "unique_values": true,
+  "cost_exponent": 2,
+  "max_value": 16,
+  "min_value": 1,
+  "max_value_sum": 1000,
+  "min_value_sum": 1,
+  "packed": "24519928653854224392189544004236702190246912255454414342"
+ },
+ {
+  "num_fields": 16,
+  "group_size": 3,
+  "unique_values": true,
+  "cost_exponent": 255,
+  "max_value": 281474976710655,
+  "min_value": 281474976710654,
+  "max_value_sum": 9223372036854775807,
+  "min_value_sum": 9223372036854775806,
+  "packed": "226156424291633194162142151441239348292184386365674270256932802071227204368"
+ },
+ {
+  "num_fields": 8,
+  "group_size": 0,
+  "unique_values": false,
+  "cost_exponent": 0,
+  "max_value": 0,
+  "min_value": 0,
+  "max_value_sum": 0,
+  "min_value_sum": 0,
+  "packed": "8"
+ }
+]

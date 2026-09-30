@@ -1,7 +1,7 @@
 // test/core/integration/VoteOrchestration.CensusProviders.test.ts
 import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainDynamicCensus } from '../../../src';
-import { VoteConfig, VoteResult } from '../../../src/core/vote/VoteOrchestrationService';
+import { VoteConfig } from '../../../src/core/vote/VoteOrchestrationService';
 import { VoteStatus } from '../../../src/sequencer/api/types';
 import {
   CensusProviders,
@@ -23,15 +23,6 @@ describe('Vote Orchestration Integration', () => {
   let processId: string;
   const voters: Wallet[] = [];
   const voterSdks: DavinciSDK[] = [];
-  let usedVoterIndex = 0;
-
-  // Helper function to get an unused voter SDK
-  function getUnusedVoterSdk(): DavinciSDK {
-    if (usedVoterIndex >= voterSdks.length) {
-      throw new Error('No unused voters available');
-    }
-    return voterSdks[usedVoterIndex++];
-  }
 
   beforeAll(async () => {
     organizerSdk = new DavinciSDK({
@@ -136,7 +127,6 @@ describe('Vote Orchestration Integration', () => {
   describe('Custom Census Providers', () => {
     let customProcessId: string;
     const customVoters: Wallet[] = [];
-    let customCensusRoot: string;
 
     beforeAll(async () => {
       // Create voters for custom provider tests
@@ -151,7 +141,6 @@ describe('Vote Orchestration Integration', () => {
       await organizerSdk.api.census.addParticipants(censusId, participants);
       const publishResult = await organizerSdk.api.census.publishCensus(censusId);
       const censusSize = await organizerSdk.api.census.getCensusSize(publishResult.root);
-      customCensusRoot = publishResult.root;
 
       // Create a process for custom provider tests
       const processConfig: ProcessConfig = {
@@ -356,12 +345,12 @@ describe('Vote Orchestration Integration', () => {
 
       it('should use custom CSP provider when provided', async () => {
         // Create a custom CSP provider
-        const customCSPProvider: CSPCensusProofProvider = async ({ processId, address }) => {
+        const customCSPProvider: CSPCensusProofProvider = async ({ processId: pid, address }) => {
           // Generate CSP proof using the dummy CSP
           const cspProofData = await davinciCSP.cspSign(
             CensusOrigin.CSP,
             CSP_PRIVATE_KEY,
-            processId,
+            pid,
             address,
             '100'
           );
@@ -427,13 +416,13 @@ describe('Vote Orchestration Integration', () => {
 
       it('should validate custom CSP provider response', async () => {
         // Create a custom provider that returns invalid data
-        const invalidCSPProvider: CSPCensusProofProvider = async ({ processId, address }) => {
+        const invalidCSPProvider: CSPCensusProofProvider = async ({ processId: pid, address }) => {
           return {
             root: 'invalid-root',
             address: address,
             weight: '100',
             censusOrigin: CensusOrigin.CSP,
-            processId: processId,
+            processId: pid,
             publicKey: '', // Missing public key
             signature: 'invalid-signature',
           } as any;

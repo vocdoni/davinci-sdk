@@ -1,0 +1,266 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "dkgManager",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "aidFor",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "appManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IDKGAppManager"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "manager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IDKGManager"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "plaintexts",
+    "inputs": [
+      {
+        "name": "eid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "first",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "count",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ready",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "values",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "register",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "dkg",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.DKGParams",
+        "components": [
+          {
+            "name": "mode",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.KeyMode"
+          },
+          {
+            "name": "epochId",
+            "type": "bytes12",
+            "internalType": "bytes12"
+          },
+          {
+            "name": "orgPKx",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "orgPKy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popAx",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popAy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popZ",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "eid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "teX",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "teY",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registrationEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "registry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "reveal",
+    "inputs": [
+      {
+        "name": "eid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sk",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submit",
+    "inputs": [
+      {
+        "name": "eid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ciphertextsTE",
+        "type": "uint256[4][]",
+        "internalType": "uint256[4][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "firstIndex",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "NoLiveEpoch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonContiguousIndex",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotRegistry",
+    "inputs": []
+  }
+]

@@ -1,0 +1,1930 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_chainID",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_ziskVerifier",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_batchProgramVK",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_resultsProgramVK",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_rootCVadcopFinal",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_ballotVKHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_dkgManager",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_defaultGrace",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_graceFloor",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_graceCeil",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_graceMaxTotal",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_noticeMin",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_STATUS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "aidFor",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ballotVKHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "batchProgramVK",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "chainID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "defaultGrace",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "dkgAdapter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalizeResultsFromDKG",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "genesisRoot",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "ballotMode",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.BallotMode",
+        "components": [
+          {
+            "name": "uniqueValues",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "numFields",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "groupSize",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "costExponent",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "maxValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "encryptionKey",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.EncryptionKey",
+        "components": [
+          {
+            "name": "x",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "censusOrigin",
+        "type": "uint8",
+        "internalType": "enum DAVINCITypes.CensusOrigin"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNextProcessId",
+    "inputs": [
+      {
+        "name": "organizationId",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProcess",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.Process",
+        "components": [
+          {
+            "name": "status",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.ProcessStatus"
+          },
+          {
+            "name": "organizationId",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "encryptionKey",
+            "type": "tuple",
+            "internalType": "struct DAVINCITypes.EncryptionKey",
+            "components": [
+              {
+                "name": "x",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "y",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "latestStateRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "result",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "startTime",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "duration",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxVoters",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "votersCount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "overwrittenVotesCount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creationBlock",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "batchNumber",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "metadataURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "metadataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "ballotMode",
+            "type": "tuple",
+            "internalType": "struct DAVINCITypes.BallotMode",
+            "components": [
+              {
+                "name": "uniqueValues",
+                "type": "bool",
+                "internalType": "bool"
+              },
+              {
+                "name": "numFields",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "groupSize",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "costExponent",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "maxValue",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "minValue",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "maxValueSum",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "minValueSum",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "census",
+            "type": "tuple",
+            "internalType": "struct DAVINCITypes.Census",
+            "components": [
+              {
+                "name": "censusOrigin",
+                "type": "uint8",
+                "internalType": "enum DAVINCITypes.CensusOrigin"
+              },
+              {
+                "name": "censusRoot",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "contractAddress",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "censusURI",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "onchainAllowAnyValidRoot",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          },
+          {
+            "name": "keyMode",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.KeyMode"
+          },
+          {
+            "name": "dkgEpochId",
+            "type": "bytes12",
+            "internalType": "bytes12"
+          },
+          {
+            "name": "dkgFirstIndex",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "dkgCount",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "dkgZeroSkipped",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "dkgResultsRequested",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "dkgAid",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "grace",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "lastVoteAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProcessEndTime",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProcessGraceEnd",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRVerifierVKeyHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getSTVerifierVKeyHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "graceCeil",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "graceFloor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "graceMaxTotal",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "newProcess",
+    "inputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum DAVINCITypes.ProcessStatus"
+      },
+      {
+        "name": "startTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "duration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxVoters",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ballotMode",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.BallotMode",
+        "components": [
+          {
+            "name": "uniqueValues",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "numFields",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "groupSize",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "costExponent",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "maxValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "census",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.Census",
+        "components": [
+          {
+            "name": "censusOrigin",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.CensusOrigin"
+          },
+          {
+            "name": "censusRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "contractAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "censusURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "onchainAllowAnyValidRoot",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      },
+      {
+        "name": "metadataURI",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "encryptionKey",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.EncryptionKey",
+        "components": [
+          {
+            "name": "x",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "dkg",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.DKGParams",
+        "components": [
+          {
+            "name": "mode",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.KeyMode"
+          },
+          {
+            "name": "epochId",
+            "type": "bytes12",
+            "internalType": "bytes12"
+          },
+          {
+            "name": "orgPKx",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "orgPKy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popAx",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popAy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "popZ",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "noticeMin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pidPrefix",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "processCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "processNonce",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "processes",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum DAVINCITypes.ProcessStatus"
+      },
+      {
+        "name": "organizationId",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "encryptionKey",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.EncryptionKey",
+        "components": [
+          {
+            "name": "x",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "latestStateRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "startTime",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "duration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxVoters",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "votersCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "overwrittenVotesCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "creationBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "batchNumber",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "metadataURI",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ballotMode",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.BallotMode",
+        "components": [
+          {
+            "name": "uniqueValues",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "numFields",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "groupSize",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "costExponent",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "maxValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValue",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minValueSum",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "census",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.Census",
+        "components": [
+          {
+            "name": "censusOrigin",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.CensusOrigin"
+          },
+          {
+            "name": "censusRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "contractAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "censusURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "onchainAllowAnyValidRoot",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      },
+      {
+        "name": "keyMode",
+        "type": "uint8",
+        "internalType": "enum DAVINCITypes.KeyMode"
+      },
+      {
+        "name": "dkgEpochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "dkgFirstIndex",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "dkgCount",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "dkgZeroSkipped",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "dkgResultsRequested",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "dkgAid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "grace",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "lastVoteAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "requestResultsDecryption",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "accumulator",
+        "type": "uint256[64]",
+        "internalType": "uint256[64]"
+      },
+      {
+        "name": "siblings",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "resultsProgramVK",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "revealProcessKey",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "sk",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rootCVadcopFinal",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setProcessCensus",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "census",
+        "type": "tuple",
+        "internalType": "struct DAVINCITypes.Census",
+        "components": [
+          {
+            "name": "censusOrigin",
+            "type": "uint8",
+            "internalType": "enum DAVINCITypes.CensusOrigin"
+          },
+          {
+            "name": "censusRoot",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "contractAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "censusURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "onchainAllowAnyValidRoot",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessDuration",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "_duration",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessGrace",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "grace",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessMaxVoters",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "_maxVoters",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessMetadata",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "metadataURI",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessResults",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "publicValues",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "proofBytes",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProcessStatus",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "newStatus",
+        "type": "uint8",
+        "internalType": "enum DAVINCITypes.ProcessStatus"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitStateTransition",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "publicValues",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "proofBytes",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "commitments",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "ys",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "kzgProofs",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "ziskVerifier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IZiskVerifier"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "CensusUpdated",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "censusRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "censusURI",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessCreated",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessDurationChanged",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "duration",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessGraceChanged",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "grace",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessMaxVotersChanged",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "maxVoters",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessMetadataUpdated",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "metadataURI",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessResultsSet",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "result",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessStateTransitioned",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "oldStateRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newStateRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newVotersCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newOverwrittenVotesCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nBlobs",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessStatusChanged",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "oldStatus",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum DAVINCITypes.ProcessStatus"
+      },
+      {
+        "name": "newStatus",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum DAVINCITypes.ProcessStatus"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ResultsDecryptionRequested",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "indexed": false,
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "firstIndex",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "count",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BallotModeMaxValueSumTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BallotModeMaxValueTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BallotModeMinValueSumTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BallotModeMinValueTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BlobCountMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CannotAcceptResult",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CensusNotUpdatable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CircuitFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DKGDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyTransition",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "GraceOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAccumulator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBlobCommitmentLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBlobOpening",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidBlobsDigest",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBlockNumber",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCensusAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCensusConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCensusOrigin",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCensusRoot",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCensusURI",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidDKGParams",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidDuration",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidEncryptionKey",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidGrace",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidGroupSize",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInclusionProof",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidKZGProofLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidKeyMode",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxCount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxMinValueBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxValue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxVoters",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMetadata",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMinTotalCost",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMinValue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidOccupiedBefore",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidProcessId",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPublicValues",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidStartTime",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidStateRoot",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidStatus",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTimeBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidUniqueValues",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidValueSumBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidVerifierConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxPossibleResultCapExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxVotersReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MissingBlob",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoBlobs",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProcessAlreadyExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProcessNotEnded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProcessNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProofInvalid",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ResultsAlreadyRequested",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ResultsNotReady",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SmtLengthMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SmtMaxLevelsReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownProcessIdPrefix",
+    "inputs": []
+  }
+]

@@ -10,7 +10,7 @@ import {
   assertMerkleCensusProof,
   assertCSPCensusProof,
 } from '../../census/types';
-import { VoteRequest, VoteBallot, VoteProof, VoteStatus } from '../../sequencer/api/types';
+import { VoteRequest, VoteProof, VoteStatus } from '../../sequencer/api/types';
 import { BallotMode } from '../types';
 import * as snarkjs from 'snarkjs';
 
@@ -128,16 +128,15 @@ export class VoteOrchestrationService {
     );
 
     // 4. Generate vote proof inputs
-    const { voteId, voteIdDecimal, cryptoOutput, circomInputs } =
-      await this.generateVoteProofInputs(
-        config.processId,
-        voterAddress,
-        process.encryptionKey,
-        process.ballotMode,
-        config.choices,
-        censusProof.weight,
-        config.randomness
-      );
+    const { voteId, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
+      config.processId,
+      voterAddress,
+      process.encryptionKey,
+      process.ballotMode,
+      config.choices,
+      censusProof.weight,
+      config.randomness
+    );
 
     // 5. Generate zk-SNARK proof using snarkjs
     const { proof } = await this.generateZkProof(circomInputs);

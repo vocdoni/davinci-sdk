@@ -1,4 +1,5 @@
-import { BallotBuilder, BallotInputsOutput, BallotConfig } from '../crypto';
+import { BallotBuilder } from '../crypto/BallotBuilder';
+import { BallotInputsOutput } from '../crypto/types';
 import { BallotMode } from '../core/types';
 import { ProofInputs } from './types';
 

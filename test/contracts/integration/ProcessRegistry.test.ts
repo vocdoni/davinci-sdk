@@ -219,8 +219,11 @@ describe('ProcessRegistryService Integration', () => {
     const newMaxVoters = 500;
 
     const maxVotersChanged = new Promise<void>(resolve => {
-      procService.onProcessMaxVotersChanged((id: string, maxVoters: bigint) => {
-        if (id.toLowerCase() === processId.toLowerCase() && maxVoters === BigInt(newMaxVoters))
+      procService.onProcessMaxVotersChanged((id: string, changedMaxVoters: bigint) => {
+        if (
+          id.toLowerCase() === processId.toLowerCase() &&
+          changedMaxVoters === BigInt(newMaxVoters)
+        )
           resolve();
       });
     });

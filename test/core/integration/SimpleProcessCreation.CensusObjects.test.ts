@@ -1,8 +1,6 @@
 // test/core/integration/SimpleProcessCreation.CensusObjects.test.ts
 import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainCensus } from '../../../src';
-import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
-import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
 import {
   createIntegrationProvider,
   createIntegrationWallet,

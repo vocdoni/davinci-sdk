@@ -1,16 +1,11 @@
 import { buildElGamal } from '../../../src/crypto/ElGamal';
-import { buildPoseidon } from 'circomlibjs';
 import { BallotBuilder } from '../../../src/crypto/BallotBuilder';
 
 describe('Crypto Integration: Poseidon + ElGamal', () => {
   let elgamal: any;
-  let poseidon: any;
-  let F: any;
 
   beforeAll(async () => {
     elgamal = await buildElGamal();
-    poseidon = await buildPoseidon();
-    F = poseidon.F;
   });
 
   it('should encrypt and match structure', async () => {

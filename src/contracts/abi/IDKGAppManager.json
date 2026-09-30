@@ -1,0 +1,338 @@
+[
+  {
+    "type": "function",
+    "name": "getApplication",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct DKGTypes.Application",
+        "components": [
+          {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "organizerPK",
+            "type": "tuple",
+            "internalType": "struct DKGTypes.Point",
+            "components": [
+              {
+                "name": "x",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "y",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "organizerSecret",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "poolIndex",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "policy",
+            "type": "tuple",
+            "internalType": "struct DKGTypes.AppPolicy",
+            "components": [
+              {
+                "name": "mode",
+                "type": "uint8",
+                "internalType": "enum DKGTypes.AppMode"
+              },
+              {
+                "name": "openSubmission",
+                "type": "bool",
+                "internalType": "bool"
+              },
+              {
+                "name": "submitters",
+                "type": "address[]",
+                "internalType": "address[]"
+              },
+              {
+                "name": "maxCiphertexts",
+                "type": "uint16",
+                "internalType": "uint16"
+              },
+              {
+                "name": "notBeforeBlock",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "notAfterBlock",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "decryptNotBefore",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "decryptNotAfter",
+                "type": "uint64",
+                "internalType": "uint64"
+              }
+            ]
+          },
+          {
+            "name": "createdAtBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "exists",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getApplicationKey",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOrganizerPK",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "registerApplication",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "policy",
+        "type": "tuple",
+        "internalType": "struct DKGTypes.AppPolicy",
+        "components": [
+          {
+            "name": "mode",
+            "type": "uint8",
+            "internalType": "enum DKGTypes.AppMode"
+          },
+          {
+            "name": "openSubmission",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "submitters",
+            "type": "address[]",
+            "internalType": "address[]"
+          },
+          {
+            "name": "maxCiphertexts",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "notBeforeBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "notAfterBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "decryptNotBefore",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "decryptNotAfter",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      },
+      {
+        "name": "pkOrgX",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pkOrgY",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "schnorrAx",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "schnorrAy",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "schnorrZ",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revealOrganizerSecret",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "organizerSecret",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "AlreadyRevealed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ApplicationAlreadyExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidApplication",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidEpoch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidOrganizerSecret",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPhase",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPolicy",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSchnorrProof",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PointNotInSubgroup",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoolExhausted",
+    "inputs": []
+  }
+]

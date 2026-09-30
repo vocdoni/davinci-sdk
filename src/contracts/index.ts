@@ -48,3 +48,9 @@ export * from './types';
  * @see {@link ProcessRegistryService}
  */
 export * from './ProcessRegistryService';
+
+/**
+ * Vendored contract ABIs and DAVINCI revert decoding.
+ * @see {@link abis}
+ */
+export * from './abis';

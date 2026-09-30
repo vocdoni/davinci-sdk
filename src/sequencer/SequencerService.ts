@@ -6,7 +6,6 @@ import {
   ParticipantInfoResponse,
   ProcessKeysResponse,
   SequencerStats,
-  VoteBallot,
   VoteRequest,
   VoteStatusResponse,
   WorkersResponse,

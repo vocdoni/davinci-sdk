@@ -25,10 +25,61 @@
     "no-shadow": "off",
     "@typescript-eslint/no-shadow": ["error"]
   },
+  "overrides": [
+    {
+      // Temporary: files of the pre-zkVM stack that are being rewritten or
+      // deleted. Their type-aware findings are warnings until then; whoever
+      // rewrites or deletes a file removes it from this list, and the block
+      // goes once the list is empty. New code never goes here.
+      "files": [
+        "src/census/CensusOrchestrator.ts",
+        "src/census/types.ts",
+        "src/contracts/ProcessRegistryService.ts",
+        "src/contracts/SmartContractService.ts",
+        "src/core/process/ProcessOrchestrationService.ts",
+        "src/core/types/metadata.ts",
+        "src/core/vote/VoteOrchestrationService.ts",
+        "src/crypto/BallotBuilder.ts",
+        "src/crypto/ElGamal.ts",
+        "src/sequencer/BallotInputGenerator.ts",
+        "src/sequencer/DavinciCSP.ts",
+        "src/sequencer/SequencerService.ts",
+        "test/census/unit/CensusOrchestrator.test.ts",
+        "test/census/unit/CspCensus.test.ts",
+        "test/census/unit/OffchainCensus.test.ts",
+        "test/census/unit/OnchainCensus.test.ts",
+        "test/contracts/integration/ProcessRegistry.test.ts",
+        "test/core/integration/DavinciSDK.test.ts",
+        "test/core/integration/SimpleProcessCreation.test.ts",
+        "test/core/integration/VoteOrchestration.CensusProviders.test.ts",
+        "test/core/integration/VoteOrchestration.test.ts",
+        "test/core/unit/DavinciSDK.multichain.test.ts",
+        "test/crypto/integration/BallotBuilder.test.ts",
+        "test/crypto/integration/Sequencer.test.ts",
+        "test/crypto/unit/ElGamal.test.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "warn",
+        "@typescript-eslint/no-misused-promises": "warn",
+        "@typescript-eslint/no-redundant-type-constituents": "warn",
+        "@typescript-eslint/no-unsafe-argument": "warn",
+        "@typescript-eslint/no-unsafe-assignment": "warn",
+        "@typescript-eslint/no-unsafe-call": "warn",
+        "@typescript-eslint/no-unsafe-enum-comparison": "warn",
+        "@typescript-eslint/no-unsafe-member-access": "warn",
+        "@typescript-eslint/no-unsafe-return": "warn",
+        "@typescript-eslint/require-await": "warn",
+        "@typescript-eslint/unbound-method": "warn"
+      }
+    }
+  ],
   "ignorePatterns": [
     "dist",
     "node_modules",
     "examples",
+    "docs",
+    "src/index.d.ts",
+    "vitest.*.config.ts",
     "jest.config.js",
     "rollup.config.js"
   ]

@@ -1,0 +1,243 @@
+[
+  {
+    "type": "function",
+    "name": "EPOCH_PREFIX",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "appManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "epochNonce",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAppPoolIndex",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getCombinedDecryption",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "ciphertextIndex",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct DKGTypes.CombinedDecryptionRecord",
+        "components": [
+          {
+            "name": "ciphertextIndex",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "completed",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "plaintext",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPoolKey",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "keyIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPoolStatus",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "nextIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "submitCiphertext",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "aid",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "c1x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "c1y",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "c2x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "c2y",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ciphertextIndex",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "CiphertextAlreadySubmitted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DecryptionLimitReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCiphertext",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidEpoch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPhase",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidProofInput",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoolExhausted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
+    "inputs": []
+  }
+]

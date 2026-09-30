@@ -49,7 +49,6 @@ const createOutput = (name, options) => [
       '@vocdoni/davinci-contracts': 'davinciContracts',
       ethers: 'ethers',
       snarkjs: 'snarkjs',
-      '@ethereumjs/common': 'ethereumjsCommon'
       // NOTE: circomlibjs/blake-hash/buffer are now bundled, so no globals needed for them.
     }
   }

@@ -25,6 +25,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint-staged": "lint-staged",
+    "sync:abis": "node scripts/sync-abis.mjs",
     "test": "yarn test:unit && yarn test:integration",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -85,7 +86,6 @@
     "url": "https://github.com/vocdoni/davinci-sdk/issues"
   },
   "dependencies": {
-    "@ethereumjs/common": "^4.4.0",
     "@vocdoni/davinci-contracts": "^0.0.49",
     "buffer": "^6.0.3",
     "circomlibjs": "^0.1.7",

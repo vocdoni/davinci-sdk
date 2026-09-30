@@ -1,13 +1,8 @@
 // test/core/integration/VoteOrchestration.test.ts
 import { JsonRpcProvider, Wallet } from 'ethers';
-import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainDynamicCensus } from '../../../src';
+import { DavinciSDK, CensusOrigin, ProcessConfig } from '../../../src';
 import { VoteConfig, VoteResult } from '../../../src/core/vote/VoteOrchestrationService';
 import { VoteStatus } from '../../../src/sequencer/api/types';
-import {
-  CensusProviders,
-  MerkleCensusProofProvider,
-  CSPCensusProofProvider,
-} from '../../../src/census/types';
 import {
   createIntegrationProvider,
   createIntegrationWallet,
@@ -429,6 +424,7 @@ describe('Vote Orchestration Integration', () => {
       await expect(async () => {
         for await (const statusInfo of stream) {
           // Should not get here
+          void statusInfo;
         }
       }).rejects.toThrow();
     });
@@ -443,6 +439,7 @@ describe('Vote Orchestration Integration', () => {
       await expect(async () => {
         for await (const statusInfo of stream) {
           // Continue iterating
+          void statusInfo;
         }
       }).rejects.toThrow('Vote did not reach status settled within 1000ms');
     });

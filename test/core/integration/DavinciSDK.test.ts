@@ -1,5 +1,5 @@
-import { DavinciSDK, DavinciSDKConfig } from '../../../src/DavinciSDK';
-import { Wallet, JsonRpcProvider } from 'ethers';
+import { DavinciSDK } from '../../../src/DavinciSDK';
+import { Wallet } from 'ethers';
 import { createIntegrationProvider, getApiUrls } from '../../helpers/integrationRuntime';
 import { InfoResponse } from '../../../src/sequencer/api/types';
 
@@ -165,8 +165,6 @@ describe('DavinciSDK Integration Tests', () => {
           processRegistry: CUSTOM_PROCESS_REGISTRY,
         },
       });
-
-      const initialConfig = sdk.getConfig();
 
       // Initialize with custom addresses
       await sdk.init();
@@ -426,7 +424,7 @@ describe('DavinciSDK Integration Tests', () => {
       });
 
       try {
-        sdk.processes;
+        void sdk.processes;
         throw new Error('Should have thrown an error');
       } catch (error: any) {
         expect(error.message).toContain('wallet.connect(provider)');

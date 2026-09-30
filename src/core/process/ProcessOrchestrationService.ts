@@ -273,6 +273,7 @@ export class ProcessOrchestrationService {
     }
 
     // It's manual config - return as-is (but remove size if present for backward compatibility)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- size is dropped on purpose
     const { size, ...censusWithoutSize } = census;
     return censusWithoutSize;
   }

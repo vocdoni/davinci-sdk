@@ -1,5 +1,5 @@
 import { VocdoniCensusService } from '../../../src/census';
-import { CensusParticipant, CensusOrigin } from '../../../src/census/types';
+import { CensusOrigin } from '../../../src/census/types';
 import {
   generateMockCensusParticipants,
   isValidUUID,

@@ -1,15 +1,8 @@
 import { VocdoniSequencerService } from '../../../src/sequencer/SequencerService';
-import { VocdoniCensusService, CensusOrigin } from '../../../src/census';
+import { VocdoniCensusService } from '../../../src/census';
 import { createProcessSignatureMessage, signProcessCreation } from '../../../src/sequencer/api';
 import { InfoResponse } from '../../../src/sequencer/api/types';
-import {
-  mockProvider,
-  mockWallet,
-  generateMockCensusParticipants,
-  generateMockProcessRequest,
-  isValidUUID,
-  isValidHex,
-} from './utils';
+import { mockWallet, generateMockCensusParticipants, isValidHex } from './utils';
 import { getElectionMetadataTemplate } from '../../../src/core/types';
 import { getApiUrls } from '../../helpers/integrationRuntime';
 
