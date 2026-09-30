@@ -1,7 +1,11 @@
 import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
-import { ProcessRegistryService, ProcessStatus } from '../../contracts/ProcessRegistryService';
-import { BallotMode, CensusData, EncryptionKey } from '../types';
+import { ProcessRegistryService } from '../../contracts/ProcessRegistryService';
+import { ProcessStatus, type RegistryCensus } from '../../contracts/types';
+import { metadataHash as hashMetadata } from '../../contracts/params';
+import type { BjjPoint } from '../../crypto/babyjubjub';
+import type { BallotModeValues } from '../../crypto/ballot';
+import { BallotMode } from '../types';
 import {
   ElectionPreset,
   parseElectionPresetFromMetadata,
@@ -137,6 +141,11 @@ export interface ProcessConfigWithMetadata extends BaseProcessConfig {
 export interface ProcessConfigWithMetadataUri extends BaseProcessConfig {
   /** Pre-existing metadata URI to use instead of uploading new metadata */
   metadataUri: string;
+  /**
+   * SHA-256 of the exact bytes served at `metadataUri` (`metadataHash()`);
+   * computed by downloading the URI when omitted.
+   */
+  metadataHash?: string;
 }
 
 /**
@@ -166,10 +175,9 @@ interface ProcessCreationData {
   censusRoot: string;
   ballotMode: BallotMode;
   metadataUri: string;
-  sequencerResult: {
-    encryptionPubKey: [string, string];
-  };
-  census: CensusData;
+  metadataHash: string;
+  encryptionKey: BjjPoint;
+  census: RegistryCensus;
 }
 
 /**
@@ -294,8 +302,8 @@ export class ProcessOrchestrationService {
     let questions: Array<ProcessQuestion> = [];
 
     try {
-      if (rawProcess.metadataURI) {
-        metadata = await this.apiService.sequencer.getMetadata(rawProcess.metadataURI);
+      if (rawProcess.metadataUri) {
+        metadata = await (await this.fetchMetadata(rawProcess.metadataUri)).json();
         title = metadata?.title?.default;
         description = metadata?.description?.default;
 
@@ -326,9 +334,9 @@ export class ProcessOrchestrationService {
 
     // 4. Transform census information
     const census = {
-      type: Number(rawProcess.census.censusOrigin) as CensusOrigin,
-      root: rawProcess.census.censusRoot,
-      uri: rawProcess.census.censusURI || '',
+      type: rawProcess.census.origin,
+      root: rawProcess.census.root,
+      uri: rawProcess.census.uri || '',
     };
 
     // 5. Transform ballot mode (convert BigInt fields to appropriate types)
@@ -354,7 +362,7 @@ export class ProcessOrchestrationService {
       census,
       ballot,
       questions: questions || [],
-      status: Number(rawProcess.status) as ProcessStatus,
+      status: rawProcess.status,
       creator: rawProcess.organizationId,
       startDate: new Date(startTime * 1000),
       endDate: new Date(endTime * 1000),
@@ -364,7 +372,7 @@ export class ProcessOrchestrationService {
       result: rawProcess.result,
       votersCount: Number(rawProcess.votersCount),
       overwrittenVotesCount: Number(rawProcess.overwrittenVotesCount),
-      metadataURI: rawProcess.metadataURI,
+      metadataURI: rawProcess.metadataUri,
       raw: rawProcess,
       ...(electionPreset && { electionPreset }),
     };
@@ -413,22 +421,22 @@ export class ProcessOrchestrationService {
     // Prepare all data needed for process creation
     const data = await this.prepareProcessCreation(config);
 
-    // Create encryption key object
-    const encryptionKey: EncryptionKey = {
-      x: data.sequencerResult.encryptionPubKey[0],
-      y: data.sequencerResult.encryptionPubKey[1],
-    };
-
-    // Submit on-chain transaction and yield events
+    // Submit on-chain transaction and yield events. The key was issued for
+    // the predicted id: another process from this account landing first
+    // fails the stream with WrongProcessIdError.
     const txStream = this.processRegistry.newProcess(
-      ProcessStatus.READY,
-      data.startTime,
-      data.duration,
-      data.maxVoters,
-      data.ballotMode,
-      data.census,
-      data.metadataUri,
-      encryptionKey
+      {
+        status: ProcessStatus.READY,
+        startTime: data.startTime,
+        duration: data.duration,
+        maxVoters: data.maxVoters,
+        ballotMode: toBallotModeValues(data.ballotMode),
+        census: data.census,
+        metadataUri: data.metadataUri,
+        metadataHash: data.metadataHash,
+        encryptionKey: data.encryptionKey,
+      },
+      { expectedProcessId: data.processId }
     );
 
     let transactionHash = 'unknown';
@@ -441,7 +449,7 @@ export class ProcessOrchestrationService {
         yield {
           status: TxStatus.Completed,
           response: {
-            processId: data.processId,
+            processId: event.response.processId,
             transactionHash,
           },
         };
@@ -505,21 +513,20 @@ export class ProcessOrchestrationService {
     // 4. Resolve ballot mode — either raw `ballot` or `electionPreset`
     const ballotMode = this.resolveBallotConfig(config);
 
-    // 5. Handle metadata - either use provided URI or create and upload new metadata
-    let metadataUri: string;
-
-    if ('metadataUri' in config) {
-      // Use the provided metadata URI directly
-      metadataUri = config.metadataUri;
-    } else {
-      // Create and push metadata
-      const metadata = this.createMetadata(config);
-      const metadataHash = await this.apiService.sequencer.pushMetadata(metadata);
-      metadataUri = this.apiService.sequencer.getMetadataUrl(metadataHash);
+    // 5. Metadata: the registry binds its URI and the SHA-256 of the bytes served there
+    if (!('metadataUri' in config)) {
+      throw new Error(
+        'The sequencer does not host metadata: serve the metadata document at a public URL ' +
+          'and create the process with `metadataUri` (and optionally `metadataHash`).'
+      );
     }
+    const metadataUri = config.metadataUri;
+    const metadataHash =
+      config.metadataHash ??
+      hashMetadata(new Uint8Array(await (await this.fetchMetadata(metadataUri)).arrayBuffer()));
 
-    // 6. Get encryption public key from sequencer
-    const sequencerResult = await this.apiService.sequencer.getProcessKeys(processId);
+    // 6. Get the encryption key the sequencer issues for the predicted process id
+    const encryptionKey = await this.apiService.sequencer.getEncryptionKey(processId);
 
     // 7. Determine maxVoters
     let maxVoters: number;
@@ -547,14 +554,11 @@ export class ProcessOrchestrationService {
     }
 
     // 8. Create census object for on-chain call
-    const census: CensusData = {
-      censusOrigin: censusConfig.type,
-      censusRoot,
+    const census: RegistryCensus = {
+      origin: censusConfig.type,
+      root: censusRoot,
       contractAddress: censusConfig.contractAddress, // Only set for onchain censuses
-      censusURI: censusConfig.uri,
-      // For onchain censuses (ERC20 token snapshots), allow any valid merkle root
-      // For other census types, require the specific censusRoot
-      onchainAllowAnyValidRoot: censusConfig.type === CensusOrigin.Onchain,
+      uri: censusConfig.uri,
     };
 
     return {
@@ -565,7 +569,8 @@ export class ProcessOrchestrationService {
       censusRoot,
       ballotMode,
       metadataUri,
-      sequencerResult,
+      metadataHash,
+      encryptionKey,
       census,
     };
   }
@@ -679,6 +684,17 @@ export class ProcessOrchestrationService {
     }
 
     throw new Error('Invalid date format. Use Date object, ISO string, or Unix timestamp.');
+  }
+
+  /**
+   * Downloads a metadata document.
+   */
+  private async fetchMetadata(uri: string): Promise<Response> {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch metadata from ${uri}: ${response.status}`);
+    }
+    return response;
   }
 
   /**
@@ -1134,4 +1150,18 @@ export class ProcessOrchestrationService {
 
     throw new Error('Set process maxVoters stream ended unexpectedly');
   }
+}
+
+/** The registry form of a ballot mode (integer bounds; groupSize defaults to numFields). */
+function toBallotModeValues(mode: BallotMode): BallotModeValues {
+  return {
+    numFields: mode.numFields,
+    groupSize: mode.groupSize ?? mode.numFields,
+    uniqueValues: mode.uniqueValues,
+    costExponent: mode.costExponent,
+    maxValue: BigInt(mode.maxValue),
+    minValue: BigInt(mode.minValue),
+    maxValueSum: BigInt(mode.maxValueSum),
+    minValueSum: BigInt(mode.minValueSum),
+  };
 }

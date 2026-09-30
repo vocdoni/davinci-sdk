@@ -20,7 +20,7 @@
  * const provider = new ethers.JsonRpcProvider('YOUR_RPC_URL');
  *
  * // Create process registry instance
- * const processRegistry = new ProcessRegistryService(provider);
+ * const processRegistry = new ProcessRegistryService(registryAddress, provider);
  * ```
  */
 
@@ -48,6 +48,13 @@ export * from './types';
  * @see {@link ProcessRegistryService}
  */
 export * from './ProcessRegistryService';
+
+/**
+ * Builders of the registry's write arguments (DKG key mode parameters,
+ * metadata hash).
+ * @see {@link params}
+ */
+export * from './params';
 
 /**
  * Vendored contract ABIs and DAVINCI revert decoding.

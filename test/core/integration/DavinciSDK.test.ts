@@ -1,15 +1,13 @@
 import { DavinciSDK } from '../../../src/DavinciSDK';
 import { Wallet } from 'ethers';
 import { createIntegrationProvider, getApiUrls } from '../../helpers/integrationRuntime';
-import { InfoResponse } from '../../../src/sequencer/api/types';
+import { SequencerInfo } from '../../../src/sequencer/api/types';
 
 const { sequencerUrl, censusUrl } = getApiUrls();
 const CUSTOM_PROCESS_REGISTRY = '0x1111111111111111111111111111111111111111';
 
-function resolveProcessRegistryFromInfo(info: InfoResponse): string {
-  const firstNetwork = Object.values(info.networks)[0];
-  if (firstNetwork?.processRegistryContract) return firstNetwork.processRegistryContract;
-  throw new Error('Sequencer info does not include process registry contract address');
+function resolveProcessRegistryFromInfo(info: SequencerInfo): string {
+  return info.processRegistry;
 }
 
 describe('DavinciSDK Integration Tests', () => {

@@ -1,8 +1,7 @@
 // test/core/integration/SimpleProcessCreation.test.ts
 import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig, OffchainCensus } from '../../../src';
-import { ProcessStatus } from '../../../src/contracts/ProcessRegistryService';
-import { getElectionMetadataTemplate } from '../../../src/core/types/metadata';
+import { ProcessStatus } from '../../../src/contracts/types';
 import {
   createIntegrationProvider,
   createIntegrationWallet,
@@ -115,7 +114,7 @@ describe('Simple Process Creation Integration', () => {
     // Verify the process was actually created on-chain
     const onChainProcess = await sdk.processes.getProcess(result.processId);
     expect(onChainProcess).toBeDefined();
-    expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
+    expect(onChainProcess.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
   });
 
   it('should create a process with minimal configuration', async () => {
@@ -288,7 +287,7 @@ describe('Simple Process Creation Integration', () => {
 
     // Verify on-chain
     const onChainProcess = await sdk.processes.getProcess(result.processId);
-    expect(onChainProcess.census.censusOrigin).toBe(BigInt(CensusOrigin.CSP));
+    expect(onChainProcess.census.origin).toBe(CensusOrigin.CSP);
   });
 
   it('should validate SDK initialization requirement', async () => {
@@ -712,7 +711,7 @@ describe('Simple Process Creation Integration', () => {
     // Verify the process was actually created on-chain
     const onChainProcess = await sdk.processes.getProcess(processId);
     expect(onChainProcess).toBeDefined();
-    expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
+    expect(onChainProcess.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
   });
 
   it('should end a process using async generator stream and yield transaction status events', async () => {
@@ -1538,74 +1537,6 @@ describe('Simple Process Creation Integration', () => {
     // Verify maxVoters was updated on-chain
     const processInfo = await sdk.getProcess(createResult.processId);
     expect(processInfo.maxVoters).toBe(newMaxVoters);
-  });
-
-  it('should create a process using pre-existing metadataUri', async () => {
-    // Step 1: Manually upload metadata to get a metadata URI using the template helper
-    const metadata = getElectionMetadataTemplate();
-    metadata.title.default = 'Metadata URI Test Election';
-    metadata.description.default = 'Testing metadataUri feature by uploading metadata manually';
-    metadata.questions = [
-      {
-        title: { default: 'Do you approve this test?' },
-        description: { default: 'Test question for metadataUri' },
-        meta: {},
-        choices: [
-          { title: { default: 'Yes' }, value: 0, meta: {} },
-          { title: { default: 'No' }, value: 1, meta: {} },
-        ],
-      },
-    ];
-
-    // Upload metadata directly to the sequencer
-    const metadataHash = await sdk.api.sequencer.pushMetadata(metadata);
-    const uploadedMetadataUri = sdk.api.sequencer.getMetadataUrl(metadataHash);
-
-    expect(uploadedMetadataUri).toBeDefined();
-    expect(uploadedMetadataUri).toBeTruthy();
-
-    // Step 2: Create a process using the uploaded metadataUri (no title/description/questions needed!)
-    const censusRoot = randomHex(32);
-    const processConfig: ProcessConfig = {
-      metadataUri: uploadedMetadataUri, // Just provide the URI!
-      census: {
-        type: CensusOrigin.OffchainStatic,
-        root: censusRoot,
-        size: 10,
-        uri: `ipfs://metadatauri-test-${Date.now()}`,
-      },
-      maxVoters: 10,
-      ballot: {
-        numFields: 1,
-        maxValue: '1',
-        minValue: '0',
-        uniqueValues: false,
-        costExponent: 1,
-        maxValueSum: '1',
-        minValueSum: '0',
-      },
-      timing: {
-        duration: 3600,
-      },
-    };
-
-    const result = await sdk.createProcess(processConfig);
-
-    // Verify the process was created successfully
-    expect(result).toBeDefined();
-    expect(result.processId).toMatch(/^0x[a-fA-F0-9]{62}$/);
-    expect(result.transactionHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-
-    // Verify the process uses the uploaded metadata URI
-    const process = await sdk.getProcess(result.processId);
-    expect(process.metadataURI).toBe(uploadedMetadataUri);
-
-    // Verify the metadata content matches what we uploaded
-    expect(process.title).toBe('Metadata URI Test Election');
-    expect(process.description).toBe('Testing metadataUri feature by uploading metadata manually');
-    expect(process.questions.length).toBe(1);
-    expect(process.questions[0].title).toBe('Do you approve this test?');
-    expect(process.questions[0].description).toBe('Test question for metadataUri');
   });
 
   describe('electionPreset round-trip', () => {

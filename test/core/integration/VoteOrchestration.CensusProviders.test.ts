@@ -548,9 +548,9 @@ describe('Vote Orchestration Integration', () => {
 
       // Step 5: Update the process census
       const updatedCensusData = {
-        censusOrigin: CensusOrigin.OffchainDynamic,
-        censusRoot: updatedPublishResult.root,
-        censusURI: updatedPublishResult.uri,
+        origin: CensusOrigin.OffchainDynamic,
+        root: updatedPublishResult.root,
+        uri: updatedPublishResult.uri,
       };
 
       const updateStream = organizerSdk.processes.setProcessCensus(

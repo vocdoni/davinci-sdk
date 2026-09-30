@@ -1,18 +1,8 @@
-import { Signer, sha256 } from 'ethers';
+import { Signer } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { BallotInputGenerator } from '../../sequencer/BallotInputGenerator';
-import { BallotInputsOutput } from '../../crypto/types';
-import { ProofInputs as Groth16ProofInputs } from '../../sequencer/types';
-import {
-  CensusOrigin,
-  CensusProof,
-  CensusProviders,
-  assertMerkleCensusProof,
-  assertCSPCensusProof,
-} from '../../census/types';
-import { VoteRequest, VoteProof, VoteStatus } from '../../sequencer/api/types';
-import { BallotMode } from '../types';
-import * as snarkjs from 'snarkjs';
+import { CensusProviders } from '../../census/types';
+import { VoteStatus } from '../../sequencer/api/types';
 
 /**
  * Simplified vote configuration interface for end users
@@ -58,6 +48,9 @@ export interface VoteStatusInfo {
   /** Current status of the vote */
   status: VoteStatus;
 
+  /** Why, for status `error` */
+  error?: string;
+
   /** The process ID */
   processId: string;
 }
@@ -77,101 +70,31 @@ export interface VoteOrchestrationConfig {
  * Handles all the complex cryptographic operations and API calls internally
  */
 export class VoteOrchestrationService {
-  private readonly verifyCircuitFiles: boolean;
-  private readonly verifyProof: boolean;
-
-  // Cache for circuit files
-  private wasmCache = new Map<string, Uint8Array>();
-  private zkeyCache = new Map<string, Uint8Array>();
-  private vkeyCache = new Map<string, any>();
-
   constructor(
     private apiService: VocdoniApiService,
     private getBallotInputGenerator: () => Promise<BallotInputGenerator>,
     private signer: Signer,
     private censusProviders: CensusProviders = {},
-    config: VoteOrchestrationConfig = {}
-  ) {
-    // Default to true - verify circuit files and proof by default for security
-    this.verifyCircuitFiles = config.verifyCircuitFiles ?? true;
-    this.verifyProof = config.verifyProof ?? true;
-  }
+    private config: VoteOrchestrationConfig = {}
+  ) {}
 
   /**
-   * Submit a vote with simplified configuration
-   * This method handles all the complex orchestration internally:
-   * - Fetches process information and encryption keys
-   * - Gets census proof (Merkle or CSP)
-   * - Generates cryptographic proofs
-   * - Signs and submits the vote
+   * Submit a vote with simplified configuration.
    *
-   * @param config - Simplified vote configuration
-   * @returns Promise resolving to vote submission result
+   * Not available in this version: ballots are the 16-field zkVM ballots
+   * built from the registry, and the sequencer no longer serves the ballot
+   * circuit artifacts the previous flow downloaded.
+   *
+   * @param _config - Simplified vote configuration
+   * @returns A rejected promise
    */
-  async submitVote(config: VoteConfig): Promise<VoteResult> {
-    // 1. Get process information
-    const process = await this.apiService.sequencer.getProcess(config.processId);
-
-    if (!process.isAcceptingVotes) {
-      throw new Error('Process is not currently accepting votes');
-    }
-
-    // 2. Get voter address from signer
-    const voterAddress = await this.signer.getAddress();
-
-    // 3. Get census proof (weight will be retrieved from the proof)
-    const censusProof = await this.getCensusProof(
-      process.census.censusOrigin,
-      process.census.censusRoot,
-      voterAddress,
-      config.processId
+  submitVote(_config: VoteConfig): Promise<VoteResult> {
+    return Promise.reject(
+      new Error(
+        'submitVote is not available in this version: the sequencer no longer serves the ' +
+          'ballot circuit artifacts, and votes are 16-field zkVM ballots built from the registry.'
+      )
     );
-
-    // 4. Generate vote proof inputs
-    const { voteId, cryptoOutput, circomInputs } = await this.generateVoteProofInputs(
-      config.processId,
-      voterAddress,
-      process.encryptionKey,
-      process.ballotMode,
-      config.choices,
-      censusProof.weight,
-      config.randomness
-    );
-
-    // 5. Generate zk-SNARK proof using snarkjs
-    const { proof } = await this.generateZkProof(circomInputs);
-
-    // 6. Sign the vote using raw VoteID bytes (canonical format)
-    const signature = await this.signVote(voteId);
-
-    // 7. Submit the vote
-    const voteRequest: VoteRequest = {
-      processId: config.processId,
-      ballot: cryptoOutput.ballot,
-      ballotProof: proof,
-      ballotInputsHash: cryptoOutput.ballotInputsHash,
-      address: voterAddress,
-      signature,
-      voteId,
-    };
-
-    // Only include censusProof for CSP (not for MerkleTree)
-    if (process.census.censusOrigin === CensusOrigin.CSP) {
-      voteRequest.censusProof = censusProof;
-    }
-
-    await this.apiService.sequencer.submitVote(voteRequest);
-
-    // 8. Get initial vote status
-    const status = await this.apiService.sequencer.getVoteStatus(config.processId, voteId);
-
-    return {
-      voteId,
-      signature,
-      voterAddress,
-      processId: config.processId,
-      status: status.status,
-    };
   }
 
   /**
@@ -179,7 +102,7 @@ export class VoteOrchestrationService {
    *
    * @param processId - The process ID
    * @param voteId - The vote ID
-   * @returns Promise resolving to vote status information
+   * @returns Promise resolving to vote status information, with the error text of an `error` vote
    */
   async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
     const status = await this.apiService.sequencer.getVoteStatus(processId, voteId);
@@ -187,6 +110,7 @@ export class VoteOrchestrationService {
     return {
       voteId,
       status: status.status,
+      ...(status.error !== undefined && { error: status.error }),
       processId,
     };
   }
@@ -221,9 +145,6 @@ export class VoteOrchestrationService {
    *   switch (statusInfo.status) {
    *     case VoteStatus.Pending:
    *       console.log("⏳ Processing...");
-   *       break;
-   *     case VoteStatus.Verified:
-   *       console.log("✓ Verified");
    *       break;
    *     case VoteStatus.Settled:
    *       console.log("✅ Settled");
@@ -302,253 +223,5 @@ export class VoteOrchestrationService {
     }
 
     return finalStatus;
-  }
-
-  /**
-   * Get census proof based on census origin type
-   */
-  private async getCensusProof(
-    censusOrigin: number,
-    censusRoot: string,
-    voterAddress: string,
-    processId: string
-  ): Promise<CensusProof> {
-    // Check if it's a Merkle-based census (OffchainStatic, OffchainDynamic, or Onchain)
-    if (
-      censusOrigin === CensusOrigin.OffchainStatic ||
-      censusOrigin === CensusOrigin.OffchainDynamic ||
-      censusOrigin === CensusOrigin.Onchain
-    ) {
-      // Use custom provider if present, otherwise get weight from sequencer
-      if (this.censusProviders.merkle) {
-        const proof = await this.censusProviders.merkle({
-          censusRoot,
-          address: voterAddress,
-        });
-        assertMerkleCensusProof(proof);
-        return proof;
-      } else {
-        // For MerkleTree, only the weight is needed - get it from sequencer
-        const weight = await this.apiService.sequencer.getAddressWeight(processId, voterAddress);
-
-        // Return minimal census proof with just the weight
-        // (full proof is not needed for MerkleTree voting)
-        return {
-          root: censusRoot,
-          address: voterAddress,
-          weight: weight,
-          censusOrigin: censusOrigin as
-            | CensusOrigin.OffchainStatic
-            | CensusOrigin.OffchainDynamic
-            | CensusOrigin.Onchain,
-          value: '',
-          siblings: '',
-        };
-      }
-    }
-
-    if (censusOrigin === CensusOrigin.CSP) {
-      if (!this.censusProviders.csp) {
-        throw new Error(
-          'CSP voting requires a CSP census proof provider. Pass one via VoteOrchestrationService(..., { csp: yourFn }).'
-        );
-      }
-      const proof = await this.censusProviders.csp({
-        processId,
-        address: voterAddress,
-      });
-      assertCSPCensusProof(proof);
-      return proof;
-    }
-
-    throw new Error(`Unsupported census origin: ${censusOrigin}`);
-  }
-
-  /**
-   * Generate vote proof inputs using BallotInputGenerator
-   */
-  private async generateVoteProofInputs(
-    processId: string,
-    voterAddress: string,
-    encryptionKey: { x: string; y: string },
-    ballotMode: BallotMode,
-    choices: number[],
-    weight: string,
-    customRandomness?: string
-  ): Promise<{
-    voteId: string;
-    voteIdDecimal: string;
-    cryptoOutput: BallotInputsOutput;
-    circomInputs: Groth16ProofInputs;
-  }> {
-    const generator = await this.getBallotInputGenerator();
-
-    // Validate choices based on ballot mode
-    this.validateChoices(choices, ballotMode);
-
-    // Convert custom randomness if provided
-    let k: string | undefined;
-    if (customRandomness) {
-      const hexRandomness = customRandomness.startsWith('0x')
-        ? customRandomness
-        : '0x' + customRandomness;
-      k = BigInt(hexRandomness).toString();
-    }
-
-    // Generate ballot inputs
-    const result = await generator.generateInputs(
-      processId.replace(/^0x/, ''),
-      voterAddress.replace(/^0x/, ''),
-      encryptionKey,
-      ballotMode,
-      choices,
-      weight,
-      k
-    );
-
-    return {
-      voteId: result.voteId,
-      voteIdDecimal: result.circomInputs.vote_id,
-      cryptoOutput: result,
-      circomInputs: result.circomInputs,
-    };
-  }
-
-  /**
-   * Validate user choices based on ballot mode
-   */
-  private validateChoices(choices: number[], ballotMode: BallotMode): void {
-    const maxValue = parseInt(ballotMode.maxValue);
-    const minValue = parseInt(ballotMode.minValue);
-
-    // Validate each choice is within the allowed range
-    for (let i = 0; i < choices.length; i++) {
-      const choice = choices[i];
-
-      if (choice < minValue || choice > maxValue) {
-        throw new Error(`Choice ${choice} is out of range [${minValue}, ${maxValue}]`);
-      }
-    }
-  }
-
-  /**
-   * Verify hash of downloaded file
-   */
-  private verifyHash(data: Uint8Array, expectedHash: string, filename: string): void {
-    const computedHash = sha256(data).slice(2); // Remove '0x' prefix
-    if (computedHash.toLowerCase() !== expectedHash.toLowerCase()) {
-      throw new Error(
-        `Hash verification failed for ${filename}. ` +
-          `Expected: ${expectedHash.toLowerCase()}, ` +
-          `Computed: ${computedHash.toLowerCase()}`
-      );
-    }
-  }
-
-  /**
-   * Generate zk-SNARK proof using snarkjs directly (no CircomProof wrapper)
-   */
-  private async generateZkProof(circomInputs: Groth16ProofInputs): Promise<{
-    proof: VoteProof;
-    publicSignals: string[];
-  }> {
-    // Get circuit URLs from sequencer info
-    const info = await this.apiService.sequencer.getInfo();
-
-    // Download WASM file (with caching)
-    let wasmBytes = this.wasmCache.get(info.circuitUrl);
-    if (!wasmBytes) {
-      const response = await fetch(info.circuitUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM at ${info.circuitUrl}: ${response.status}`);
-      }
-      const buffer = await response.arrayBuffer();
-      wasmBytes = new Uint8Array(buffer);
-
-      // Verify hash if enabled
-      if (this.verifyCircuitFiles) {
-        this.verifyHash(wasmBytes, info.circuitHash, 'circuit.wasm');
-      }
-
-      this.wasmCache.set(info.circuitUrl, wasmBytes);
-    }
-
-    // Download zkey file (with caching)
-    let zkeyBytes = this.zkeyCache.get(info.provingKeyUrl);
-    if (!zkeyBytes) {
-      const response = await fetch(info.provingKeyUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch zkey at ${info.provingKeyUrl}: ${response.status}`);
-      }
-      const buffer = await response.arrayBuffer();
-      zkeyBytes = new Uint8Array(buffer);
-
-      // Verify hash if enabled
-      if (this.verifyCircuitFiles) {
-        this.verifyHash(zkeyBytes, info.provingKeyHash, 'proving_key.zkey');
-      }
-
-      this.zkeyCache.set(info.provingKeyUrl, zkeyBytes);
-    }
-
-    // Use snarkjs.groth16.fullProve with file bytes
-    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-      circomInputs,
-      wasmBytes,
-      zkeyBytes
-    );
-
-    // Optionally verify the generated proof
-    if (this.verifyProof) {
-      // Download and cache verification key
-      let vkey = this.vkeyCache.get(info.verificationKeyUrl);
-      if (!vkey) {
-        const response = await fetch(info.verificationKeyUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch vkey at ${info.verificationKeyUrl}: ${response.status}`);
-        }
-        const vkeyText = await response.text();
-
-        // Verify hash if enabled
-        if (this.verifyCircuitFiles) {
-          const vkeyBytes = new TextEncoder().encode(vkeyText);
-          this.verifyHash(vkeyBytes, info.verificationKeyHash, 'verification_key.json');
-        }
-
-        vkey = JSON.parse(vkeyText);
-        this.vkeyCache.set(info.verificationKeyUrl, vkey);
-      }
-
-      const isValid = await snarkjs.groth16.verify(vkey, publicSignals, proof);
-      if (!isValid) {
-        throw new Error('Generated proof is invalid');
-      }
-    }
-
-    // Convert proof to VoteProof format
-    const voteProof: VoteProof = {
-      pi_a: proof.pi_a,
-      pi_b: proof.pi_b,
-      pi_c: proof.pi_c,
-      protocol: proof.protocol,
-    };
-
-    return { proof: voteProof, publicSignals };
-  }
-
-  /**
-   * Sign the vote using the signer
-   */
-  private async signVote(voteIdHex: string): Promise<string> {
-    // Sequencer VerifyVoteID currently verifies signature over a 32-byte
-    // big-endian VoteID message (left-padded), while voteId transport is 8-byte.
-    const voteId = BigInt(voteIdHex);
-    const bytes = new Uint8Array(32);
-    let value = voteId;
-    for (let i = 31; i >= 0; i--) {
-      bytes[i] = Number(value & 0xffn);
-      value >>= 8n;
-    }
-    return this.signer.signMessage(bytes);
   }
 }

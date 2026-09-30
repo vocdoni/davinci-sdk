@@ -87,7 +87,7 @@ describe('Simple Process Creation Integration', () => {
 
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);
-      expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(census.censusRoot!.toLowerCase());
+      expect(onChainProcess.census.root.toLowerCase()).toBe(census.censusRoot!.toLowerCase());
     });
 
     it('should create a process using OffchainCensus with string weights (auto-publishes)', async () => {
@@ -402,7 +402,7 @@ describe('Simple Process Creation Integration', () => {
 
       // Verify on-chain
       const onChainProcess = await sdk.processes.getProcess(result.processId);
-      expect(onChainProcess.census.censusRoot.toLowerCase()).toBe(censusRoot.toLowerCase());
+      expect(onChainProcess.census.root.toLowerCase()).toBe(censusRoot.toLowerCase());
     });
   });
 });

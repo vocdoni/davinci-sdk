@@ -12,6 +12,7 @@ import {
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
 import { VoteStatus } from './sequencer/api/types';
 import { CensusProviders } from './census/types';
+import { NETWORKS, processIdPrefix } from './networks';
 
 /**
  * Configuration interface for the DavinciSDK
@@ -496,7 +497,7 @@ export class DavinciSDK {
    * ```typescript
    * const statusInfo = await sdk.getVoteStatus(processId, voteId);
    * console.log("Vote status:", statusInfo.status);
-   * // Possible statuses: "pending", "verified", "aggregated", "processed", "settled", "error"
+   * // Possible statuses: "pending", "aggregated", "processed", "settled", "error"
    * ```
    */
   async getVoteStatus(processId: string, voteId: string): Promise<VoteStatusInfo> {
@@ -585,7 +586,7 @@ export class DavinciSDK {
       );
     }
 
-    return this.apiService.sequencer.getAddressWeight(processId, address);
+    return (await this.apiService.sequencer.getAddressWeight(processId, address)).toString();
   }
 
   /**
@@ -615,9 +616,6 @@ export class DavinciSDK {
    *   switch (statusInfo.status) {
    *     case VoteStatus.Pending:
    *       console.log("⏳ Processing...");
-   *       break;
-   *     case VoteStatus.Verified:
-   *       console.log("✓ Vote verified");
    *       break;
    *     case VoteStatus.Aggregated:
    *       console.log("📊 Vote aggregated");
@@ -1078,23 +1076,43 @@ export class DavinciSDK {
   }
 
   /**
-   * List process IDs from sequencer. In multichain mode, chainId is required unless signer has a provider.
+   * List the process IDs the sequencer knows. A node serves one deployment:
+   * when `chainId` is given, or the signer has a provider, it must be the
+   * node's chain.
    */
   async listProcesses(chainId?: number): Promise<string[]> {
     if (!this.initialized) {
       throw new Error('SDK must be initialized before listing processes. Call sdk.init() first.');
     }
 
-    let resolvedChainId = chainId;
-    if (resolvedChainId === undefined) {
-      if (!this.config.signer.provider) {
-        throw new Error('chainId is required for listProcesses when signer has no provider.');
-      }
+    let expected = chainId;
+    if (expected === undefined && this.config.signer.provider) {
       const network = await this.config.signer.provider.getNetwork();
-      resolvedChainId = Number(network.chainId);
+      expected = Number(network.chainId);
+    }
+    if (expected !== undefined) {
+      const info = await this.apiService.sequencer.getInfo();
+      if (info.chainId !== expected) {
+        throw new Error(`The sequencer serves chainId ${info.chainId}, not ${expected}.`);
+      }
     }
 
-    return this.apiService.sequencer.listProcesses(resolvedChainId);
+    return this.apiService.sequencer.listProcesses();
+  }
+
+  /**
+   * The registry of a chain: a known network's, else the sequencer's own
+   * deployment when it is on that chain.
+   */
+  private async registryForChain(chainId: string): Promise<string> {
+    const preset = NETWORKS.find(n => n.chainId.toString() === chainId);
+    if (preset) return preset.processRegistry;
+    const info = await this.apiService.sequencer.getInfo();
+    if (info.chainId.toString() === chainId) return info.processRegistry;
+    const available = [...new Set([...NETWORKS.map(n => n.chainId), info.chainId])].join(',');
+    throw new Error(
+      `Signer chainId ${chainId} is not supported by sequencer. Available chainIds: ${available}`
+    );
   }
 
   /**
@@ -1127,15 +1145,7 @@ export class DavinciSDK {
       return cached;
     }
 
-    const info = await this.apiService.sequencer.getInfo();
-    const processRegistryAddress = info.networks[chainId]?.processRegistryContract;
-    if (!processRegistryAddress) {
-      const availableChainIds = Object.keys(info.networks).join(',');
-      throw new Error(
-        `Signer chainId ${chainId} is not supported by sequencer. Available chainIds: ${availableChainIds}`
-      );
-    }
-
+    const processRegistryAddress = await this.registryForChain(chainId);
     const processRegistry = new ProcessRegistryService(processRegistryAddress, this.config.signer);
     this.processRegistryByChainId.set(chainId, processRegistry);
     if (!this._processRegistry) {
@@ -1202,7 +1212,9 @@ export class DavinciSDK {
   }
 
   /**
-   * Resolve process registry from processId version against sequencer /info networks.
+   * Resolve the process registry from the process ID prefix (bytes 20..23),
+   * which each registry derives from its chain and address: the known
+   * networks first, then the sequencer's own deployment.
    */
   private async getProcessRegistryForProcessId(processId: string): Promise<ProcessRegistryService> {
     if (this.config.customAddresses.processRegistry) {
@@ -1219,24 +1231,27 @@ export class DavinciSDK {
     const cached = this.processRegistryByVersion.get(processVersion);
     if (cached) return cached;
 
-    const info = await this.apiService.sequencer.getInfo();
-    const networkEntry = Object.values(info.networks).find(
-      network => network.processIDVersion.toLowerCase() === processVersion
-    );
-
-    if (!networkEntry?.processRegistryContract) {
-      const availableVersions = Object.values(info.networks)
-        .map(network => network.processIDVersion.toLowerCase())
+    const candidates = NETWORKS.map(n => ({ chainId: n.chainId, registry: n.processRegistry }));
+    let registry = candidates.find(
+      c => processIdPrefix(c.chainId, c.registry) === processVersion
+    )?.registry;
+    if (!registry) {
+      const info = await this.apiService.sequencer.getInfo();
+      candidates.push({ chainId: info.chainId, registry: info.processRegistry });
+      if (processIdPrefix(info.chainId, info.processRegistry) === processVersion) {
+        registry = info.processRegistry;
+      }
+    }
+    if (!registry) {
+      const availableVersions = candidates
+        .map(c => processIdPrefix(c.chainId, c.registry))
         .join(',');
       throw new Error(
         `Process ID version ${processVersion} is not supported by sequencer. Available versions: ${availableVersions}`
       );
     }
 
-    const processRegistry = new ProcessRegistryService(
-      networkEntry.processRegistryContract,
-      this.config.signer
-    );
+    const processRegistry = new ProcessRegistryService(registry, this.config.signer);
     this.processRegistryByVersion.set(processVersion, processRegistry);
     return processRegistry;
   }

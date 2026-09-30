@@ -1,0 +1,17 @@
+# Generator of ../wire.json. Place this directory next to a davinci-sequencer
+# checkout (whose workspace expects davinci-zkvm beside it) and run
+# `cargo run --release > wire.json`.
+[package]
+name = "wire-gen"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+davinci-client = { path = "../davinci-sequencer/client", default-features = false }
+davinci-zkvm-sdk = { path = "../davinci-zkvm/rust-sdk" }
+serde = "1"
+serde_json = "1"
+hex = "0.4"

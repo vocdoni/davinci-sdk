@@ -21,12 +21,15 @@ export interface BaseServiceConfig {
   headers?: Record<string, string>;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** Largest response body read, in bytes; a longer one fails the request. Unbounded by default. */
+  maxResponseBytes?: number;
 }
 
 export class BaseService {
   private readonly fetchImpl: typeof fetch;
   private readonly defaultHeaders: Record<string, string>;
   private readonly defaultTimeoutMs?: number;
+  private readonly maxResponseBytes?: number;
   private readonly baseURL: string;
 
   constructor(baseURL: string, config?: BaseServiceConfig) {
@@ -42,6 +45,7 @@ export class BaseService {
     }
     this.defaultHeaders = config?.headers ?? {};
     this.defaultTimeoutMs = config?.timeoutMs;
+    this.maxResponseBytes = config?.maxResponseBytes;
   }
 
   public getBaseUrl(): string {
@@ -64,70 +68,77 @@ export class BaseService {
   }
 
   protected async request<T>(config: RequestConfig): Promise<T> {
+    const url = new URL(this.resolveUrl(config.url));
+    this.appendQueryParams(url, config.params);
+
+    const method = (config.method ?? 'GET').toUpperCase();
+    const headers = new Headers(this.defaultHeaders);
+    if (config.headers) {
+      for (const [key, value] of Object.entries(config.headers)) {
+        headers.set(key, value);
+      }
+    }
+
     const timeoutMs = config.timeoutMs ?? this.defaultTimeoutMs;
-    const { signal, cleanup } = this.createRequestSignal(timeoutMs, config.signal);
+    const { signal, cleanup, timedOut } = this.createRequestSignal(timeoutMs, config.signal);
+    const init: RequestInit = {
+      method,
+      headers,
+      signal,
+    };
 
+    if (config.data !== undefined && method !== 'GET' && method !== 'HEAD') {
+      if (this.isBodyInit(config.data)) {
+        init.body = config.data;
+      } else {
+        if (!headers.has('Content-Type')) {
+          headers.set('Content-Type', 'application/json');
+        }
+        init.body = JSON.stringify(config.data);
+      }
+    }
+
+    let response: Response;
+    let payload: unknown;
     try {
-      const url = new URL(this.resolveUrl(config.url));
-      this.appendQueryParams(url, config.params);
-
-      const method = (config.method ?? 'GET').toUpperCase();
-      const headers = new Headers(this.defaultHeaders);
-      if (config.headers) {
-        for (const [key, value] of Object.entries(config.headers)) {
-          headers.set(key, value);
-        }
-      }
-
-      const init: RequestInit = {
-        method,
-        headers,
-        signal,
-      };
-
-      if (config.data !== undefined && method !== 'GET' && method !== 'HEAD') {
-        if (this.isBodyInit(config.data)) {
-          init.body = config.data;
-        } else {
-          if (!headers.has('Content-Type')) {
-            headers.set('Content-Type', 'application/json');
-          }
-          init.body = JSON.stringify(config.data);
-        }
-      }
-
-      const response = await this.fetchImpl(url.toString(), init);
-      const payload = await this.parseResponsePayload(response);
-
-      if (!response.ok) {
-        const apiPayload = payload as Partial<ApiError> | undefined;
-        const message =
-          (typeof apiPayload?.error === 'string' && apiPayload.error) ||
-          response.statusText ||
-          `HTTP ${response.status}`;
-        const code = apiPayload?.code ?? response.status ?? 500;
-        const error = new Error(message);
-        (error as ErrorWithCode).code = code;
-        throw error;
-      }
-
-      return payload as T;
+      response = await this.fetchImpl(url.toString(), init);
+      payload = await this.parseResponsePayload(response);
     } catch (err) {
-      if (this.hasErrorCode(err)) {
-        throw err;
-      }
-
-      const message = err instanceof Error ? err.message : 'Unknown request error';
-      const code =
-        err instanceof Error && err.name === 'AbortError'
-          ? 'ECONNABORTED'
-          : (this.readErrorCode(err) ?? 500);
-      const error = new Error(message);
-      (error as ErrorWithCode).code = code;
-      throw error;
+      throw this.transportError(err, timedOut());
     } finally {
       cleanup();
     }
+
+    if (!response.ok) {
+      throw this.httpError(response.status, response.statusText, payload);
+    }
+    return payload as T;
+  }
+
+  /**
+   * The error for an answer with an error status. The default is an `Error`
+   * whose `code` is the body's `code`, else the HTTP status.
+   */
+  protected httpError(status: number, statusText: string, payload: unknown): Error {
+    const apiPayload = payload as Partial<ApiError> | undefined;
+    const message =
+      (typeof apiPayload?.error === 'string' && apiPayload.error) || statusText || `HTTP ${status}`;
+    const error = new Error(message);
+    (error as ErrorWithCode).code = apiPayload?.code ?? status;
+    return error;
+  }
+
+  /**
+   * The error for a request that got no usable answer: a network failure, an
+   * abort, the timeout, or a body that could not be read. The default is an
+   * `Error` with code `ECONNABORTED` for an abort or timeout.
+   */
+  protected transportError(err: unknown, timedOut: boolean): Error {
+    const message = err instanceof Error ? err.message : 'Unknown request error';
+    const aborted = timedOut || (err instanceof Error && err.name === 'AbortError');
+    const error = new Error(message);
+    (error as ErrorWithCode).code = aborted ? 'ECONNABORTED' : (this.readErrorCode(err) ?? 500);
+    return error;
   }
 
   private appendQueryParams(url: URL, params?: object): void {
@@ -146,21 +157,10 @@ export class BaseService {
     }
   }
 
+  // JSON whatever the content type (some servers omit it), else the raw text.
   private async parseResponsePayload(response: Response): Promise<unknown> {
-    const raw = await response.text();
+    const raw = await this.readText(response);
     if (!raw) return undefined;
-
-    const contentType = response.headers.get('content-type') ?? '';
-    const expectsJson = /application\/json|\/[^;]+\+json/i.test(contentType);
-
-    if (expectsJson) {
-      try {
-        return JSON.parse(raw) as unknown;
-      } catch {
-        return raw;
-      }
-    }
-
     try {
       return JSON.parse(raw) as unknown;
     } catch {
@@ -168,12 +168,40 @@ export class BaseService {
     }
   }
 
+  // Reads the body as text, failing once it passes `maxResponseBytes`.
+  private async readText(response: Response): Promise<string> {
+    const max = this.maxResponseBytes;
+    if (max === undefined || !response.body) return response.text();
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > max) {
+        await reader.cancel();
+        throw new Error(`response body over ${max} bytes`);
+      }
+      chunks.push(value);
+    }
+    const body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder().decode(body);
+  }
+
   private createRequestSignal(
     timeoutMs?: number,
     externalSignal?: AbortSignal
-  ): { signal?: AbortSignal; cleanup: () => void } {
+  ): { signal?: AbortSignal; cleanup: () => void; timedOut: () => boolean } {
+    let fired = false;
+    const timedOut = () => fired;
     if (!timeoutMs && !externalSignal) {
-      return { signal: undefined, cleanup: () => undefined };
+      return { signal: undefined, cleanup: () => undefined, timedOut };
     }
 
     const controller = new AbortController();
@@ -190,11 +218,15 @@ export class BaseService {
     }
 
     if (timeoutMs && timeoutMs > 0) {
-      timeout = setTimeout(() => controller.abort(), timeoutMs);
+      timeout = setTimeout(() => {
+        fired = true;
+        controller.abort();
+      }, timeoutMs);
     }
 
     return {
       signal: controller.signal,
+      timedOut,
       cleanup: () => {
         if (timeout) clearTimeout(timeout);
         if (externalSignal) {
@@ -211,10 +243,6 @@ export class BaseService {
     if (typeof FormData !== 'undefined' && value instanceof FormData) return true;
     if (typeof ReadableStream !== 'undefined' && value instanceof ReadableStream) return true;
     return false;
-  }
-
-  private hasErrorCode(value: unknown): value is ErrorWithCode {
-    return value instanceof Error && this.readErrorCode(value) !== undefined;
   }
 
   private readErrorCode(value: unknown): ErrorCode | undefined {

@@ -1,0 +1,3525 @@
+{
+  "ballot": {
+    "address": "0x2222222222222222222222222222222222222222",
+    "ballot": [
+      {
+        "c1": {
+          "x": "11171587748779905031652909554051178400059609012656504941545102440375791995180",
+          "y": "2615991690014947892912901595299913212154276449236361242382080326431176304431"
+        },
+        "c2": {
+          "x": "7701219333553662962492246446288144945576093593441300688289361299059108093363",
+          "y": "18770481546514701392825858257856830271852044137591656296482945710160864313165"
+        }
+      },
+      {
+        "c1": {
+          "x": "15166910063229785830376154691641599298409021479461400265030055355542558690869",
+          "y": "13622372793077492088522443800286438421177651627280072742989534869865432880561"
+        },
+        "c2": {
+          "x": "1083407073848977156319833830476585155027834688588015574454969855119941013238",
+          "y": "7610393967192486016931109042532548874285379731872908562406415343229971060704"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      },
+      {
+        "c1": {
+          "x": "0",
+          "y": "1"
+        },
+        "c2": {
+          "x": "0",
+          "y": "1"
+        }
+      }
+    ]
+  },
+  "ballotCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "15 ciphertexts",
+      "ok": false,
+      "ops": [
+        {
+          "op": "pop",
+          "path": [
+            "ballot"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "off curve",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            1,
+            "c2",
+            "x"
+          ],
+          "value": "7"
+        }
+      ]
+    }
+  ],
+  "blobCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "odd hex",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blobs",
+            0
+          ],
+          "value": "0x123"
+        }
+      ]
+    },
+    {
+      "label": "no 0x",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blobs",
+            1
+          ],
+          "value": "abcdef"
+        }
+      ]
+    },
+    {
+      "label": "upper hex",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blobs",
+            1
+          ],
+          "value": "0xABCDEF"
+        }
+      ]
+    },
+    {
+      "label": "empty blob",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blobs",
+            0
+          ],
+          "value": "0x"
+        }
+      ]
+    },
+    {
+      "label": "not hex",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "blobs",
+            0
+          ],
+          "value": "0xzz"
+        }
+      ]
+    }
+  ],
+  "blobs": {
+    "blobs": [
+      "0x0102",
+      "0xabcdef"
+    ]
+  },
+  "censusFile": {
+    "participants": [
+      {
+        "key": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "weight": "3"
+      },
+      {
+        "key": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "weight": "340282366920938463463374607431768211455"
+      }
+    ]
+  },
+  "censusFileCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "weight as a number",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "participants",
+            0,
+            "weight"
+          ],
+          "value": 3
+        }
+      ]
+    },
+    {
+      "label": "19-byte key",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "participants",
+            0,
+            "key"
+          ],
+          "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "cspRequestCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "31-byte r",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "r"
+          ],
+          "value": "0x01010101010101010101010101010101010101010101010101010101010101"
+        }
+      ]
+    },
+    {
+      "label": "s without 0x",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "s"
+          ],
+          "value": "0202020202020202020202020202020202020202020202020202020202020202"
+        }
+      ]
+    },
+    {
+      "label": "recid 0",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "recid"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "recid 2",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "recid"
+          ],
+          "value": 2
+        }
+      ]
+    },
+    {
+      "label": "recid 256",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "recid"
+          ],
+          "value": 256
+        }
+      ]
+    },
+    {
+      "label": "index as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "index"
+          ],
+          "value": "9"
+        }
+      ]
+    },
+    {
+      "label": "negative index",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "index"
+          ],
+          "value": -1
+        }
+      ]
+    },
+    {
+      "label": "index 2^53 - 1",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "index"
+          ],
+          "value": 9007199254740991
+        }
+      ]
+    },
+    {
+      "label": "no index",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "censusProof",
+            "index"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "extra field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "weight"
+          ],
+          "value": "42"
+        }
+      ]
+    }
+  ],
+  "encryptionKey": {
+    "x": "19099552327547260981542886231210125691902505931204088720746463491300185142606",
+    "y": "13276557205153692030187527501273228448057533426731746626187331221465573305487"
+  },
+  "encryptionKeyCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "off curve",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [],
+          "value": {
+            "x": "1",
+            "y": "2"
+          }
+        }
+      ]
+    },
+    {
+      "label": "x = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [],
+          "value": {
+            "x": "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+            "y": "1"
+          }
+        }
+      ]
+    },
+    {
+      "label": "identity",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [],
+          "value": {
+            "x": "0",
+            "y": "1"
+          }
+        }
+      ]
+    },
+    {
+      "label": "hex coordinates",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [],
+          "value": {
+            "x": "0x01",
+            "y": "0x02"
+          }
+        }
+      ]
+    },
+    {
+      "label": "extra field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "z"
+          ],
+          "value": "0"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "observer": {
+      "ballotVkHash": "0x0303030303030303030303030303030303030303030303030303030303030303",
+      "batchProgramVk": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "chainId": 31337,
+      "lostRaces": 3,
+      "observer": true,
+      "processRegistry": "0x0202020202020202020202020202020202020202",
+      "resultsProgramVk": "0x0505050505050505050505050505050505050505050505050505050505050505",
+      "sequencerAddress": null,
+      "settledBySelf": 7,
+      "syncedFromOthers": 8
+    },
+    "sequencer": {
+      "ballotVkHash": "0x0303030303030303030303030303030303030303030303030303030303030303",
+      "batchProgramVk": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "chainId": 31337,
+      "lostRaces": 3,
+      "observer": false,
+      "processRegistry": "0x0202020202020202020202020202020202020202",
+      "resultsProgramVk": "0x0505050505050505050505050505050505050505050505050505050505050505",
+      "sequencerAddress": "0x0101010101010101010101010101010101010101",
+      "settledBySelf": 7,
+      "syncedFromOthers": 8
+    }
+  },
+  "infoCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "observer",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sequencerAddress"
+          ],
+          "value": null
+        },
+        {
+          "op": "set",
+          "path": [
+            "observer"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "label": "19-byte sequencer address",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "sequencerAddress"
+          ],
+          "value": "0x01010101010101010101010101010101010101"
+        }
+      ]
+    },
+    {
+      "label": "no sequencerAddress",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "sequencerAddress"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "no lostRaces",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "lostRaces"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "no settledBySelf",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "settledBySelf"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "chainId as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "chainId"
+          ],
+          "value": "100"
+        }
+      ]
+    },
+    {
+      "label": "31-byte vk hash",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotVkHash"
+          ],
+          "value": "0x03030303030303030303030303030303030303030303030303030303030303"
+        }
+      ]
+    },
+    {
+      "label": "unknown field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "version"
+          ],
+          "value": "1.0"
+        }
+      ]
+    }
+  ],
+  "newKeyCases": [
+    {
+      "json": {
+        "x": "19099552327547260981542886231210125691902505931204088720746463491300185142606",
+        "y": "13276557205153692030187527501273228448057533426731746626187331221465573305487"
+      },
+      "label": "12345 * B8",
+      "ok": true
+    },
+    {
+      "json": {
+        "x": "5299619240641551281634865583518297030282874472190772894086521144482721001553",
+        "y": "16950150798460657717958625567821834550301663161624707787222815936182638968203"
+      },
+      "label": "B8",
+      "ok": true
+    },
+    {
+      "json": {
+        "x": "0",
+        "y": "1"
+      },
+      "label": "identity",
+      "ok": false
+    },
+    {
+      "json": {
+        "x": "0",
+        "y": "21888242871839275222246405745257275088548364400416034343698204186575808495616"
+      },
+      "label": "order 2",
+      "ok": false
+    },
+    {
+      "json": {
+        "x": "995203441582195749578291179787384436505546430278305826713579947235728471134",
+        "y": "5472060717959818805561601436314318772137091100104008585924551046643952123905"
+      },
+      "label": "full-group generator",
+      "ok": false
+    }
+  ],
+  "participant": {
+    "address": "0x0606060606060606060606060606060606060606",
+    "censusProof": {
+      "leaf": "10642655260782738549960568475063226824749079472937622782807290410874961927",
+      "pathBits": 3,
+      "root": "8968276146194805015978015668956675092963841824772149378841211958919241599207",
+      "siblings": [
+        "11178647682667153453586042692189084050560295780819292723755375342273699149810",
+        "134128628277932807562970746937804139049410259292042133681231779156583638585"
+      ]
+    },
+    "weight": "7"
+  },
+  "participantCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "weight as a number",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": 7
+        }
+      ]
+    },
+    {
+      "label": "proof extra field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "type"
+          ],
+          "value": "merkle"
+        }
+      ]
+    },
+    {
+      "label": "proof leaf = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "leaf"
+          ],
+          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "bad address",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "0x06"
+        }
+      ]
+    },
+    {
+      "label": "unknown field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "slot"
+          ],
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "pickNode": [
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://b:8080",
+        "http://c:8080",
+        "http://a:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://c:8080",
+        "http://a:8080",
+        "http://b:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://b:8080",
+        "http://a:8080",
+        "http://c:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://c:8080",
+        "http://b:8080",
+        "http://a:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://c:8080",
+        "http://a:8080",
+        "http://b:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://a:8080",
+        "http://b:8080",
+        "http://c:8080"
+      ],
+      "order": [
+        "http://c:8080",
+        "http://a:8080",
+        "http://b:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq2.example.org/",
+        "https://seq4.example.org",
+        "https://seq3.example.org",
+        "https://seq1.example.org"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq4.example.org",
+        "https://seq3.example.org",
+        "https://seq1.example.org",
+        "https://seq2.example.org/"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq1.example.org",
+        "https://seq4.example.org"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq4.example.org",
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq3.example.org",
+        "https://seq2.example.org/",
+        "https://seq4.example.org",
+        "https://seq1.example.org"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq3.example.org",
+        "https://seq2.example.org/",
+        "https://seq1.example.org",
+        "https://seq4.example.org"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq1.example.org",
+        "https://seq4.example.org"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "order": [
+        "https://seq1.example.org",
+        "https://seq2.example.org/",
+        "https://seq3.example.org",
+        "https://seq4.example.org"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://node-n.example",
+        "http://nodo-ñ.example"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://node-n.example",
+        "http://nodo-ñ.example"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://node-n.example",
+        "http://nodo-ñ.example"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://nodo-ñ.example",
+        "http://node-n.example"
+      ],
+      "order": [
+        "http://node-n.example",
+        "http://nodo-ñ.example"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://y:1",
+        "http://x:1",
+        "http://x:1"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://y:1",
+        "http://x:1",
+        "http://x:1"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://x:1",
+        "http://x:1",
+        "http://y:1"
+      ],
+      "order": [
+        "http://y:1",
+        "http://x:1",
+        "http://x:1"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x0101010101010101010101010101010101010101"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x1111111111111111111111111111111111111111"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0xfefefefefefefefefefefefefefefefefefefefe"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0x07070707070707070707070707070707070707070707070707070707070707",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    },
+    {
+      "nodes": [
+        "http://only:8080"
+      ],
+      "order": [
+        "http://only:8080"
+      ],
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "voter": "0x052a4f7499bee3082d52779cc1e60b30557a9fc4"
+    }
+  ],
+  "processView": {
+    "ready": {
+      "ballotMode": {
+        "costExponent": 1,
+        "groupSize": 1,
+        "maxValue": "5",
+        "maxValueSum": "4611686018427387904",
+        "minValue": "0",
+        "minValueSum": "0",
+        "numFields": 4,
+        "uniqueValues": false
+      },
+      "census": {
+        "censusOrigin": 1,
+        "censusRoot": "5",
+        "censusURI": "file:///tmp/census.json"
+      },
+      "duration": 7200,
+      "encryptionKey": {
+        "x": "19099552327547260981542886231210125691902505931204088720746463491300185142606",
+        "y": "13276557205153692030187527501273228448057533426731746626187331221465573305487"
+      },
+      "id": "0x03030303030303030303030303030303030303030303030303030303030303",
+      "isAcceptingVotes": true,
+      "maxVoters": 100,
+      "organizationId": "0x0909090909090909090909090909090909090909",
+      "overwrittenVotesCount": 1,
+      "startTime": 1700000000,
+      "stateRoot": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "status": "ready",
+      "synced": false,
+      "votersCount": 2
+    },
+    "results": {
+      "ballotMode": {
+        "costExponent": 1,
+        "groupSize": 1,
+        "maxValue": "5",
+        "maxValueSum": "4611686018427387904",
+        "minValue": "0",
+        "minValueSum": "0",
+        "numFields": 2,
+        "uniqueValues": false
+      },
+      "census": {
+        "censusOrigin": 1,
+        "censusRoot": "5",
+        "censusURI": "file:///tmp/census.json"
+      },
+      "duration": 7200,
+      "encryptionKey": {
+        "x": "19099552327547260981542886231210125691902505931204088720746463491300185142606",
+        "y": "13276557205153692030187527501273228448057533426731746626187331221465573305487"
+      },
+      "id": "0x03030303030303030303030303030303030303030303030303030303030303",
+      "isAcceptingVotes": true,
+      "localStateRoot": "0x0606060606060606060606060606060606060606060606060606060606060606",
+      "maxVoters": 100,
+      "organizationId": "0x0909090909090909090909090909090909090909",
+      "overwrittenVotesCount": 1,
+      "result": [
+        3,
+        0
+      ],
+      "startTime": 1700000000,
+      "stateRoot": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "status": "results",
+      "synced": true,
+      "votersCount": 2
+    }
+  },
+  "processViewCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "groupSize > numFields",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "groupSize"
+          ],
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "maxValue 2^48",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "maxValue"
+          ],
+          "value": "281474976710656"
+        }
+      ]
+    },
+    {
+      "label": "maxValue 2^48 - 1",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "maxValue"
+          ],
+          "value": "281474976710655"
+        }
+      ]
+    },
+    {
+      "label": "maxValueSum 2^63",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "maxValueSum"
+          ],
+          "value": "9223372036854775808"
+        }
+      ]
+    },
+    {
+      "label": "maxValue as a number",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "maxValue"
+          ],
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "numFields as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "numFields"
+          ],
+          "value": "4"
+        }
+      ]
+    },
+    {
+      "label": "numFields 256",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "numFields"
+          ],
+          "value": 256
+        }
+      ]
+    },
+    {
+      "label": "numFields 0",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "numFields"
+          ],
+          "value": 0
+        },
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "groupSize"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "ballot mode extra field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotMode",
+            "extra"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "key off curve",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "encryptionKey",
+            "y"
+          ],
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "label": "key extra field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "encryptionKey",
+            "z"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "label": "status finished",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "status"
+          ],
+          "value": "finished"
+        }
+      ]
+    },
+    {
+      "label": "status Ready",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "status"
+          ],
+          "value": "Ready"
+        }
+      ]
+    },
+    {
+      "label": "status unknown",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "status"
+          ],
+          "value": "unknown"
+        }
+      ]
+    },
+    {
+      "label": "status results",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "status"
+          ],
+          "value": "results"
+        }
+      ]
+    },
+    {
+      "label": "unknown field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "extra"
+          ],
+          "value": {
+            "a": 1
+          }
+        }
+      ]
+    },
+    {
+      "label": "local root null",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "localStateRoot"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "label": "local root",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "localStateRoot"
+          ],
+          "value": "0x0505050505050505050505050505050505050505050505050505050505050505"
+        }
+      ]
+    },
+    {
+      "label": "local root 31 bytes",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "localStateRoot"
+          ],
+          "value": "0x05050505050505050505050505050505050505050505050505050505050505"
+        }
+      ]
+    },
+    {
+      "label": "no synced",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "synced"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "ignored with a note",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ignored"
+          ],
+          "value": true
+        },
+        {
+          "op": "set",
+          "path": [
+            "note"
+          ],
+          "value": "census: download failed"
+        }
+      ]
+    },
+    {
+      "label": "31-byte state root",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "stateRoot"
+          ],
+          "value": "0x04040404040404040404040404040404040404040404040404040404040404"
+        }
+      ]
+    },
+    {
+      "label": "census root = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusRoot"
+          ],
+          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "census extra field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "contractAddress"
+          ],
+          "value": "0x0000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "label": "census uri misnamed",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusUri"
+          ],
+          "value": "file:///tmp/census.json"
+        },
+        {
+          "op": "remove",
+          "path": [
+            "census",
+            "censusURI"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "negative votersCount",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "votersCount"
+          ],
+          "value": -1
+        }
+      ]
+    },
+    {
+      "label": "votersCount as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "votersCount"
+          ],
+          "value": "2"
+        }
+      ]
+    },
+    {
+      "label": "fractional startTime",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "startTime"
+          ],
+          "value": 1.5
+        }
+      ]
+    },
+    {
+      "label": "result null",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "result"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "label": "result",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "result"
+          ],
+          "value": [
+            7,
+            0,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "label": "result as strings",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "result"
+          ],
+          "value": [
+            "7"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "19-byte organization",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "organizationId"
+          ],
+          "value": "0x09090909090909090909090909090909090909"
+        }
+      ]
+    },
+    {
+      "label": "no duration",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "duration"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "no ignored",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "ignored"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "no census",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "census"
+          ]
+        }
+      ]
+    }
+  ],
+  "trackerProof": {
+    "processId": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "root": "0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+    "siblings": [
+      "0x0101010101010101010101010101010101010101010101010101010101010101",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0xfefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefe"
+    ],
+    "voteId": "0x8000000000004321"
+  },
+  "trackerProofCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "vote id below 2^63",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x0000000000004321"
+        }
+      ]
+    },
+    {
+      "label": "31-byte root",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "root"
+          ],
+          "value": "0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+        }
+      ]
+    },
+    {
+      "label": "33-byte sibling",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "siblings",
+            1
+          ],
+          "value": "0x000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "label": "bad process id",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "processId"
+          ],
+          "value": "0x5a"
+        }
+      ]
+    },
+    {
+      "label": "no siblings",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "siblings"
+          ],
+          "value": []
+        }
+      ]
+    },
+    {
+      "label": "unknown field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "extra"
+          ],
+          "value": true
+        }
+      ]
+    }
+  ],
+  "transitionCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "31-byte tx hash",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "transitions",
+            0,
+            "txHash"
+          ],
+          "value": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "label": "block as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "transitions",
+            1,
+            "blockNumber"
+          ],
+          "value": "48600120"
+        }
+      ]
+    },
+    {
+      "label": "empty",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "transitions"
+          ],
+          "value": []
+        }
+      ]
+    }
+  ],
+  "transitions": {
+    "transitions": [
+      {
+        "blockNumber": 48600000,
+        "index": 0,
+        "nBlobs": 1,
+        "newRoot": "0x0202020202020202020202020202020202020202020202020202020202020202",
+        "oldRoot": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "overwrites": 0,
+        "sender": "0x3333333333333333333333333333333333333333",
+        "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "voters": 3
+      },
+      {
+        "blockNumber": 48600120,
+        "index": 1,
+        "nBlobs": 2,
+        "newRoot": "0x0303030303030303030303030303030303030303030303030303030303030303",
+        "oldRoot": "0x0202020202020202020202020202020202020202020202020202020202020202",
+        "overwrites": 2,
+        "sender": "0x4444444444444444444444444444444444444444",
+        "txHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "voters": 5
+      }
+    ]
+  },
+  "voteRequest": {
+    "csp": {
+      "address": "0x1111111111111111111111111111111111111111",
+      "ballot": [
+        {
+          "c1": {
+            "x": "11171587748779905031652909554051178400059609012656504941545102440375791995180",
+            "y": "2615991690014947892912901595299913212154276449236361242382080326431176304431"
+          },
+          "c2": {
+            "x": "7701219333553662962492246446288144945576093593441300688289361299059108093363",
+            "y": "18770481546514701392825858257856830271852044137591656296482945710160864313165"
+          }
+        },
+        {
+          "c1": {
+            "x": "15166910063229785830376154691641599298409021479461400265030055355542558690869",
+            "y": "13622372793077492088522443800286438421177651627280072742989534869865432880561"
+          },
+          "c2": {
+            "x": "1083407073848977156319833830476585155027834688588015574454969855119941013238",
+            "y": "7610393967192486016931109042532548874285379731872908562406415343229971060704"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        }
+      ],
+      "ballotInputsHash": "999",
+      "ballotProof": {
+        "curve": "bn128",
+        "pi_a": [
+          "1",
+          "2",
+          "1"
+        ],
+        "pi_b": [
+          [
+            "1",
+            "2"
+          ],
+          [
+            "3",
+            "4"
+          ],
+          [
+            "1",
+            "0"
+          ]
+        ],
+        "pi_c": [
+          "5",
+          "6",
+          "1"
+        ],
+        "protocol": "groth16"
+      },
+      "censusProof": {
+        "index": 9,
+        "r": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "recid": 1,
+        "s": "0x0202020202020202020202020202020202020202020202020202020202020202",
+        "type": "csp"
+      },
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "signature": "0x0707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707",
+      "voteId": "0x8000000000001234",
+      "weight": "42"
+    },
+    "merkle": {
+      "address": "0x1111111111111111111111111111111111111111",
+      "ballot": [
+        {
+          "c1": {
+            "x": "11171587748779905031652909554051178400059609012656504941545102440375791995180",
+            "y": "2615991690014947892912901595299913212154276449236361242382080326431176304431"
+          },
+          "c2": {
+            "x": "7701219333553662962492246446288144945576093593441300688289361299059108093363",
+            "y": "18770481546514701392825858257856830271852044137591656296482945710160864313165"
+          }
+        },
+        {
+          "c1": {
+            "x": "15166910063229785830376154691641599298409021479461400265030055355542558690869",
+            "y": "13622372793077492088522443800286438421177651627280072742989534869865432880561"
+          },
+          "c2": {
+            "x": "1083407073848977156319833830476585155027834688588015574454969855119941013238",
+            "y": "7610393967192486016931109042532548874285379731872908562406415343229971060704"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        }
+      ],
+      "ballotInputsHash": "999",
+      "ballotProof": {
+        "curve": "bn128",
+        "pi_a": [
+          "1",
+          "2",
+          "1"
+        ],
+        "pi_b": [
+          [
+            "1",
+            "2"
+          ],
+          [
+            "3",
+            "4"
+          ],
+          [
+            "1",
+            "0"
+          ]
+        ],
+        "pi_c": [
+          "5",
+          "6",
+          "1"
+        ],
+        "protocol": "groth16"
+      },
+      "censusProof": {
+        "leaf": "5321327630391369274980284237531613412374539736468811391403645205437480961",
+        "pathBits": 3,
+        "root": "4177383426488611943439950432088536559788492868229848189889437642440785991273",
+        "siblings": [
+          "3547551753594246183320189491687742274916359824312540927602430136958320641",
+          "549211108558326606991856655932027951231195219014355207363467304607847299210",
+          "7095103507188492366640378983375484549832719648625081855204860273916641281"
+        ],
+        "type": "merkle"
+      },
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "signature": "0x0707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707",
+      "voteId": "0x8000000000001234",
+      "weight": "42"
+    },
+    "noCensusProof": {
+      "address": "0x1111111111111111111111111111111111111111",
+      "ballot": [
+        {
+          "c1": {
+            "x": "11171587748779905031652909554051178400059609012656504941545102440375791995180",
+            "y": "2615991690014947892912901595299913212154276449236361242382080326431176304431"
+          },
+          "c2": {
+            "x": "7701219333553662962492246446288144945576093593441300688289361299059108093363",
+            "y": "18770481546514701392825858257856830271852044137591656296482945710160864313165"
+          }
+        },
+        {
+          "c1": {
+            "x": "15166910063229785830376154691641599298409021479461400265030055355542558690869",
+            "y": "13622372793077492088522443800286438421177651627280072742989534869865432880561"
+          },
+          "c2": {
+            "x": "1083407073848977156319833830476585155027834688588015574454969855119941013238",
+            "y": "7610393967192486016931109042532548874285379731872908562406415343229971060704"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        },
+        {
+          "c1": {
+            "x": "0",
+            "y": "1"
+          },
+          "c2": {
+            "x": "0",
+            "y": "1"
+          }
+        }
+      ],
+      "ballotInputsHash": "999",
+      "ballotProof": {
+        "curve": "bn128",
+        "pi_a": [
+          "1",
+          "2",
+          "1"
+        ],
+        "pi_b": [
+          [
+            "1",
+            "2"
+          ],
+          [
+            "3",
+            "4"
+          ],
+          [
+            "1",
+            "0"
+          ]
+        ],
+        "pi_c": [
+          "5",
+          "6",
+          "1"
+        ],
+        "protocol": "groth16"
+      },
+      "processId": "0xababababababababababababababababababababababababababababababab",
+      "signature": "0x0707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707",
+      "voteId": "0x8000000000001234",
+      "weight": "42"
+    }
+  },
+  "voteRequestCases": [
+    {
+      "label": "canonical",
+      "ok": true,
+      "ops": []
+    },
+    {
+      "label": "Fr = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "hex Fr",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "0x10"
+        }
+      ]
+    },
+    {
+      "label": "negative Fr",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "-1"
+        }
+      ]
+    },
+    {
+      "label": "number Fr",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "empty Fr",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": ""
+        }
+      ]
+    },
+    {
+      "label": "Fr with leading zeros",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "000999"
+        }
+      ]
+    },
+    {
+      "label": "Fr of 80 zeros",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "00000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "label": "Fr of 81 digits",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "label": "Fr with a sign",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotInputsHash"
+          ],
+          "value": "+999"
+        }
+      ]
+    },
+    {
+      "label": "off curve",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            0,
+            "c1",
+            "x"
+          ],
+          "value": "5"
+        }
+      ]
+    },
+    {
+      "label": "coord = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            3,
+            "c2",
+            "y"
+          ],
+          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "15 ciphertexts",
+      "ok": false,
+      "ops": [
+        {
+          "op": "pop",
+          "path": [
+            "ballot"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "17 ciphertexts",
+      "ok": false,
+      "ops": [
+        {
+          "op": "push",
+          "path": [
+            "ballot"
+          ],
+          "value": {
+            "c1": {
+              "x": "11171587748779905031652909554051178400059609012656504941545102440375791995180",
+              "y": "2615991690014947892912901595299913212154276449236361242382080326431176304431"
+            },
+            "c2": {
+              "x": "7701219333553662962492246446288144945576093593441300688289361299059108093363",
+              "y": "18770481546514701392825858257856830271852044137591656296482945710160864313165"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "extra field in a point",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            0,
+            "c1",
+            "z"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "label": "extra field in a ciphertext",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            0,
+            "c3"
+          ],
+          "value": {
+            "x": "0",
+            "y": "1"
+          }
+        }
+      ]
+    },
+    {
+      "label": "point as an array",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballot",
+            2,
+            "c1"
+          ],
+          "value": [
+            "0",
+            "1"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "7-byte vote id",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x80000000000012"
+        }
+      ]
+    },
+    {
+      "label": "vote id 2^63 - 1",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x7fffffffffffffff"
+        }
+      ]
+    },
+    {
+      "label": "small vote id",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x0000000000001234"
+        }
+      ]
+    },
+    {
+      "label": "vote id 2^63",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x8000000000000000"
+        }
+      ]
+    },
+    {
+      "label": "vote id 2^64 - 1",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0xffffffffffffffff"
+        }
+      ]
+    },
+    {
+      "label": "numeric vote id",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": 9223372036854780468
+        }
+      ]
+    },
+    {
+      "label": "vote id without 0x",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "8000000000001234"
+        }
+      ]
+    },
+    {
+      "label": "vote id with 0X",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0X8000000000001234"
+        }
+      ]
+    },
+    {
+      "label": "vote id upper hex",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "voteId"
+          ],
+          "value": "0x80000000000012AB"
+        }
+      ]
+    },
+    {
+      "label": "32-byte process id",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "processId"
+          ],
+          "value": "0xabababababababababababababababababababababababababababababababab"
+        }
+      ]
+    },
+    {
+      "label": "process id without 0x",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "processId"
+          ],
+          "value": "ababababababababababababababababababababababababababababababab"
+        }
+      ]
+    },
+    {
+      "label": "process id upper hex",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "processId"
+          ],
+          "value": "0xABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+        }
+      ]
+    },
+    {
+      "label": "19-byte address",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "0x11111111111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "label": "non-hex address",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+        }
+      ]
+    },
+    {
+      "label": "checksummed address",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+        }
+      ]
+    },
+    {
+      "label": "64-byte signature",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "signature"
+          ],
+          "value": "0x07070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707"
+        }
+      ]
+    },
+    {
+      "label": "weight 2^128",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": "340282366920938463463374607431768211456"
+        }
+      ]
+    },
+    {
+      "label": "weight 2^128 - 1",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": "340282366920938463463374607431768211455"
+        }
+      ]
+    },
+    {
+      "label": "number weight",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": 42
+        }
+      ]
+    },
+    {
+      "label": "weight of 40 digits",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": "0000000000000000000000000000000000000042"
+        }
+      ]
+    },
+    {
+      "label": "weight of 39 digits",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "weight"
+          ],
+          "value": "000000000000000000000000000000000000042"
+        }
+      ]
+    },
+    {
+      "label": "census proof type dynamic",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "type"
+          ],
+          "value": "dynamic"
+        }
+      ]
+    },
+    {
+      "label": "census proof type Merkle",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "type"
+          ],
+          "value": "Merkle"
+        }
+      ]
+    },
+    {
+      "label": "census proof root = p",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "census proof extra field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "depth"
+          ],
+          "value": 3
+        }
+      ]
+    },
+    {
+      "label": "census proof path bits as a string",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "pathBits"
+          ],
+          "value": "3"
+        }
+      ]
+    },
+    {
+      "label": "census proof without type",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "censusProof",
+            "type"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "census proof null",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "label": "no census proof",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "censusProof"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "unknown field",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "extra"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "proof without curve",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "ballotProof",
+            "curve"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "proof without protocol",
+      "ok": true,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "ballotProof",
+            "protocol"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "proof with an extra field",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotProof",
+            "extra"
+          ],
+          "value": "x"
+        }
+      ]
+    },
+    {
+      "label": "proof pi_a of 2",
+      "ok": false,
+      "ops": [
+        {
+          "op": "pop",
+          "path": [
+            "ballotProof",
+            "pi_a"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "proof pi_a number",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotProof",
+            "pi_a",
+            0
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "no weight",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "weight"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "no signature",
+      "ok": false,
+      "ops": [
+        {
+          "op": "remove",
+          "path": [
+            "signature"
+          ]
+        }
+      ]
+    }
+  ],
+  "voteStatusCases": [
+    {
+      "json": {
+        "status": "pending"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "status": "aggregated"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "status": "processed"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "status": "settled"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "error": "process closed",
+        "status": "error"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "error": null,
+        "status": "settled"
+      },
+      "ok": true
+    },
+    {
+      "json": {
+        "status": "done"
+      },
+      "ok": false
+    },
+    {
+      "json": {
+        "status": "verified"
+      },
+      "ok": false
+    },
+    {
+      "json": {
+        "status": "Settled"
+      },
+      "ok": false
+    },
+    {
+      "json": {
+        "error": 3,
+        "status": "error"
+      },
+      "ok": false
+    },
+    {
+      "json": {
+        "error": "x"
+      },
+      "ok": false
+    }
+  ],
+  "voteStatuses": [
+    "pending",
+    "aggregated",
+    "processed",
+    "settled",
+    "error"
+  ]
+}

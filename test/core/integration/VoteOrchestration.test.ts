@@ -402,7 +402,7 @@ describe('Vote Orchestration Integration', () => {
 
     it('should stop watching when target status is reached', async () => {
       const stream = watchTestVoterSdk.watchVoteStatus(processId, watchTestVoteId, {
-        targetStatus: VoteStatus.Verified,
+        targetStatus: VoteStatus.Aggregated,
         timeoutMs: 15000,
         pollIntervalMs: 1000,
       });

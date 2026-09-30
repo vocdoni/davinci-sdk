@@ -1,10 +1,18 @@
-import type {
-  ContractTransactionResponse,
-  BaseContract,
-  EventFilter,
-  Provider,
-  ContractEventName,
+import {
+  BaseWallet,
+  keccak256,
+  type BaseContract,
+  type Contract,
+  type ContractEventName,
+  type EventFilter,
+  type Provider,
+  type Signer,
+  type TransactionReceipt,
+  type TransactionRequest,
+  type TransactionResponse,
 } from 'ethers';
+import { type DavinciErrorDescription, decodeDavinciError } from './abis';
+import type { ContractServiceError } from './errors';
 
 /**
  * Enum representing the possible states of a transaction during its lifecycle.
@@ -27,11 +35,88 @@ export enum TxStatus {
  *
  * @template T - The type of the successful response data
  */
-export type TxStatusEvent<T = any> =
+export type TxStatusEvent<T = unknown> =
   | { status: TxStatus.Pending; hash: string }
   | { status: TxStatus.Completed; response: T }
-  | { status: TxStatus.Reverted; reason?: string }
+  | { status: TxStatus.Reverted; reason?: string; error?: Error }
   | { status: TxStatus.Failed; error: Error };
+
+/** Default wait for a transaction receipt. */
+export const RECEIPT_TIMEOUT_MS = 180_000;
+
+// A send refused because the nonce is taken: by an earlier copy of the same
+// transaction (geth "already known", anvil/reth "already imported",
+// Nethermind "AlreadyKnown", Besu "Known transaction") or by a mined one.
+const REFUSED_RESEND = [
+  'nonce too low',
+  'already known',
+  'already imported',
+  'alreadyknown',
+  'known transaction',
+];
+
+// The messages of an error and of the errors it wraps (ethers nests the
+// node's answer under `error`, `info.error` or `cause`).
+function errorTexts(err: unknown): string[] {
+  const out: string[] = [];
+  let e: unknown = err;
+  for (let depth = 0; depth < 5 && typeof e === 'object' && e !== null; depth++) {
+    const o = e as { message?: unknown; shortMessage?: unknown; code?: unknown };
+    for (const v of [o.message, o.shortMessage, o.code]) {
+      if (typeof v === 'string') out.push(v);
+    }
+    const next = e as { error?: unknown; info?: { error?: unknown }; cause?: unknown };
+    e = next.error ?? next.info?.error ?? next.cause;
+  }
+  return out;
+}
+
+function isRefusedResend(err: unknown): boolean {
+  const text = errorTexts(err).join(' ').toLowerCase();
+  return text.includes('nonce_expired') || REFUSED_RESEND.some(p => text.includes(p));
+}
+
+/**
+ * The revert data of a failed call, wherever the provider put it (ethers
+ * `data`, or the node's answer nested under `error`, `info.error` or `cause`).
+ */
+export function revertData(err: unknown): string | null {
+  let e: unknown = err;
+  for (let depth = 0; depth < 5 && typeof e === 'object' && e !== null; depth++) {
+    const o = e as { data?: unknown; error?: unknown; info?: { error?: unknown }; cause?: unknown };
+    const data =
+      typeof o.data === 'object' && o.data !== null ? (o.data as { data?: unknown }).data : o.data;
+    if (typeof data === 'string' && /^0x([0-9a-fA-F]{2}){4,}$/.test(data)) return data;
+    e = o.error ?? o.info?.error ?? o.cause;
+  }
+  return null;
+}
+
+/**
+ * The DAVINCI custom error a failed call reverted with: registry, DKG
+ * adapter, DKG or verifier, merged as the registry bubbles them up.
+ */
+export function decodeRevert(err: unknown): DavinciErrorDescription | null {
+  const data = revertData(err);
+  return data ? decodeDavinciError(data) : null;
+}
+
+/** Builds the typed error of one operation. */
+export type ContractErrorFactory = (
+  message: string,
+  revert?: DavinciErrorDescription,
+  cause?: unknown
+) => ContractServiceError;
+
+/** A registry write: the method, its arguments and what to make of the receipt. */
+export interface ContractWrite<T> {
+  contract: Contract;
+  method: string;
+  /** Builds the arguments when the stream starts; a throw fails the stream. */
+  args: () => readonly unknown[];
+  error: ContractErrorFactory;
+  onReceipt: (receipt: TransactionReceipt) => T | Promise<T>;
+}
 
 /**
  * Abstract base class providing common functionality for smart contract interactions.
@@ -43,61 +128,148 @@ export abstract class SmartContractService {
   private pollingIntervals: NodeJS.Timeout[] = [];
   /** Default polling interval in milliseconds for event listener fallback */
   protected eventPollingInterval: number = 5000;
+  /** Longest wait for a transaction receipt, in milliseconds. */
+  protected receiptTimeoutMs: number = RECEIPT_TIMEOUT_MS;
+
   /**
-   * Sends a transaction and yields status events during its lifecycle.
-   * This method handles the complete transaction flow from submission to completion,
-   * including error handling and status updates.
+   * Simulates a write, sends it and waits for its receipt, yielding status
+   * events. Nothing happens until the stream is iterated.
    *
-   * @template T - The type of the successful response data
-   * @param txPromise - Promise resolving to the transaction response
-   * @param responseHandler - Function to process the successful transaction result
-   * @returns AsyncGenerator yielding transaction status events
-   *
-   * @example
-   * ```typescript
-   * const txStream = await this.sendTx(
-   *   contract.someMethod(),
-   *   async () => await contract.getUpdatedValue()
-   * );
-   *
-   * for await (const event of txStream) {
-   *   switch (event.status) {
-   *     case TxStatus.Pending:
-   *       console.log(`Transaction pending: ${event.hash}`);
-   *       break;
-   *     case TxStatus.Completed:
-   *       console.log(`Transaction completed:`, event.response);
-   *       break;
-   *   }
-   * }
-   * ```
+   * - The call is simulated first (`staticCall` from the signer), so a revert
+   *   fails the stream with the operation's error and the decoded custom error
+   *   before anything is signed.
+   * - A local wallet (ethers `Wallet`) signs before sending, so the
+   *   transaction hash is known. If the node refuses the broadcast as a known
+   *   transaction or a used nonce (an RPC retry resending a transaction that
+   *   already went in) and the chain has that hash, the transaction counts as
+   *   sent. Other signers (browser wallets) send it themselves.
+   * - A mined revert is named by replaying the call on the latest state and
+   *   comes as a `Reverted` event whose `error` carries the decoded error.
    */
-  protected async *sendTx<T>(
-    txPromise: Promise<ContractTransactionResponse>,
-    responseHandler: () => Promise<T>
+  protected async *sendContractTx<T>(
+    write: ContractWrite<T>
   ): AsyncGenerator<TxStatusEvent<T>, void, unknown> {
-    try {
-      const tx = await txPromise;
-      yield { status: TxStatus.Pending, hash: tx.hash };
-
-      const receipt = await tx.wait();
-
-      if (!receipt) {
-        yield { status: TxStatus.Reverted, reason: 'Transaction was dropped or not mined.' };
-      } else if (receipt.status === 0) {
-        yield { status: TxStatus.Reverted, reason: 'Transaction reverted.' };
-      } else {
-        const result = await responseHandler();
-        yield { status: TxStatus.Completed, response: result };
-      }
-    } catch (err: any) {
+    const { contract, method, args, error } = write;
+    const signer = contract.runner as Signer | null;
+    if (!signer || typeof signer.sendTransaction !== 'function' || !signer.provider) {
       yield {
         status: TxStatus.Failed,
-        error: err instanceof Error ? err : new Error('Unknown transaction error'),
+        error: error(`${method}: a signer connected to a provider is required`),
+      };
+      return;
+    }
+    const fn = contract.getFunction(method);
+    let request: TransactionRequest;
+    try {
+      const built = args();
+      await fn.staticCall(...built);
+      request = await fn.populateTransaction(...built);
+    } catch (err) {
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      return;
+    }
+
+    let response: TransactionResponse;
+    try {
+      response = await this.broadcast(signer, request);
+    } catch (err) {
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      return;
+    }
+    yield { status: TxStatus.Pending, hash: response.hash };
+
+    let receipt: TransactionReceipt;
+    try {
+      receipt = await this.mined(response);
+    } catch (err) {
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      return;
+    }
+    if (receipt.status === 0) {
+      const revert = await this.replayRevert(signer.provider, {
+        from: receipt.from,
+        to: request.to,
+        data: request.data,
+        value: request.value,
+      });
+      const reason = revert?.name ?? 'Transaction reverted.';
+      yield {
+        status: TxStatus.Reverted,
+        reason,
+        error: error(`${method} reverted: ${reason}`, revert ?? undefined),
+      };
+      return;
+    }
+    try {
+      yield { status: TxStatus.Completed, response: await write.onReceipt(receipt) };
+    } catch (err) {
+      yield {
+        status: TxStatus.Failed,
+        error: err instanceof Error ? err : error(`${method}: ${String(err)}`),
       };
     }
   }
 
+  // The operation's error for a failed call, with its custom error decoded.
+  private callError(error: ContractErrorFactory, method: string, err: unknown): Error {
+    const revert = decodeRevert(err);
+    if (revert) return error(`${method} reverted: ${revert.name}`, revert, err);
+    const o = err as { shortMessage?: unknown; message?: unknown };
+    const text =
+      typeof o?.shortMessage === 'string'
+        ? o.shortMessage
+        : typeof o?.message === 'string'
+          ? o.message
+          : String(err);
+    return error(`${method}: ${text}`, undefined, err);
+  }
+
+  // Signs first when the signer is a local wallet, so a refused resend of a
+  // transaction the chain already has is recognized by its hash.
+  private async broadcast(signer: Signer, tx: TransactionRequest): Promise<TransactionResponse> {
+    const provider = signer.provider as Provider;
+    if (!(signer instanceof BaseWallet)) return signer.sendTransaction(tx);
+    const raw = await signer.signTransaction(await signer.populateTransaction(tx));
+    const hash = keccak256(raw);
+    try {
+      return await provider.broadcastTransaction(raw);
+    } catch (err) {
+      if (isRefusedResend(err)) {
+        const known = await provider.getTransaction(hash).catch(() => null);
+        if (known) return known;
+      }
+      throw err;
+    }
+  }
+
+  // Waits for the receipt, returning it for a mined revert too. A repriced
+  // replacement (same call, new fee) stands in for the original.
+  private async mined(response: TransactionResponse): Promise<TransactionReceipt> {
+    try {
+      const receipt = await response.wait(1, this.receiptTimeoutMs);
+      if (!receipt) throw new Error(`transaction ${response.hash} was not mined`);
+      return receipt;
+    } catch (err) {
+      const e = err as { code?: unknown; receipt?: TransactionReceipt | null; cancelled?: unknown };
+      if (e.code === 'CALL_EXCEPTION' && e.receipt) return e.receipt;
+      if (e.code === 'TRANSACTION_REPLACED' && e.cancelled === false && e.receipt) return e.receipt;
+      throw err;
+    }
+  }
+
+  // Names a mined revert by replaying the call on the latest state (a lost
+  // race replays the same way); null when the replay passes or says nothing.
+  private async replayRevert(
+    provider: Provider,
+    tx: TransactionRequest
+  ): Promise<DavinciErrorDescription | null> {
+    try {
+      await provider.call(tx);
+      return null;
+    } catch (err) {
+      return decodeRevert(err);
+    }
+  }
   /**
    * Executes a transaction stream and returns the result or throws an error.
    * This is a convenience method that processes a transaction stream and either
@@ -128,7 +300,9 @@ export abstract class SmartContractService {
         case TxStatus.Failed:
           throw event.error;
         case TxStatus.Reverted:
-          throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
+          throw (
+            event.error ?? new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`)
+          );
       }
     }
     throw new Error('Transaction stream ended unexpectedly');
@@ -150,16 +324,12 @@ export abstract class SmartContractService {
    * }));
    * ```
    */
-  protected normalizeListener<Args extends any[]>(
+  protected normalizeListener<Args extends unknown[]>(
     callback: (...args: Args) => void
-  ): (...listenerArgs: any[]) => void {
-    return (...listenerArgs: any[]) => {
-      let args: any[];
-      if (listenerArgs.length === 1 && listenerArgs[0]?.args) {
-        args = listenerArgs[0].args;
-      } else {
-        args = listenerArgs;
-      }
+  ): (...listenerArgs: unknown[]) => void {
+    return (...listenerArgs: unknown[]) => {
+      const first = listenerArgs[0] as { args?: unknown[] } | undefined;
+      const args = listenerArgs.length === 1 && first?.args ? first.args : listenerArgs;
       callback(...(args as Args));
     };
   }
@@ -178,14 +348,14 @@ export abstract class SmartContractService {
    * ```typescript
    * this.setupEventListener(
    *   this.contract,
-   *   this.contract.filters.Transfer(),
+   *   'Transfer',
    *   (from: string, to: string, amount: bigint) => {
    *     console.log(`Transfer: ${from} -> ${to}: ${amount}`);
    *   }
    * );
    * ```
    */
-  protected async setupEventListener<Args extends any[]>(
+  protected async setupEventListener<Args extends unknown[]>(
     contract: BaseContract,
     eventFilter: ContractEventName | EventFilter,
     callback: (...args: Args) => void
@@ -193,7 +363,9 @@ export abstract class SmartContractService {
     const normalizedCallback = this.normalizeListener(callback);
 
     // First, test if eth_newFilter is supported by trying to create a filter
-    const provider = contract.runner?.provider as Provider | undefined;
+    const provider = contract.runner?.provider as
+      | (Provider & { send?: (method: string, params: unknown[]) => Promise<unknown> })
+      | undefined;
     if (!provider) {
       console.warn('No provider available for event listeners');
       return;
@@ -210,7 +382,7 @@ export abstract class SmartContractService {
 
       // Try to create a filter - this will fail if eth_newFilter is not supported
       // We use the provider's internal method if available
-      if ('send' in provider && typeof provider.send === 'function') {
+      if (typeof provider.send === 'function') {
         try {
           // Test both creating the filter AND getting changes to ensure full support
           const filterId = await provider.send('eth_newFilter', [testFilter]);
@@ -219,9 +391,9 @@ export abstract class SmartContractService {
           await provider.send('eth_getFilterChanges', [filterId]);
 
           // If we get here, both eth_newFilter and eth_getFilterChanges work
-          contract.on(eventFilter as ContractEventName, normalizedCallback);
+          await contract.on(eventFilter as ContractEventName, normalizedCallback);
           return;
-        } catch (error: any) {
+        } catch (error) {
           if (this.isUnsupportedMethodError(error)) {
             // eth_newFilter or eth_getFilterChanges not working, use polling
             console.warn(
@@ -242,10 +414,13 @@ export abstract class SmartContractService {
       }
 
       // Default: set up contract listener directly
-      contract.on(eventFilter as ContractEventName, normalizedCallback);
-    } catch (error: any) {
+      await contract.on(eventFilter as ContractEventName, normalizedCallback);
+    } catch (error) {
       // Fallback to polling on any setup error
-      console.warn('Error setting up event listener, falling back to polling:', error.message);
+      console.warn(
+        'Error setting up event listener, falling back to polling:',
+        error instanceof Error ? error.message : error
+      );
       this.setupPollingListener(contract, eventFilter, callback);
     }
   }
@@ -259,21 +434,24 @@ export abstract class SmartContractService {
    * @param error - The error to check
    * @returns true if the error indicates unsupported or broken filter functionality
    */
-  private isUnsupportedMethodError(error: any): boolean {
+  private isUnsupportedMethodError(error: unknown): boolean {
+    type RpcError = { code?: unknown; message?: unknown };
+    const e = (error ?? {}) as RpcError & { error?: RpcError; data?: RpcError };
+    const includes = (m: unknown, what: string) => typeof m === 'string' && m.includes(what);
+
     // Check for error code -32601 (method not found) - RPC doesn't support eth_newFilter
     const isMethodNotFound =
-      error?.code === -32601 ||
-      error?.error?.code === -32601 ||
-      error?.data?.code === -32601 ||
-      (typeof error?.message === 'string' && error.message.includes('unsupported method'));
+      e.code === -32601 ||
+      e.error?.code === -32601 ||
+      e.data?.code === -32601 ||
+      includes(e.message, 'unsupported method');
 
     // Check for error code -32000 with "filter not found" - RPC supports creating filters but doesn't maintain them
     const isFilterNotFound =
-      (error?.code === -32000 ||
-        error?.error?.code === -32000 ||
-        (error?.code === 'UNKNOWN_ERROR' && error?.error?.code === -32000)) &&
-      (error?.message?.includes('filter not found') ||
-        error?.error?.message?.includes('filter not found'));
+      (e.code === -32000 ||
+        e.error?.code === -32000 ||
+        (e.code === 'UNKNOWN_ERROR' && e.error?.code === -32000)) &&
+      (includes(e.message, 'filter not found') || includes(e.error?.message, 'filter not found'));
 
     return isMethodNotFound || isFilterNotFound;
   }
@@ -287,7 +465,7 @@ export abstract class SmartContractService {
    * @param eventFilter - The event filter to poll for
    * @param callback - The callback function to invoke for each event
    */
-  private setupPollingListener<Args extends any[]>(
+  private setupPollingListener<Args extends unknown[]>(
     contract: BaseContract,
     eventFilter: ContractEventName | EventFilter,
     callback: (...args: Args) => void
@@ -321,7 +499,7 @@ export abstract class SmartContractService {
           // Process each event - filter to only EventLog types that have args
           for (const event of events) {
             if ('args' in event && event.args) {
-              callback(...(event.args as any as Args));
+              callback(...(event.args as unknown as Args));
             }
           }
 
@@ -333,11 +511,11 @@ export abstract class SmartContractService {
     };
 
     // Start polling
-    const intervalId = setInterval(poll, this.eventPollingInterval);
+    const intervalId = setInterval(() => void poll(), this.eventPollingInterval);
     this.pollingIntervals.push(intervalId);
 
     // Do an initial poll
-    poll();
+    void poll();
   }
 
   /**

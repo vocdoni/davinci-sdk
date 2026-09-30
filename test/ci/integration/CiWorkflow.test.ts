@@ -1,6 +1,6 @@
 import { JsonRpcProvider, Wallet } from 'ethers';
 import { DavinciSDK, CensusOrigin, ProcessConfig } from '../../../src';
-import { GetProcessResponse, VoteStatus } from '../../../src/sequencer/api/types';
+import { ProcessView, VoteStatus } from '../../../src/sequencer/api/types';
 import {
   createIntegrationProvider,
   createIntegrationWallet,
@@ -89,7 +89,7 @@ async function waitForProcessResults(
   processId: string,
   timeoutMs = 300_000,
   pollMs = 5_000
-): Promise<GetProcessResponse> {
+): Promise<ProcessView> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const process = await sdk.api.sequencer.getProcess(processId);

@@ -46,7 +46,6 @@ const createOutput = (name, options) => [
     file: `dist/${name}.umd.js`,
     format: 'umd',
     globals: {
-      '@vocdoni/davinci-contracts': 'davinciContracts',
       ethers: 'ethers',
       snarkjs: 'snarkjs',
       // NOTE: circomlibjs/blake-hash/buffer are now bundled, so no globals needed for them.
