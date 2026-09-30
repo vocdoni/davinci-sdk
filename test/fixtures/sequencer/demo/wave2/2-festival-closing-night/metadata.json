@@ -1,0 +1,75 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Summer festival: who plays the closing night?",
+    "en": "Summer festival: who plays the closing night?",
+    "es": "Fiesta mayor: ¿quién toca en la noche de clausura?",
+    "ca": "Festa major: qui toca a la nit de cloenda?"
+  },
+  "description": {
+    "default": "The festival committee shortlisted four acts for the closing night. Vote for one, or leave the ballot blank if none convinces you. Voting closes on its own one hour after it opens, and the result is published automatically.",
+    "en": "The festival committee shortlisted four acts for the closing night. Vote for one, or leave the ballot blank if none convinces you. Voting closes on its own one hour after it opens, and the result is published automatically.",
+    "es": "La comisión de fiestas ha preseleccionado cuatro propuestas para la noche de clausura. Vota una, o deja la papeleta en blanco si ninguna te convence. La votación se cierra sola una hora después de abrirse y el resultado se publica automáticamente.",
+    "ca": "La comissió de festes ha preseleccionat quatre propostes per a la nit de cloenda. Vota'n una, o deixa la papereta en blanc si cap no et convenç. La votació es tanca sola una hora després d'obrir-se i el resultat es publica automàticament."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which act should close the festival?",
+        "en": "Which act should close the festival?",
+        "es": "¿Quién debería cerrar la fiesta?",
+        "ca": "Qui hauria de tancar la festa?"
+      },
+      "description": {
+        "default": "Pick one act, or leave the ballot blank.",
+        "en": "Pick one act, or leave the ballot blank.",
+        "es": "Elige una propuesta o deja la papeleta en blanco.",
+        "ca": "Tria una proposta o deixa la papereta en blanc."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "The music school brass band",
+            "en": "The music school brass band",
+            "es": "La banda de la escuela de música",
+            "ca": "La banda de l'escola de música"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "A jazz quartet",
+            "en": "A jazz quartet",
+            "es": "Un cuarteto de jazz",
+            "ca": "Un quartet de jazz"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "A folk-rock group",
+            "en": "A folk-rock group",
+            "es": "Un grupo de folk-rock",
+            "ca": "Un grup de folk-rock"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "The town choir with a chamber orchestra",
+            "en": "The town choir with a chamber orchestra",
+            "es": "El coro municipal con una orquesta de cámara",
+            "ca": "La coral municipal amb una orquestra de cambra"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice",
+      "allowAbstain": true
+    }
+  }
+}

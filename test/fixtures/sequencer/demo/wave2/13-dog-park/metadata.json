@@ -1,0 +1,44 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Where should the new dog park go?"
+  },
+  "description": {
+    "default": "The parks department has three possible sites for a fenced dog park. Pick the one you prefer; the department will build on the site with the most votes."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which site do you prefer?"
+      },
+      "description": {
+        "default": "Pick one site."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "The north corner of the central park"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Next to the sports ground"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "The empty lot on Mill Street"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice"
+    }
+  }
+}

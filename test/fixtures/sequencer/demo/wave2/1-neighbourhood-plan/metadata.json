@@ -1,0 +1,182 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Neighbourhood plan 2027: which improvements do you support?",
+    "en": "Neighbourhood plan 2027: which improvements do you support?",
+    "es": "Plan de barrio 2027: ¿qué mejoras apoyas?",
+    "ca": "Pla de barri 2027: a quines millores dones suport?"
+  },
+  "description": {
+    "default": "The district council is drafting next year's neighbourhood plan and wants to know which improvements residents back. Approve as many of the sixteen proposals as you like; the most approved ones go into the plan and are funded first.",
+    "en": "The district council is drafting next year's neighbourhood plan and wants to know which improvements residents back. Approve as many of the sixteen proposals as you like; the most approved ones go into the plan and are funded first.",
+    "es": "El distrito está preparando el plan de barrio del año que viene y quiere saber qué mejoras apoyan los vecinos. Aprueba tantas de las dieciséis propuestas como quieras; las más aprobadas entrarán en el plan y se financiarán primero.",
+    "ca": "El districte prepara el pla de barri de l'any vinent i vol saber a quines millores donen suport els veïns. Aprova tantes propostes de les setze com vulguis; les més aprovades entraran al pla i es finançaran primer."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which improvements do you support?",
+        "en": "Which improvements do you support?",
+        "es": "¿Qué mejoras apoyas?",
+        "ca": "A quines millores dones suport?"
+      },
+      "description": {
+        "default": "Approve any number of proposals, or none.",
+        "en": "Approve any number of proposals, or none.",
+        "es": "Aprueba las propuestas que quieras, o ninguna.",
+        "ca": "Aprova les propostes que vulguis, o cap."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "More trees along the main avenue",
+            "en": "More trees along the main avenue",
+            "es": "Más árboles en la avenida principal",
+            "ca": "Més arbres a l'avinguda principal"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Safer crossings near the schools",
+            "en": "Safer crossings near the schools",
+            "es": "Pasos de peatones más seguros cerca de las escuelas",
+            "ca": "Passos de vianants més segurs a prop de les escoles"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "A covered playground in the central park",
+            "en": "A covered playground in the central park",
+            "es": "Un parque infantil cubierto en el parque central",
+            "ca": "Un parc infantil cobert al parc central"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Longer library opening hours",
+            "en": "Longer library opening hours",
+            "es": "Más horas de apertura en la biblioteca",
+            "ca": "Més hores d'obertura a la biblioteca"
+          },
+          "value": 3
+        },
+        {
+          "title": {
+            "default": "Public drinking fountains",
+            "en": "Public drinking fountains",
+            "es": "Fuentes públicas de agua potable",
+            "ca": "Fonts públiques d'aigua potable"
+          },
+          "value": 4
+        },
+        {
+          "title": {
+            "default": "Bins for organic waste on every street",
+            "en": "Bins for organic waste on every street",
+            "es": "Contenedores de orgánico en todas las calles",
+            "ca": "Contenidors d'orgànica a tots els carrers"
+          },
+          "value": 5
+        },
+        {
+          "title": {
+            "default": "A weekly farmers' market in the square",
+            "en": "A weekly farmers' market in the square",
+            "es": "Un mercado semanal de productores en la plaza",
+            "ca": "Un mercat setmanal de pagès a la plaça"
+          },
+          "value": 6
+        },
+        {
+          "title": {
+            "default": "Shelters and benches at bus stops",
+            "en": "Shelters and benches at bus stops",
+            "es": "Marquesinas y bancos en las paradas de autobús",
+            "ca": "Marquesines i bancs a les parades d'autobús"
+          },
+          "value": 7
+        },
+        {
+          "title": {
+            "default": "A protected cycle lane to the station",
+            "en": "A protected cycle lane to the station",
+            "es": "Un carril bici protegido hasta la estación",
+            "ca": "Un carril bici protegit fins a l'estació"
+          },
+          "value": 8
+        },
+        {
+          "title": {
+            "default": "Free wifi in public buildings",
+            "en": "Free wifi in public buildings",
+            "es": "Wifi gratuito en los edificios públicos",
+            "ca": "Wifi gratuït als edificis públics"
+          },
+          "value": 9
+        },
+        {
+          "title": {
+            "default": "A community vegetable garden",
+            "en": "A community vegetable garden",
+            "es": "Un huerto comunitario",
+            "ca": "Un hort comunitari"
+          },
+          "value": 10
+        },
+        {
+          "title": {
+            "default": "Quieter streets on weekend nights",
+            "en": "Quieter streets on weekend nights",
+            "es": "Calles más tranquilas las noches de fin de semana",
+            "ca": "Carrers més tranquils les nits de cap de setmana"
+          },
+          "value": 11
+        },
+        {
+          "title": {
+            "default": "Better street lighting in the old town",
+            "en": "Better street lighting in the old town",
+            "es": "Mejor alumbrado en el casco antiguo",
+            "ca": "Millor enllumenat al nucli antic"
+          },
+          "value": 12
+        },
+        {
+          "title": {
+            "default": "An outdoor gym by the river",
+            "en": "An outdoor gym by the river",
+            "es": "Un gimnasio al aire libre junto al río",
+            "ca": "Un gimnàs a l'aire lliure a la vora del riu"
+          },
+          "value": 13
+        },
+        {
+          "title": {
+            "default": "A youth centre open in the evenings",
+            "en": "A youth centre open in the evenings",
+            "es": "Un espacio joven abierto por las tardes",
+            "ca": "Un espai jove obert a la tarda"
+          },
+          "value": 14
+        },
+        {
+          "title": {
+            "default": "More frequent night buses",
+            "en": "More frequent night buses",
+            "es": "Autobuses nocturnos más frecuentes",
+            "ca": "Autobusos nocturns més freqüents"
+          },
+          "value": 15
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "approval"
+    }
+  }
+}

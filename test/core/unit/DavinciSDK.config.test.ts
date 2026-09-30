@@ -3,6 +3,7 @@ import {
   Wallet,
   ZeroAddress,
   keccak256,
+  sha256,
   toUtf8Bytes,
   toUtf8String,
   type JsonRpcPayload,
@@ -24,6 +25,8 @@ import {
   SequencerUnavailableError,
   type SequencerInfo,
 } from '../../../src/sequencer';
+import { buildElectionMetadata, serializeMetadata } from '../../../src/core';
+import { DocumentHost } from '../../helpers/documentHost';
 import { MockChain, type CallHandler } from '../../helpers/mockChain';
 
 const KEY = `0x${'11'.repeat(32)}`;
@@ -648,5 +651,53 @@ describe('DavinciSDK ballot proving', () => {
     const uploader = { upload: vi.fn(() => Promise.resolve('https://files.example/x.json')) };
     expect(sdkWith({ uploader }).sdk.uploader).toBe(uploader);
     expect(sdkWith({}).sdk.uploader).toBeUndefined();
+  });
+
+  it('publishes and checks documents with the configured uploader and fetch', async () => {
+    const host = new DocumentHost();
+    const organizer = new Wallet(KEY).address;
+    const questions = [{ title: 'q', choices: [{ title: 'a', value: 0 }] }];
+    const doc = serializeMetadata(buildElectionMetadata({ title: 'Parks', questions }));
+    const url = host.urlOf(doc);
+    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+      getProcess: () => [
+        {
+          ...onchainProcess(),
+          organizationId: organizer,
+          metadataURI: url,
+          metadataHash: sha256(doc),
+        },
+      ],
+      setProcessMetadata: () => [],
+    });
+    const node = nodes({ [A]: {} });
+    const sdk = new DavinciSDK({
+      signer: new Wallet(KEY, chain),
+      sequencerUrls: [A],
+      verifyDeployment: VERIFY,
+      sequencerConfig: { fetchImpl: node.fetchImpl },
+      uploader: host.uploader,
+      documents: { fetchImpl: host.fetchImpl },
+    });
+    await expect(sdk.updateMetadata(PID, { uri: url })).rejects.toThrow(
+      'SDK must be initialized before updating the metadata'
+    );
+    await sdk.init();
+    await sdk.updateMetadata(PID, { title: 'Parks', questions });
+    expect(host.uploads.map(u => u.data)).toEqual([doc]);
+    expect(chain.sent).toHaveLength(1);
+    const info = await sdk.getProcess(PID);
+    expect([info.title, info.metadataVerified]).toEqual(['Parks', true]);
+    await expect(
+      sdk.updateCensus(pidWith('0x01020304'), { root: '0x05', uri: url })
+    ).rejects.toThrow('was not created by the gnosis registry');
+    expect(
+      () =>
+        new DavinciSDK({
+          signer: new Wallet(KEY),
+          sequencerUrls: [A],
+          documents: { timeoutMs: -1 },
+        })
+    ).toThrow('documents.timeoutMs -1 is not a positive number');
   });
 });

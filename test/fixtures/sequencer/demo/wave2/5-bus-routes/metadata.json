@@ -1,0 +1,76 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Rate the new bus routes",
+    "en": "Rate the new bus routes",
+    "es": "Valora las nuevas líneas de autobús",
+    "ca": "Valora les noves línies d'autobús"
+  },
+  "description": {
+    "default": "Four new bus routes ran on trial this autumn. Rate each one from 1 (poor) to 5 (excellent). The transport commission holds part of the decryption key and publishes it while the vote is still open, so the count is ready as soon as voting ends.",
+    "en": "Four new bus routes ran on trial this autumn. Rate each one from 1 (poor) to 5 (excellent). The transport commission holds part of the decryption key and publishes it while the vote is still open, so the count is ready as soon as voting ends.",
+    "es": "Este otoño se han probado cuatro nuevas líneas de autobús. Valora cada una de 1 (mala) a 5 (excelente). La comisión de transporte guarda parte de la clave de descifrado y la publica mientras la votación sigue abierta, para que el recuento esté listo en cuanto se cierre.",
+    "ca": "Aquesta tardor s'han provat quatre noves línies d'autobús. Valora cadascuna d'1 (dolenta) a 5 (excel·lent). La comissió de transport guarda part de la clau de desxifratge i la publica mentre la votació encara és oberta, perquè el recompte estigui a punt tan bon punt es tanqui."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "How would you rate each route?",
+        "en": "How would you rate each route?",
+        "es": "¿Qué nota le das a cada línea?",
+        "ca": "Quina nota poses a cada línia?"
+      },
+      "description": {
+        "default": "1 is poor, 5 is excellent.",
+        "en": "1 is poor, 5 is excellent.",
+        "es": "1 es mala, 5 es excelente.",
+        "ca": "1 és dolenta, 5 és excel·lent."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Route 14: hospital – university",
+            "en": "Route 14: hospital – university",
+            "es": "Línea 14: hospital – universidad",
+            "ca": "Línia 14: hospital – universitat"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Route 22: old town loop",
+            "en": "Route 22: old town loop",
+            "es": "Línea 22: circular del casco antiguo",
+            "ca": "Línia 22: circular del nucli antic"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Route 31: industrial estate express",
+            "en": "Route 31: industrial estate express",
+            "es": "Línea 31: exprés al polígono industrial",
+            "ca": "Línia 31: exprés al polígon industrial"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Night route N4",
+            "en": "Night route N4",
+            "es": "Línea nocturna N4",
+            "ca": "Línia nocturna N4"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "rating",
+      "maxValue": 5,
+      "minValue": 1
+    }
+  }
+}

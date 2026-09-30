@@ -1,6 +1,7 @@
 import {
   BaseWallet,
   keccak256,
+  type Interface,
   type BaseContract,
   type Contract,
   type ContractEventName,
@@ -93,12 +94,22 @@ export function revertData(err: unknown): string | null {
 }
 
 /**
- * The DAVINCI custom error a failed call reverted with: registry, DKG
- * adapter, DKG or verifier, merged as the registry bubbles them up.
+ * The custom error a failed call reverted with: one of `contract`'s own
+ * errors when given, else a DAVINCI error (registry, DKG adapter, DKG or
+ * verifier, merged as the registry bubbles them up).
  */
-export function decodeRevert(err: unknown): DavinciErrorDescription | null {
+export function decodeRevert(err: unknown, contract?: Interface): DavinciErrorDescription | null {
   const data = revertData(err);
-  return data ? decodeDavinciError(data) : null;
+  if (!data) return null;
+  if (contract) {
+    try {
+      const e = contract.parseError(data);
+      if (e) return { name: e.name, signature: e.signature, selector: e.selector, args: e.args };
+    } catch {
+      // Not one of the contract's errors.
+    }
+  }
+  return decodeDavinciError(data);
 }
 
 /** Builds the typed error of one operation. */
@@ -165,7 +176,7 @@ export abstract class SmartContractService {
       await fn.staticCall(...built);
       request = await fn.populateTransaction(...built);
     } catch (err) {
-      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err, contract) };
       return;
     }
 
@@ -173,7 +184,7 @@ export abstract class SmartContractService {
     try {
       response = await this.broadcast(signer, request);
     } catch (err) {
-      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err, contract) };
       return;
     }
     yield { status: TxStatus.Pending, hash: response.hash };
@@ -182,16 +193,15 @@ export abstract class SmartContractService {
     try {
       receipt = await this.mined(response);
     } catch (err) {
-      yield { status: TxStatus.Failed, error: this.callError(error, method, err) };
+      yield { status: TxStatus.Failed, error: this.callError(error, method, err, contract) };
       return;
     }
     if (receipt.status === 0) {
-      const revert = await this.replayRevert(signer.provider, {
-        from: receipt.from,
-        to: request.to,
-        data: request.data,
-        value: request.value,
-      });
+      const revert = await this.replayRevert(
+        signer.provider,
+        { from: receipt.from, to: request.to, data: request.data, value: request.value },
+        contract
+      );
       const reason = revert?.name ?? 'Transaction reverted.';
       yield {
         status: TxStatus.Reverted,
@@ -211,8 +221,13 @@ export abstract class SmartContractService {
   }
 
   // The operation's error for a failed call, with its custom error decoded.
-  private callError(error: ContractErrorFactory, method: string, err: unknown): Error {
-    const revert = decodeRevert(err);
+  private callError(
+    error: ContractErrorFactory,
+    method: string,
+    err: unknown,
+    contract: Contract
+  ): Error {
+    const revert = decodeRevert(err, contract.interface);
     if (revert) return error(`${method} reverted: ${revert.name}`, revert, err);
     const o = err as { shortMessage?: unknown; message?: unknown };
     const text =
@@ -261,13 +276,14 @@ export abstract class SmartContractService {
   // race replays the same way); null when the replay passes or says nothing.
   private async replayRevert(
     provider: Provider,
-    tx: TransactionRequest
+    tx: TransactionRequest,
+    contract: Contract
   ): Promise<DavinciErrorDescription | null> {
     try {
       await provider.call(tx);
       return null;
     } catch (err) {
-      return decodeRevert(err);
+      return decodeRevert(err, contract.interface);
     }
   }
   /**

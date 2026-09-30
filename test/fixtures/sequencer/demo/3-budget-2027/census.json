@@ -1,0 +1,84 @@
+{
+  "participants": [
+    {
+      "key": "0xb2445213a32178d1c5573d5294b0799ef70a29be",
+      "weight": "45"
+    },
+    {
+      "key": "0x6520bc8f40612642436d2370105035217d466a47",
+      "weight": "65"
+    },
+    {
+      "key": "0x3a42c2496f941299b2a1ff8d12a6dfe298427823",
+      "weight": "90"
+    },
+    {
+      "key": "0xcd14a6b4eb44861b2ef15d5d342e4dea06bafffe",
+      "weight": "47"
+    },
+    {
+      "key": "0x83c3f7923601b429da497f349af4e34cd14a1823",
+      "weight": "55"
+    },
+    {
+      "key": "0xca793a4653ccfd932eb52c2f067e7a88ce099c9b",
+      "weight": "79"
+    },
+    {
+      "key": "0xee317e95893864a998be54d852a1a0941a8e91a7",
+      "weight": "67"
+    },
+    {
+      "key": "0x1c536666fd5da128fb4a54e93d5b78196f52da86",
+      "weight": "92"
+    },
+    {
+      "key": "0x0559d1a7b2c918388e3e0cfb6f7a4103e32f70d3",
+      "weight": "42"
+    },
+    {
+      "key": "0xce996d7eba279bc59c172ed4dd0189f10f5c34c8",
+      "weight": "100"
+    },
+    {
+      "key": "0xb14b9d3f2957bb38aa6bca9a5ac815455a4610b7",
+      "weight": "57"
+    },
+    {
+      "key": "0xfca1dd73fdd9b7deae9cc8f731982d1faa70367d",
+      "weight": "72"
+    },
+    {
+      "key": "0x3c89eb1e0ed585f26dbaf20ae9f982a124982be3",
+      "weight": "62"
+    },
+    {
+      "key": "0xb95ddb32b087aff18b0d39b8316b5ba1447d86d8",
+      "weight": "54"
+    },
+    {
+      "key": "0xe8e4ace8f2a2f41035d2b7f55adee0d3addc9829",
+      "weight": "79"
+    },
+    {
+      "key": "0x323a8fc733927763caa51e4372d94efcca897c11",
+      "weight": "57"
+    },
+    {
+      "key": "0xc1aeeb0424b26f2191dbecf930d22982d41a0a3c",
+      "weight": "73"
+    },
+    {
+      "key": "0x54ff9ddcc34d5b1f788c43bfca2133867d710a9f",
+      "weight": "71"
+    },
+    {
+      "key": "0x4b27550d7ab95f3b250d0a5c3dd288043dd55ebd",
+      "weight": "45"
+    },
+    {
+      "key": "0xddca69266f1838174e140ca1d609e4045d013b7b",
+      "weight": "65"
+    }
+  ]
+}

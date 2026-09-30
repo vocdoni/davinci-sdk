@@ -2,8 +2,10 @@
  * @fileoverview Contract ABIs of the DAVINCI deployment the SDK targets.
  *
  * `abi/*.json` are the forge build ABIs of davinci-contracts at the commit in
- * `abi/source.json`, copied by `scripts/sync-abis.mjs`. Do not edit them by
- * hand: re-run the script and the drift test (`test/contracts/unit/abi.test.ts`).
+ * `abi/source.json`, and `abi/census/*.json` those of
+ * davinci-onchain-census-contract at the commit in `abi/census/source.json`,
+ * both copied by `scripts/sync-abis.mjs`. Do not edit them by hand: re-run the
+ * script and the drift test (`test/contracts/unit/abi.test.ts`).
  */
 
 import { Interface, type BytesLike, type JsonFragment, type Result } from 'ethers';
@@ -14,6 +16,9 @@ import dkgManagerAbi from './abi/IDKGManager.json';
 import processRegistryAbi from './abi/ProcessRegistry.json';
 import abiSource from './abi/source.json';
 import ziskVerifierAbi from './abi/ZiskVerifier.json';
+import onchainCensusAbi from './abi/census/OnchainCensus.json';
+import ownedCensusAbi from './abi/census/OwnedCensus.json';
+import censusAbiSource from './abi/census/source.json';
 
 /** `ProcessRegistry`: processes, census, metadata, grace window, DKG key modes. */
 export const PROCESS_REGISTRY_ABI = processRegistryAbi as JsonFragment[];
@@ -35,6 +40,19 @@ export const DKG_MANAGER_ABI = dkgManagerAbi as JsonFragment[];
 
 /** davinci-contracts commit the vendored ABIs were built from. */
 export const CONTRACTS_ABI_COMMIT: string = abiSource.commit;
+
+/**
+ * davinci-onchain-census-contract `OnchainCensus` (davinci-zkvm branch): the
+ * append-only lean-IMT census an origin-3 process points at, with
+ * `ICensusValidator`, member weights, ballot slots and `CensusMemberAdded`.
+ */
+export const ONCHAIN_CENSUS_ABI = onchainCensusAbi as JsonFragment[];
+
+/** `OwnedCensus`: an `OnchainCensus` whose owner adds members (`addMember`, `addMembers`). */
+export const OWNED_CENSUS_ABI = ownedCensusAbi as JsonFragment[];
+
+/** davinci-onchain-census-contract commit the vendored census ABIs were built from. */
+export const CENSUS_CONTRACTS_ABI_COMMIT: string = censusAbiSource.commit;
 
 /**
  * Every custom error a registry call can revert with, one fragment per

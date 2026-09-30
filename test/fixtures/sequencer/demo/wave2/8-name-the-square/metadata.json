@@ -1,0 +1,83 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Name the new square",
+    "en": "Name the new square",
+    "es": "Pon nombre a la nueva plaza",
+    "ca": "Posa nom a la plaça nova"
+  },
+  "description": {
+    "default": "The new square between the market and the station needs a name. Rank the five proposals from 1 (your favourite) to 5. The rankings stay sealed until the organizers publish their part of the key after the vote closes.",
+    "en": "The new square between the market and the station needs a name. Rank the five proposals from 1 (your favourite) to 5. The rankings stay sealed until the organizers publish their part of the key after the vote closes.",
+    "es": "La nueva plaza entre el mercado y la estación necesita un nombre. Ordena las cinco propuestas de 1 (tu favorita) a 5. Las clasificaciones quedan selladas hasta que los organizadores publiquen su parte de la clave, después del cierre.",
+    "ca": "La plaça nova entre el mercat i l'estació necessita un nom. Ordena les cinc propostes d'1 (la teva preferida) a 5. Les classificacions queden segellades fins que els organitzadors publiquin la seva part de la clau, després del tancament."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "How do you rank the proposed names?",
+        "en": "How do you rank the proposed names?",
+        "es": "¿Cómo ordenas los nombres propuestos?",
+        "ca": "Com ordenes els noms proposats?"
+      },
+      "description": {
+        "default": "Give each name a different rank, from 1 to 5.",
+        "en": "Give each name a different rank, from 1 to 5.",
+        "es": "Da a cada nombre una posición distinta, de 1 a 5.",
+        "ca": "Dona a cada nom una posició diferent, d'1 a 5."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Weavers' Square",
+            "en": "Weavers' Square",
+            "es": "Plaza de los Tejedores",
+            "ca": "Plaça dels Teixidors"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Clara Campoamor Square",
+            "en": "Clara Campoamor Square",
+            "es": "Plaza de Clara Campoamor",
+            "ca": "Plaça de Clara Campoamor"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Old Mill Square",
+            "en": "Old Mill Square",
+            "es": "Plaza del Molino Viejo",
+            "ca": "Plaça del Molí Vell"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Harbour Lights Square",
+            "en": "Harbour Lights Square",
+            "es": "Plaza de las Luces del Puerto",
+            "ca": "Plaça dels Llums del Port"
+          },
+          "value": 3
+        },
+        {
+          "title": {
+            "default": "Linden Tree Square",
+            "en": "Linden Tree Square",
+            "es": "Plaza del Tilo",
+            "ca": "Plaça del Til·ler"
+          },
+          "value": 4
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "ranking"
+    }
+  }
+}

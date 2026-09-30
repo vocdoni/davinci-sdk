@@ -1,0 +1,39 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Shareholder resolution: yes / no / abstain"
+  },
+  "description": {
+    "default": "Resolution 2026-04: approve the merger with the regional credit cooperative on the terms presented at the extraordinary general meeting. Each shareholder casts the full weight of their shares for one option; the weights come from the share register."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Do you approve the merger?"
+      },
+      "description": {
+        "default": "Put all your shares on one option."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Yes"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "No"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Abstain"
+          },
+          "value": 2
+        }
+      ]
+    }
+  ]
+}

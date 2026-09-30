@@ -1,0 +1,85 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Sports club: two delegates to the federation",
+    "en": "Sports club: two delegates to the federation",
+    "es": "Club deportivo: dos delegados para la federación",
+    "ca": "Club esportiu: dos delegats per a la federació"
+  },
+  "description": {
+    "default": "The club sends two delegates to the regional federation's assembly. Choose exactly two of the five members who volunteered. Voting closes on its own after an hour. The ballots are encrypted with a key held jointly by an independent committee, which decrypts only the final count.",
+    "en": "The club sends two delegates to the regional federation's assembly. Choose exactly two of the five members who volunteered. Voting closes on its own after an hour. The ballots are encrypted with a key held jointly by an independent committee, which decrypts only the final count.",
+    "es": "El club envía dos delegados a la asamblea de la federación territorial. Elige exactamente a dos de los cinco socios que se han presentado. La votación se cierra sola al cabo de una hora. Las papeletas se cifran con una clave que custodia de forma conjunta un comité independiente, que solo descifra el recuento final.",
+    "ca": "El club envia dos delegats a l'assemblea de la federació territorial. Tria exactament dos dels cinc socis que s'han presentat. La votació es tanca sola al cap d'una hora. Les paperetes es xifren amb una clau que custodia de manera conjunta un comitè independent, que només desxifra el recompte final."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which two members should represent the club?",
+        "en": "Which two members should represent the club?",
+        "es": "¿Qué dos socios deberían representar al club?",
+        "ca": "Quins dos socis haurien de representar el club?"
+      },
+      "description": {
+        "default": "Choose exactly two.",
+        "en": "Choose exactly two.",
+        "es": "Elige exactamente dos.",
+        "ca": "Tria'n exactament dos."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Núria Casals",
+            "en": "Núria Casals",
+            "es": "Núria Casals",
+            "ca": "Núria Casals"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Pablo Martín",
+            "en": "Pablo Martín",
+            "es": "Pablo Martín",
+            "ca": "Pablo Martín"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Fatima El Idrissi",
+            "en": "Fatima El Idrissi",
+            "es": "Fatima El Idrissi",
+            "ca": "Fatima El Idrissi"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Jordi Roca",
+            "en": "Jordi Roca",
+            "es": "Jordi Roca",
+            "ca": "Jordi Roca"
+          },
+          "value": 3
+        },
+        {
+          "title": {
+            "default": "Emma Laurent",
+            "en": "Emma Laurent",
+            "es": "Emma Laurent",
+            "ca": "Emma Laurent"
+          },
+          "value": 4
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "multiple_choice",
+      "maxSelections": 2,
+      "minSelections": 2
+    }
+  }
+}

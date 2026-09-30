@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/vocdoni/davinci-onchain-census-contract",
+  "commit": "671ef5bdc39bd57b5ed1c570e506af370a0db910",
+  "files": {
+    "OnchainCensus.json": "933f4ce2f4ca42f2b8e38ee944a61b017429d68faa25a02bd83bc0a61075e770",
+    "OwnedCensus.json": "714fb55926dae38d6d209e7a67d4de105d6ad8fbdd6b3cdb49f86022da89aa53"
+  }
+}

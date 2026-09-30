@@ -40,3 +40,31 @@ export interface Uploader {
   /** Stores `request.data` and resolves to the public URL serving it. */
   upload(request: UploadRequest): Promise<string>;
 }
+
+/** Default wait for a census file or metadata document (answer or more of its body). */
+export const DOCUMENT_TIMEOUT_MS = 30_000;
+
+/** How the SDK downloads and checks census files and metadata documents. */
+export interface DocumentOptions {
+  /** Default: the global `fetch`. */
+  fetchImpl?: typeof fetch;
+  /** Longest wait for an answer or for more of its body; default {@link DOCUMENT_TIMEOUT_MS}. */
+  timeoutMs?: number;
+  /**
+   * Check the documents a process points at, as nodes and readers will
+   * (default true): every census file and metadata document the SDK
+   * uploads is downloaded back (a census file as nodes read it: a 200 with no
+   * redirect and the same root; a metadata document by its sha256), and so
+   * is a Merkle census URL given by hand. Turn it off only where the host
+   * cannot be read back, such as a browser app on a host without CORS
+   * headers.
+   */
+  verify?: boolean;
+  /**
+   * Accept census and metadata URLs on loopback and private hosts (which
+   * nodes refuse for a census unless run with `--census-allow-private`):
+   * local development only. Otherwise the SDK never downloads a document
+   * from such a host, whatever URL a process names.
+   */
+  allowPrivateHosts?: boolean;
+}

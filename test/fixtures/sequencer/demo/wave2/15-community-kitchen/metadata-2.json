@@ -1,0 +1,74 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Community kitchen: the Saturday lunch menu",
+    "en": "Community kitchen: the Saturday lunch menu",
+    "es": "Cocina comunitaria: el menú de los sábados",
+    "ca": "Cuina comunitària: el menú dels dissabtes"
+  },
+  "description": {
+    "default": "The community kitchen serves a shared lunch on the first Saturday of every month. Choose the menu we cook most often next season; the others will rotate. Corrected before voting opened: the lunches are monthly, not weekly.",
+    "en": "The community kitchen serves a shared lunch on the first Saturday of every month. Choose the menu we cook most often next season; the others will rotate. Corrected before voting opened: the lunches are monthly, not weekly.",
+    "es": "La cocina comunitaria sirve una comida compartida el primer sábado de cada mes. Elige el menú que cocinaremos más a menudo la próxima temporada; los demás irán rotando. Corregido antes de abrir la votación: las comidas son mensuales, no semanales.",
+    "ca": "La cuina comunitària serveix un dinar compartit el primer dissabte de cada mes. Tria el menú que cuinarem més sovint la temporada vinent; els altres aniran rotant. Corregit abans d'obrir la votació: els dinars són mensuals, no setmanals."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which menu should we cook most often?",
+        "en": "Which menu should we cook most often?",
+        "es": "¿Qué menú deberíamos cocinar más a menudo?",
+        "ca": "Quin menú hauríem de cuinar més sovint?"
+      },
+      "description": {
+        "default": "Pick one menu.",
+        "en": "Pick one menu.",
+        "es": "Elige un menú.",
+        "ca": "Tria un menú."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Paella and salad",
+            "en": "Paella and salad",
+            "es": "Paella y ensalada",
+            "ca": "Paella i amanida"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Lentil stew",
+            "en": "Lentil stew",
+            "es": "Lentejas estofadas",
+            "ca": "Llenties estofades"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Couscous with vegetables",
+            "en": "Couscous with vegetables",
+            "es": "Cuscús con verduras",
+            "ca": "Cuscús amb verdures"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Pasta with seasonal pesto",
+            "en": "Pasta with seasonal pesto",
+            "es": "Pasta con pesto de temporada",
+            "ca": "Pasta amb pesto de temporada"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice"
+    }
+  }
+}

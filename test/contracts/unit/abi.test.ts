@@ -3,12 +3,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Interface, type JsonFragment, type ParamType } from 'ethers';
 import {
+  CENSUS_CONTRACTS_ABI_COMMIT,
   CENSUS_VALIDATOR_ABI,
   CONTRACTS_ABI_COMMIT,
   DAVINCI_DKG_ADAPTER_ABI,
   DAVINCI_ERRORS_ABI,
   DKG_APP_MANAGER_ABI,
   DKG_MANAGER_ABI,
+  ONCHAIN_CENSUS_ABI,
+  OWNED_CENSUS_ABI,
   PROCESS_REGISTRY_ABI,
   ZISK_VERIFIER_ABI,
   decodeDavinciError,
@@ -344,6 +347,100 @@ describe('vendored contract ABIs', () => {
     const root = must(iface.getFunction('getRootCVadcopFinal()'), 'getRootCVadcopFinal');
     expect(root.outputs.map(o => o.type)).toEqual(['bytes32']);
     expect(iface.getFunction('verifySnarkProof(bytes32,bytes32,bytes,bytes)')).not.toBeNull();
+  });
+});
+
+// davinci-onchain-census-contract, davinci-zkvm branch (671ef5b).
+const CENSUS_FUNCTIONS: Record<string, string> = {
+  'getCensusRoot()': '0xc1da8691',
+  'getRootBlockNumber(uint256)': '0x650e5fcf',
+  'getTotalVotingPowerAtRoot(uint256)': '0x21541146',
+  'weightOf(address)': '0xdd4bc101',
+  'slotOf(address)': '0xea986413',
+  'slotOwner(uint64)': '0x0ed2b6e3',
+  'treeSize()': '0x8d1ddfb1',
+  'treeDepth()': '0x16a56c41',
+  'totalVotingPower()': '0x671b3793',
+  'leafOf(address)': '0xfd6bc547',
+  'leafFor(address,uint88)': '0xdb1467b6',
+  'owner()': '0x8da5cb5b',
+};
+
+const CENSUS_EVENTS: Record<string, string> = {
+  'CensusMemberAdded(address,uint88,uint256,uint256,uint256)':
+    '0x77533acdff96d14ca12a9347d34fee89de30299ab81e55ef3e0f594a592485aa',
+  'WeightChanged(address,uint88,uint88)':
+    '0xee82339564ef9f72eccdbb67b46a62198422524ab9c7e3fcbdd194fa1b46461b',
+  'OwnershipTransferred(address,address)':
+    '0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0',
+};
+
+const CENSUS_ERRORS: Record<string, string> = {
+  AlreadyRegisteredAddress: '0x9642e737',
+  InvalidCensusWeight: '0x12a80033',
+  SlotTaken: '0x4cf5c63d',
+  OwnableInvalidOwner: '0x1e4fbdf7',
+  OwnableUnauthorizedAccount: '0x118cdaa7',
+};
+
+describe('vendored census contract ABIs', () => {
+  const onchain = new Interface(ONCHAIN_CENSUS_ABI);
+  const owned = new Interface(OWNED_CENSUS_ABI);
+
+  it('match the files recorded by the sync script', () => {
+    const dir = join(__dirname, '../../../src/contracts/abi/census');
+    const source = JSON.parse(readFileSync(join(dir, 'source.json'), 'utf8')) as {
+      repository: string;
+      commit: string;
+      files: Record<string, string>;
+    };
+    expect(source.repository).toBe('https://github.com/vocdoni/davinci-onchain-census-contract');
+    expect(source.commit).toBe('671ef5bdc39bd57b5ed1c570e506af370a0db910');
+    expect(CENSUS_CONTRACTS_ABI_COMMIT).toBe(source.commit);
+    expect(Object.keys(source.files).sort()).toEqual(['OnchainCensus.json', 'OwnedCensus.json']);
+    for (const [file, sha] of Object.entries(source.files)) {
+      const digest = createHash('sha256')
+        .update(readFileSync(join(dir, file)))
+        .digest('hex');
+      expect(digest, file).toBe(sha);
+    }
+  });
+
+  it('pin the census reads, events and errors', () => {
+    for (const iface of [onchain, owned]) {
+      for (const [sig, selector] of Object.entries(CENSUS_FUNCTIONS)) {
+        expect(must(iface.getFunction(sig), sig).selector, sig).toBe(selector);
+      }
+      const events: Record<string, string> = {};
+      iface.forEachEvent(e => (events[e.format('sighash')] = e.topicHash));
+      expect(events).toEqual(CENSUS_EVENTS);
+      for (const [name, selector] of Object.entries(CENSUS_ERRORS)) {
+        expect(must(iface.getError(name), name).selector, name).toBe(selector);
+      }
+    }
+    const outputs = (sig: string) => must(onchain.getFunction(sig), sig).outputs.map(o => o.type);
+    expect(outputs('weightOf(address)')).toEqual(['uint88']);
+    expect(outputs('slotOf(address)')).toEqual(['uint64']);
+    expect(outputs('slotOwner(uint64)')).toEqual(['address']);
+    const added = must(onchain.getEvent('CensusMemberAdded'), 'CensusMemberAdded');
+    expect(added.inputs.map(i => [i.name, i.type, i.indexed])).toEqual([
+      ['user', 'address', true],
+      ['weight', 'uint88', false],
+      ['leaf', 'uint256', false],
+      ['newRoot', 'uint256', false],
+      ['totalVotingPower', 'uint256', false],
+    ]);
+  });
+
+  it('pin the OwnedCensus writes', () => {
+    expect(must(owned.getFunction('addMember(address,uint88)'), 'addMember').selector).toBe(
+      '0x6f3249b9'
+    );
+    expect(must(owned.getFunction('addMembers(address[],uint88[])'), 'addMembers').selector).toBe(
+      '0x107859f4'
+    );
+    expect(must(owned.getError('LengthMismatch'), 'LengthMismatch').selector).toBe('0xff633a38');
+    expect(onchain.getFunction('addMember')).toBeNull();
   });
 });
 

@@ -1,0 +1,85 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Housing cooperative: priorities for 2027",
+    "en": "Housing cooperative: priorities for 2027",
+    "es": "Cooperativa de vivienda: prioridades para 2027",
+    "ca": "Cooperativa d'habitatge: prioritats per al 2027"
+  },
+  "description": {
+    "default": "Each member has 100 credits for the cooperative's five priorities in 2027 and must spend at least 50 of them. Giving a priority n votes costs n² credits, so a strong preference costs more than broad support. Membership is recorded on-chain: new members can vote as soon as they join.",
+    "en": "Each member has 100 credits for the cooperative's five priorities in 2027 and must spend at least 50 of them. Giving a priority n votes costs n² credits, so a strong preference costs more than broad support. Membership is recorded on-chain: new members can vote as soon as they join.",
+    "es": "Cada socio tiene 100 créditos para las cinco prioridades de la cooperativa en 2027 y debe gastar al menos 50. Dar n votos a una prioridad cuesta n² créditos, así que una preferencia fuerte cuesta más que un apoyo repartido. La lista de socios está registrada en la cadena: los nuevos socios pueden votar en cuanto se incorporan.",
+    "ca": "Cada soci té 100 crèdits per a les cinc prioritats de la cooperativa el 2027 i n'ha de gastar almenys 50. Donar n vots a una prioritat costa n² crèdits, de manera que una preferència forta costa més que un suport repartit. La llista de socis és registrada a la cadena: els socis nous poden votar tan bon punt s'incorporen."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "How many votes do you give each priority?",
+        "en": "How many votes do you give each priority?",
+        "es": "¿Cuántos votos das a cada prioridad?",
+        "ca": "Quants vots dones a cada prioritat?"
+      },
+      "description": {
+        "default": "Spend between 50 and 100 credits; n votes cost n² credits.",
+        "en": "Spend between 50 and 100 credits; n votes cost n² credits.",
+        "es": "Gasta entre 50 y 100 créditos; n votos cuestan n² créditos.",
+        "ca": "Gasta entre 50 i 100 crèdits; n vots costen n² crèdits."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Insulate the façades",
+            "en": "Insulate the façades",
+            "es": "Aislar las fachadas",
+            "ca": "Aïllar les façanes"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Solar panels on the roofs",
+            "en": "Solar panels on the roofs",
+            "es": "Placas solares en las azoteas",
+            "ca": "Plaques solars als terrats"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "A lift in building B",
+            "en": "A lift in building B",
+            "es": "Un ascensor en el bloque B",
+            "ca": "Un ascensor al bloc B"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "A bicycle storage room",
+            "en": "A bicycle storage room",
+            "es": "Un cuarto para bicicletas",
+            "ca": "Un espai per a bicicletes"
+          },
+          "value": 3
+        },
+        {
+          "title": {
+            "default": "A shared laundry",
+            "en": "A shared laundry",
+            "es": "Una lavandería compartida",
+            "ca": "Una bugaderia compartida"
+          },
+          "value": 4
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "quadratic",
+      "budget": 100,
+      "minValueSum": 50
+    }
+  }
+}

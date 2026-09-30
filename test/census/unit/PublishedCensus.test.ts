@@ -1,118 +1,46 @@
-import { PublishedCensus } from '../../../src/census/classes/PublishedCensus';
-import { CensusOrigin } from '../../../src/census/types';
+import { CensusError, CensusOrigin, PublishedCensus } from '../../../src/census';
+import { BN254_FR } from '../../../src/crypto';
 
 describe('PublishedCensus', () => {
-  const testRoot = '0x1234567890abcdef';
-  const testUri = 'ipfs://QmTest123';
+  const root = '0x1234567890abcdef';
+  const uri = 'https://files.example.org/census.json';
+  const padded = `0x${'1234567890abcdef'.padStart(64, '0')}`;
 
-  describe('Construction', () => {
-    it('should create a PublishedCensus with OffchainStatic origin', () => {
-      const census = new PublishedCensus(CensusOrigin.OffchainStatic, testRoot, testUri);
-
-      expect(census.censusOrigin).toBe(CensusOrigin.OffchainStatic);
-      expect(census.censusRoot).toBe(testRoot);
-      expect(census.censusURI).toBe(testUri);
-    });
-
-    it('should be marked as published', () => {
-      const census = new PublishedCensus(CensusOrigin.OffchainStatic, testRoot, testUri);
+  it('holds a Merkle root, as bytes32, and its URL', () => {
+    for (const origin of [CensusOrigin.OffchainStatic, CensusOrigin.OffchainDynamic]) {
+      const census = new PublishedCensus(origin, root, uri);
+      expect(census.censusOrigin).toBe(origin);
+      expect(census.censusRoot).toBe(padded);
+      expect(census.censusURI).toBe(uri);
       expect(census.isPublished).toBe(true);
-    });
-
-    it('should work with OffchainDynamic origin', () => {
-      const census = new PublishedCensus(CensusOrigin.OffchainDynamic, testRoot, testUri);
-      expect(census.censusOrigin).toBe(CensusOrigin.OffchainDynamic);
-    });
-
-    it('should work with Onchain origin', () => {
-      const contractAddress = '0x1234567890123456789012345678901234567890';
-      const census = new PublishedCensus(
-        CensusOrigin.Onchain,
-        contractAddress,
-        `contract://${contractAddress}`
-      );
-      expect(census.censusOrigin).toBe(CensusOrigin.Onchain);
-    });
-
-    it('should work with CSP origin', () => {
-      const publicKey = '0xabcdef1234567890';
-      const cspUri = 'https://csp-server.com';
-      const census = new PublishedCensus(CensusOrigin.CSP, publicKey, cspUri);
-      expect(census.censusOrigin).toBe(CensusOrigin.CSP);
-    });
+      expect(census.toRegistryCensus()).toEqual({ origin, root: padded, uri });
+    }
+    expect(new PublishedCensus(CensusOrigin.OffchainStatic, 0x1234n, uri).censusRoot).toBe(
+      `0x${'1234'.padStart(64, '0')}`
+    );
   });
 
-  describe('Publishing behavior', () => {
-    it('should NOT require publishing for OffchainStatic (already published)', () => {
-      const census = new PublishedCensus(CensusOrigin.OffchainStatic, testRoot, testUri);
-      // This is a published census, so even though OffchainStatic normally requires publishing,
-      // this specific instance is already published
-      expect(census.isPublished).toBe(true);
-    });
-
-    it('should NOT require publishing for OffchainDynamic (already published)', () => {
-      const census = new PublishedCensus(CensusOrigin.OffchainDynamic, testRoot, testUri);
-      expect(census.isPublished).toBe(true);
-    });
-
-    it('should NOT require publishing for Onchain (never requires it)', () => {
-      const contractAddress = '0x1234567890123456789012345678901234567890';
-      const census = new PublishedCensus(
-        CensusOrigin.Onchain,
-        contractAddress,
-        `contract://${contractAddress}`
-      );
-      expect(census.requiresPublishing).toBe(false);
-      expect(census.isPublished).toBe(true);
-    });
-
-    it('should NOT require publishing for CSP (never requires it)', () => {
-      const publicKey = '0xabcdef1234567890';
-      const cspUri = 'https://csp-server.com';
-      const census = new PublishedCensus(CensusOrigin.CSP, publicKey, cspUri);
-      expect(census.requiresPublishing).toBe(false);
-      expect(census.isPublished).toBe(true);
-    });
+  it('holds a CSP address', () => {
+    const address = '0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a';
+    const census = new PublishedCensus(CensusOrigin.CSP, address, 'https://csp.example.org');
+    expect(census.censusRoot).toBe(`0x${'00'.repeat(12)}${address.slice(2)}`);
+    expect(census.requiresPublishing).toBe(false);
   });
 
-  describe('Ready for process creation', () => {
-    it('should be immediately ready with all census origins', () => {
-      const censuses = [
-        new PublishedCensus(CensusOrigin.OffchainStatic, testRoot, testUri),
-        new PublishedCensus(CensusOrigin.OffchainDynamic, testRoot, testUri),
-        new PublishedCensus(
-          CensusOrigin.Onchain,
-          '0x1234567890123456789012345678901234567890',
-          'contract://0x1234567890123456789012345678901234567890'
-        ),
-        new PublishedCensus(CensusOrigin.CSP, '0xpubkey', 'https://csp.com'),
-      ];
-
-      censuses.forEach(census => {
-        expect(census.isPublished).toBe(true);
-        expect(census.censusRoot).toBeTruthy();
-        expect(census.censusURI).toBeTruthy();
-      });
-    });
-  });
-
-  describe('Use case', () => {
-    it('should be useful for reusing already-published census data', () => {
-      // Scenario: User published a census earlier and got back root and URI
-      // They want to create a new process using that same census
-      const previouslyPublishedRoot = '0xabcdef123456';
-      const previouslyPublishedUri = 'ipfs://QmPreviouslyPublished';
-
-      const census = new PublishedCensus(
-        CensusOrigin.OffchainStatic,
-        previouslyPublishedRoot,
-        previouslyPublishedUri
-      );
-
-      // Can be used directly for process creation without re-publishing
-      expect(census.isPublished).toBe(true);
-      expect(census.censusRoot).toBe(previouslyPublishedRoot);
-      expect(census.censusURI).toBe(previouslyPublishedUri);
-    });
+  it('refuses roots the registry or the nodes refuse', () => {
+    const refused: [CensusOrigin, string | bigint, string][] = [
+      [CensusOrigin.OffchainStatic, 0n, 'non-zero field element'],
+      [CensusOrigin.OffchainStatic, BN254_FR, 'non-zero field element'],
+      [CensusOrigin.OffchainDynamic, '0x', 'is not a bigint or 0x hex'],
+      [CensusOrigin.OffchainStatic, '1234', 'is not a bigint or 0x hex'],
+      [CensusOrigin.CSP, 1n << 160n, 'the CSP address'],
+      [CensusOrigin.CSP, 0n, 'the CSP address'],
+      [CensusOrigin.Onchain, 0n, 'use OnchainCensus'],
+      [9 as CensusOrigin, 1n, 'unknown census origin'],
+    ];
+    for (const [origin, r, msg] of refused) {
+      expect(() => new PublishedCensus(origin, r, uri), String(r)).toThrow(msg);
+    }
+    expect(() => new PublishedCensus(CensusOrigin.OffchainStatic, root, '')).toThrow(CensusError);
   });
 });

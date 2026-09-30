@@ -2,8 +2,8 @@ import { MerkleCensus } from './MerkleCensus';
 import { CensusOrigin } from '../types';
 
 /**
- * Offchain static Merkle Tree census (most common)
- * Supports both plain addresses (weight=1) and weighted participants
+ * Static Merkle census (origin 1): its root is fixed when the process is
+ * created. Plain addresses have weight 1; weighted members are allowed.
  */
 export class OffchainCensus extends MerkleCensus {
   constructor() {

@@ -1,8 +1,8 @@
-import { Signer } from 'ethers';
+import { Signer, getAddress } from 'ethers';
 import { VocdoniApiService } from '../api/ApiService';
 import { ProcessRegistryService } from '../../contracts/ProcessRegistryService';
-import { ProcessStatus, type RegistryCensus } from '../../contracts/types';
-import { metadataHash as hashMetadata } from '../../contracts/params';
+import { CensusNotUpdatable, ProcessMetadataError } from '../../contracts/errors';
+import { ProcessStatus, type OnchainProcess, type RegistryCensus } from '../../contracts/types';
 import type { BjjPoint } from '../../crypto/babyjubjub';
 import type { BallotModeValues } from '../../crypto/ballot';
 import { BallotMode } from '../types';
@@ -12,11 +12,34 @@ import {
   resolveElectionPreset,
 } from '../types/ballot';
 import { CensusOrigin } from '../../census/types';
-import { getElectionMetadataTemplate } from '../types/metadata';
-import { TxStatusEvent, TxStatus } from '../../contracts/SmartContractService';
+import { CensusError } from '../../census/errors';
+import { publishCensus, verifyCensusUrl } from '../../census/publish';
+import {
+  buildElectionMetadata,
+  fetchMetadataHash,
+  localizedText,
+  publishMetadata,
+  readMetadata,
+  type MetadataStatus,
+  type PublishedMetadata,
+} from '../metadata';
+import type {
+  ElectionMetadata,
+  ElectionMetadataConfig,
+  LocalizedText,
+  QuestionConfig,
+} from '../types/metadata';
+import type { DocumentOptions, Uploader } from '../types/uploader';
+import {
+  SmartContractService,
+  TxStatusEvent,
+  TxStatus,
+} from '../../contracts/SmartContractService';
 import { Census } from '../../census/classes/Census';
 import { MerkleCensus } from '../../census/classes/MerkleCensus';
-import { CensusOrchestrator } from '../../census/CensusOrchestrator';
+import { OnchainCensus } from '../../census/classes/OnchainCensus';
+import { PublishedCensus } from '../../census/classes/PublishedCensus';
+import { OffchainDynamicCensus } from '../../census/classes/OffchainDynamicCensus';
 
 /**
  * Base interface with shared fields between ProcessConfig and ProcessInfo
@@ -30,12 +53,14 @@ export interface BaseProcess {
 
   /** Census configuration */
   census: {
-    /** Census type - MerkleTree or CSP */
+    /** Census origin */
     type: CensusOrigin;
-    /** Census root */
+    /** Census root, `bytes32` hex: the lean-IMT root, or the CSP address */
     root: string;
     /** Census URI */
     uri: string;
+    /** The census contract of an on-chain census */
+    contractAddress?: string;
   };
 
   /** Ballot configuration */
@@ -46,7 +71,8 @@ export interface BaseProcess {
 }
 
 /**
- * Question structure used in process configuration and metadata
+ * A question as `getProcess` reads it from the metadata: its text in the
+ * default language, and each choice's ballot field (`value`).
  */
 export type ProcessQuestion = {
   title: string;
@@ -58,26 +84,34 @@ export type ProcessQuestion = {
 };
 
 /**
+ * A census given by hand: what the registry stores. Prefer a census object,
+ * which the SDK publishes and checks.
+ */
+export interface CensusConfig {
+  /** Census origin */
+  type: CensusOrigin;
+  /** Lean-IMT root, CSP address, or zero for an on-chain census; `bytes32` hex */
+  root: string;
+  /** Census URI */
+  uri: string;
+  /** The census contract (origin 3 only) */
+  contractAddress?: string;
+  /** @deprecated Ignored; give `maxVoters`. */
+  size?: number;
+}
+
+/**
  * Base configuration shared by both process creation variants
  */
 interface BaseProcessConfig {
   /**
-   * Census - either a Census object (PlainCensus, WeightedCensus, CspCensus, PublishedCensus)
-   * or manual configuration. If a Census object is provided and not published, it will be
-   * automatically published.
+   * The census: a census object, or its registry form. A Merkle census
+   * object not yet published is uploaded through the SDK's uploader and
+   * checked as nodes will read it. A Merkle census URL given by hand is
+   * checked the same way (unless `documents.verify` is false), since a
+   * census the nodes cannot load leaves the process ignored.
    */
-  census:
-    | Census
-    | {
-        /** Census type - MerkleTree or CSP */
-        type: CensusOrigin;
-        /** Census root */
-        root: string;
-        /** Census size */
-        size: number;
-        /** Census URI */
-        uri: string;
-      };
+  census: Census | CensusConfig;
 
   /**
    * Ballot configuration. Mutually exclusive with `electionPreset`:
@@ -111,35 +145,37 @@ interface BaseProcessConfig {
   };
 
   /**
-   * Maximum number of voters allowed for this process
-   * Optional only if census is a published MerkleCensus (OffchainCensus/OffchainDynamicCensus)
-   * - defaults to participant count from the census
-   * Required in all other cases (OnchainCensus, CspCensus, manual config, unpublished census)
+   * Maximum number of voters allowed for this process. Defaults to the
+   * member count of a Merkle census object; required for every other census.
    */
   maxVoters?: number;
 }
 
 /**
- * Process configuration with metadata fields (title, description, questions)
- * The metadata will be created and uploaded automatically
+ * Process configuration with the metadata fields: the SDK builds the
+ * metadata document (`buildElectionMetadata`), publishes it through its
+ * uploader and registers its URL and hash.
  */
 export interface ProcessConfigWithMetadata extends BaseProcessConfig {
-  /** Process title */
-  title: string;
+  /** Process title, plain or in several languages */
+  title: LocalizedText;
 
   /** Process description (optional) */
-  description?: string;
+  description?: LocalizedText;
 
   /** Election questions and choices (at least one required) */
-  questions: [ProcessQuestion, ...ProcessQuestion[]];
+  questions: [QuestionConfig, ...QuestionConfig[]];
+
+  /** Header and logo image URLs */
+  media?: { header?: string; logo?: string };
 }
 
 /**
- * Process configuration with a pre-existing metadata URI
- * No metadata upload will occur - the provided URI will be used directly
+ * Process configuration with a metadata document already served: no upload
+ * happens.
  */
 export interface ProcessConfigWithMetadataUri extends BaseProcessConfig {
-  /** Pre-existing metadata URI to use instead of uploading new metadata */
+  /** Where the metadata document is served */
   metadataUri: string;
   /**
    * SHA-256 of the exact bytes served at `metadataUri` (`metadataHash()`);
@@ -165,6 +201,32 @@ export interface ProcessCreationResult {
 }
 
 /**
+ * What `updateCensus` moves an updatable (origin 2) process to: a census
+ * object (published first when needed), or the root and URL of a census
+ * file already served.
+ */
+export type CensusUpdate = OffchainDynamicCensus | PublishedCensus | { root: string; uri: string };
+
+/**
+ * What `updateMetadata` moves a process to: a document to publish (built
+ * from a config, a document, or exact bytes), or one already served, with
+ * its hash or to be hashed from the URL.
+ */
+export type MetadataUpdate =
+  | ElectionMetadataConfig
+  | ElectionMetadata
+  | Uint8Array
+  | { uri: string; hash?: string };
+
+/** What the process orchestration needs besides the registry and the nodes. */
+export interface ProcessOrchestrationOptions {
+  /** Publishes census files and metadata documents. */
+  uploader?: Uploader;
+  /** How documents are downloaded and checked. */
+  documents?: DocumentOptions;
+}
+
+/**
  * Internal data needed during process creation
  */
 interface ProcessCreationData {
@@ -172,10 +234,8 @@ interface ProcessCreationData {
   startTime: number;
   duration: number;
   maxVoters: number;
-  censusRoot: string;
   ballotMode: BallotMode;
-  metadataUri: string;
-  metadataHash: string;
+  metadata: PublishedMetadata;
   encryptionKey: BjjPoint;
   census: RegistryCensus;
 }
@@ -220,8 +280,29 @@ export interface ProcessInfo extends BaseProcess {
   /** Metadata URI */
   metadataURI: string;
 
+  /** SHA-256 of the metadata document the organizer committed, `bytes32` hex */
+  metadataHash: string;
+
+  /**
+   * The document at `metadataURI` hashes to `metadataHash`. Title,
+   * description, questions and preset come from the document only then.
+   */
+  metadataVerified: boolean;
+
+  /**
+   * `verified`; `mismatch` (the URL serves another document); `unreachable`;
+   * or `refused` (not an `http(s)` URL on a public host, so never requested).
+   */
+  metadataStatus: MetadataStatus;
+
+  /** Why the metadata is not verified, or why the verified document is not JSON. */
+  metadataError?: string;
+
+  /** The verified metadata document, with every language. */
+  metadata?: ElectionMetadata;
+
   /** Raw contract data (for advanced users) */
-  raw?: any;
+  raw?: OnchainProcess;
 
   /**
    * Election preset used to create the process, recovered from
@@ -233,61 +314,124 @@ export interface ProcessInfo extends BaseProcess {
   electionPreset?: ElectionPreset;
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+// A `bytes32` metadata hash; zero is what the registry refuses.
+function metadataHashOf(hash: string): string {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash) || BigInt(hash) === 0n) {
+    throw new Error(`metadataHash ${hash} is not a non-zero 32-byte hex hash`);
+  }
+  return hash.toLowerCase();
+}
+
+// Questions of a verified document, in the default language.
+function questionsOf(doc: Record<string, unknown>): ProcessQuestion[] {
+  if (!Array.isArray(doc.questions)) return [];
+  return doc.questions.filter(isObject).map(q => ({
+    title: localizedText(q.title) ?? '',
+    description: localizedText(q.description),
+    choices: (Array.isArray(q.choices) ? q.choices : [])
+      .filter(isObject)
+      .filter(c => typeof c.value === 'number')
+      .map(c => ({ title: localizedText(c.title) ?? '', value: c.value as number })),
+  }));
+}
+
 /**
  * Service that orchestrates the complete process creation workflow
  */
 export class ProcessOrchestrationService {
-  private censusOrchestrator: CensusOrchestrator;
+  private readonly uploader?: Uploader;
+  private readonly documents: DocumentOptions;
 
   constructor(
     private processRegistry: ProcessRegistryService,
     private apiService: VocdoniApiService,
-    private signer: Signer
+    private signer: Signer,
+    options: ProcessOrchestrationOptions = {}
   ) {
-    // Initialize CensusOrchestrator with VocdoniCensusService from apiService
-    this.censusOrchestrator = new CensusOrchestrator(apiService.census);
+    this.uploader = options.uploader;
+    this.documents = options.documents ?? {};
   }
 
-  /**
-   * Handles census - auto-publishes if needed and returns census config
-   * @private
-   */
-  private async handleCensus(census: ProcessConfig['census']): Promise<{
-    type: CensusOrigin;
-    root: string;
-    uri: string;
-    contractAddress?: string;
-  }> {
-    // Check if it's a Census object
-    if ('isPublished' in census) {
-      // It's a Census object
-      // Only Merkle censuses (OffchainCensus, OffchainDynamicCensus) need publishing
-      // Onchain and CSP are ready immediately
-      if (census.requiresPublishing && !census.isPublished) {
-        // Check if census service has a valid base URL configured
-        const censusBaseURL = this.apiService.census?.getBaseUrl();
-        if (!censusBaseURL || censusBaseURL === '' || censusBaseURL === 'undefined') {
-          throw new Error(
-            'Census API URL is required to publish Merkle censuses (OffchainCensus, OffchainDynamicCensus). ' +
-              'Please provide "censusUrl" when initializing DavinciSDK, or use a pre-published census.'
-          );
-        }
-        // Type guard: if requiresPublishing is true, it must be a MerkleCensus
-        await this.censusOrchestrator.publish(census as MerkleCensus);
-      }
-
-      // Extract census data (includes contractAddress for onchain censuses)
-      return this.censusOrchestrator.getCensusData(census);
+  private requireUploader(what: string): Uploader {
+    if (!this.uploader) {
+      throw new Error(
+        `publishing ${what} needs an uploader: configure \`uploader\` in the SDK, ` +
+          'or serve the document yourself and pass its URL'
+      );
     }
-
-    // It's manual config - return as-is (but remove size if present for backward compatibility)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- size is dropped on purpose
-    const { size, ...censusWithoutSize } = census;
-    return censusWithoutSize;
+    return this.uploader;
   }
 
   /**
-   * Gets user-friendly process information by transforming raw contract data
+   * The registry form of a process's census: a Merkle census object is
+   * published when it is not yet, an on-chain one is checked to be a
+   * davinci-zkvm census contract, and a Merkle census URL given by hand is
+   * checked as nodes read it.
+   */
+  private async handleCensus(
+    census: ProcessConfig['census']
+  ): Promise<{ registry: RegistryCensus; size?: number }> {
+    if (census instanceof Census) {
+      if (census instanceof MerkleCensus && !census.isPublished) {
+        await publishCensus(census, this.requireUploader('the census file'), this.documents);
+      } else if (
+        census instanceof PublishedCensus &&
+        census.requiresPublishing &&
+        this.documents.verify !== false
+      ) {
+        await verifyCensusUrl(
+          census.censusURI as string,
+          census.censusRoot as string,
+          this.documents
+        );
+      }
+      if (census instanceof OnchainCensus) {
+        await census.check(this.signer.provider ?? this.signer);
+      }
+      return {
+        registry: census.toRegistryCensus(),
+        ...(census instanceof MerkleCensus && { size: census.size }),
+      };
+    }
+    const { type, root, uri, contractAddress } = census;
+    if (
+      (type === CensusOrigin.OffchainStatic || type === CensusOrigin.OffchainDynamic) &&
+      this.documents.verify !== false
+    ) {
+      await verifyCensusUrl(uri, root, this.documents);
+    }
+    return { registry: { origin: type, root, uri, ...(contractAddress && { contractAddress }) } };
+  }
+
+  /** The metadata URL and hash: a document built and published, or one already served. */
+  private async handleMetadata(config: ProcessConfig): Promise<PublishedMetadata> {
+    if ('metadataUri' in config) {
+      const uri = config.metadataUri;
+      const hash =
+        config.metadataHash !== undefined
+          ? metadataHashOf(config.metadataHash)
+          : await fetchMetadataHash(uri, this.documents);
+      return { uri, hash };
+    }
+    const document = buildElectionMetadata({
+      title: config.title,
+      description: config.description,
+      questions: config.questions,
+      electionPreset: config.electionPreset,
+      media: config.media,
+    });
+    return publishMetadata(document, this.requireUploader('the metadata document'), this.documents);
+  }
+
+  /**
+   * Gets user-friendly process information by transforming raw contract data.
+   * The metadata document is downloaded and checked against the registry's
+   * `metadataHash`; title, description, questions and preset are read from it
+   * only when it matches (`metadataVerified`).
+   *
    * @param processId - The process ID to fetch
    * @returns Promise resolving to the user-friendly process information
    */
@@ -295,34 +439,11 @@ export class ProcessOrchestrationService {
     // 1. Get raw process data from contract
     const rawProcess = await this.processRegistry.getProcess(processId);
 
-    // 2. Fetch and parse metadata
-    let metadata: any = null;
-    let title: string | undefined;
-    let description: string | undefined;
-    let questions: Array<ProcessQuestion> = [];
-
-    try {
-      if (rawProcess.metadataUri) {
-        metadata = await (await this.fetchMetadata(rawProcess.metadataUri)).json();
-        title = metadata?.title?.default;
-        description = metadata?.description?.default;
-
-        // Transform metadata questions to ProcessConfig format
-        if (metadata?.questions) {
-          questions = metadata.questions.map((q: any) => ({
-            title: q.title?.default,
-            description: q.description?.default,
-            choices:
-              q.choices?.map((c: any) => ({
-                title: c.title?.default,
-                value: c.value,
-              })) || [],
-          }));
-        }
-      }
-    } catch (error) {
-      console.warn(`Failed to fetch metadata for process ${processId}:`, error);
-    }
+    // 2. Fetch the metadata and check it against its on-chain hash
+    const read = rawProcess.metadataUri
+      ? await readMetadata(rawProcess.metadataUri, rawProcess.metadataHash, this.documents)
+      : { status: 'unreachable' as const, error: 'the process has no metadata URI' };
+    const doc = read.status === 'verified' && isObject(read.document) ? read.document : undefined;
 
     // 3. Calculate timing information
     const now = Math.floor(Date.now() / 1000);
@@ -333,10 +454,13 @@ export class ProcessOrchestrationService {
     const timeRemaining = now >= endTime ? 0 : now >= startTime ? endTime - now : startTime - now;
 
     // 4. Transform census information
-    const census = {
+    const census: ProcessInfo['census'] = {
       type: rawProcess.census.origin,
       root: rawProcess.census.root,
       uri: rawProcess.census.uri || '',
+      ...(rawProcess.census.origin === CensusOrigin.Onchain && {
+        contractAddress: rawProcess.census.contractAddress,
+      }),
     };
 
     // 5. Transform ballot mode (convert BigInt fields to appropriate types)
@@ -352,16 +476,18 @@ export class ProcessOrchestrationService {
     };
 
     // 5b. Extract election preset from metadata (if present)
-    const electionPreset = parseElectionPresetFromMetadata(metadata);
+    const electionPreset = parseElectionPresetFromMetadata(
+      doc as { meta?: { electionPreset?: unknown } } | undefined
+    );
 
     // 6. Return user-friendly process info
     return {
       processId,
-      title: title || '',
-      description: description,
+      title: localizedText(doc?.title) ?? '',
+      description: localizedText(doc?.description),
       census,
       ballot,
-      questions: questions || [],
+      questions: doc ? questionsOf(doc) : [],
       status: rawProcess.status,
       creator: rawProcess.organizationId,
       startDate: new Date(startTime * 1000),
@@ -373,6 +499,11 @@ export class ProcessOrchestrationService {
       votersCount: Number(rawProcess.votersCount),
       overwrittenVotesCount: Number(rawProcess.overwrittenVotesCount),
       metadataURI: rawProcess.metadataUri,
+      metadataHash: rawProcess.metadataHash,
+      metadataVerified: read.status === 'verified',
+      metadataStatus: read.status,
+      ...(read.error !== undefined && { metadataError: read.error }),
+      ...(doc && { metadata: doc as unknown as ElectionMetadata }),
       raw: rawProcess,
       ...(electionPreset && { electionPreset }),
     };
@@ -432,8 +563,8 @@ export class ProcessOrchestrationService {
         maxVoters: data.maxVoters,
         ballotMode: toBallotModeValues(data.ballotMode),
         census: data.census,
-        metadataUri: data.metadataUri,
-        metadataHash: data.metadataHash,
+        metadataUri: data.metadata.uri,
+        metadataHash: data.metadata.hash,
         encryptionKey: data.encryptionKey,
       },
       { expectedProcessId: data.processId }
@@ -471,9 +602,8 @@ export class ProcessOrchestrationService {
    * For real-time transaction status updates, use createProcessStream() instead.
    *
    * The method automatically:
-   * - Gets encryption keys from the sequencer
-   * - Coordinates between sequencer API and on-chain contract calls
-   * - Creates and pushes metadata
+   * - Publishes the census file and the metadata document through the uploader
+   * - Gets the encryption key from the key sequencer
    * - Submits the on-chain transaction
    *
    * @param config - Simplified process configuration
@@ -482,11 +612,11 @@ export class ProcessOrchestrationService {
   async createProcess(config: ProcessConfig): Promise<ProcessCreationResult> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.createProcessStream(config)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return event.response;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }
@@ -495,84 +625,171 @@ export class ProcessOrchestrationService {
   }
 
   /**
-   * Prepares all data needed for process creation
+   * Prepares all data needed for process creation. Everything that can be
+   * refused locally is checked first, then the documents are published, and
+   * the key is requested last, for the id the registry assigns next.
    * @private
    */
   private async prepareProcessCreation(config: ProcessConfig): Promise<ProcessCreationData> {
     // 1. Validate and calculate timing
     const { startTime, duration } = this.calculateTiming(config.timing);
 
-    // 2. Get the next process ID
-    const signerAddress = await this.signer.getAddress();
-    const processId = await this.processRegistry.getNextProcessId(signerAddress);
-
-    // 3. Handle census (auto-publish if needed)
-    const censusConfig = await this.handleCensus(config.census);
-    const censusRoot = censusConfig.root;
-
-    // 4. Resolve ballot mode — either raw `ballot` or `electionPreset`
+    // 2. Resolve ballot mode — either raw `ballot` or `electionPreset`
     const ballotMode = this.resolveBallotConfig(config);
 
-    // 5. Metadata: the registry binds its URI and the SHA-256 of the bytes served there
-    if (!('metadataUri' in config)) {
+    // 3. maxVoters: given, or the members of a Merkle census object
+    if (config.maxVoters === undefined && !(config.census instanceof MerkleCensus)) {
       throw new Error(
-        'The sequencer does not host metadata: serve the metadata document at a public URL ' +
-          'and create the process with `metadataUri` (and optionally `metadataHash`).'
+        'maxVoters is required. It can only be omitted for a Merkle census object ' +
+          '(OffchainCensus/OffchainDynamicCensus), whose member count it defaults to.'
       );
     }
-    const metadataUri = config.metadataUri;
-    const metadataHash =
-      config.metadataHash ??
-      hashMetadata(new Uint8Array(await (await this.fetchMetadata(metadataUri)).arrayBuffer()));
 
-    // 6. Get the encryption key the sequencer issues for the predicted process id
+    // 4. Census: publish (or check) it; 5. metadata: publish it, or hash the one given
+    const census = await this.handleCensus(config.census);
+    const metadata = await this.handleMetadata(config);
+    const maxVoters = config.maxVoters ?? (census.size as number);
+
+    // 6. The next process id, and the key the sequencer issues for it
+    const signerAddress = await this.signer.getAddress();
+    const processId = await this.processRegistry.getNextProcessId(signerAddress);
     const encryptionKey = await this.apiService.sequencer.getEncryptionKey(processId);
-
-    // 7. Determine maxVoters
-    let maxVoters: number;
-
-    if (config.maxVoters !== undefined) {
-      // User explicitly provided maxVoters
-      maxVoters = config.maxVoters;
-    } else if ('isPublished' in config.census && config.census.isPublished) {
-      // Census is published - can only use participant count for MerkleCensus
-      if ('participants' in config.census) {
-        // It's a MerkleCensus with participants
-        maxVoters = (config.census as any).participants.length;
-      } else {
-        throw new Error(
-          'maxVoters is required when using OnchainCensus, CspCensus, or PublishedCensus. ' +
-            'It can only be auto-calculated for published MerkleCensus (OffchainCensus/OffchainDynamicCensus).'
-        );
-      }
-    } else {
-      // Census is not published yet, or it's manual config
-      throw new Error(
-        'maxVoters is required. It can only be omitted when using a published MerkleCensus ' +
-          '(OffchainCensus/OffchainDynamicCensus), in which case it defaults to the participant count.'
-      );
-    }
-
-    // 8. Create census object for on-chain call
-    const census: RegistryCensus = {
-      origin: censusConfig.type,
-      root: censusRoot,
-      contractAddress: censusConfig.contractAddress, // Only set for onchain censuses
-      uri: censusConfig.uri,
-    };
 
     return {
       processId,
       startTime,
       duration,
       maxVoters,
-      censusRoot,
       ballotMode,
-      metadataUri,
-      metadataHash,
+      metadata,
       encryptionKey,
-      census,
+      census: census.registry,
     };
+  }
+
+  // The process, for an update by this signer while it can still change.
+  private async updatable(processId: string, what: string): Promise<OnchainProcess> {
+    const process = await this.processRegistry.getProcess(processId);
+    const signer = getAddress(await this.signer.getAddress());
+    if (process.organizationId !== signer) {
+      throw new Error(`only the organizer ${process.organizationId} can change the ${what}`);
+    }
+    if (process.status !== ProcessStatus.READY && process.status !== ProcessStatus.PAUSED) {
+      throw new Error(
+        `the ${what} of a process can change only while it is READY or PAUSED ` +
+          `(status ${ProcessStatus[process.status]})`
+      );
+    }
+    return process;
+  }
+
+  /**
+   * Moves an updatable Merkle census (origin 2) to a new version: a census
+   * object is published when needed (a URL given by hand is checked as nodes
+   * read it), then `setProcessCensus` records the new root and URL. The
+   * process is read first, so a process of another origin, of another
+   * organizer or already closed is refused before anything is uploaded.
+   * Nodes load the new census in the background and answer votes 429 until
+   * then; a pending vote whose member was removed or reweighted fails with
+   * `census changed, recast`.
+   *
+   * @throws CensusNotUpdatable for a process whose census is not updatable
+   *
+   * @example
+   * ```typescript
+   * census.add(newMembers);
+   * for await (const e of orchestrator.updateCensusStream(processId, census)) console.log(e.status);
+   * ```
+   */
+  async *updateCensusStream(
+    processId: string,
+    census: CensusUpdate
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    const process = await this.updatable(processId, 'census');
+    if (process.census.origin !== CensusOrigin.OffchainDynamic) {
+      throw new CensusNotUpdatable(
+        `process ${processId} has a census of origin ${process.census.origin}; ` +
+          'only an updatable Merkle census (origin 2) can be replaced',
+        'setProcessCensus'
+      );
+    }
+    if (census instanceof Census && census.censusOrigin !== CensusOrigin.OffchainDynamic) {
+      throw new CensusError('the new census must be updatable too (an OffchainDynamicCensus)');
+    }
+    const { registry } = await this.handleCensus(
+      census instanceof Census
+        ? census
+        : { type: CensusOrigin.OffchainDynamic, root: census.root, uri: census.uri }
+    );
+    yield* this.processRegistry.setProcessCensus(processId, {
+      origin: CensusOrigin.OffchainDynamic,
+      root: registry.root,
+      uri: registry.uri,
+    });
+  }
+
+  /**
+   * {@link updateCensusStream}, waiting for the transaction.
+   *
+   * @throws CensusNotUpdatable, CensusError, or the registry's revert
+   */
+  async updateCensus(processId: string, census: CensusUpdate): Promise<void> {
+    await SmartContractService.executeTx(this.updateCensusStream(processId, census));
+  }
+
+  /**
+   * Moves a process to a new metadata document (`setProcessMetadata`,
+   * READY or PAUSED, before the end): a document to publish through the
+   * uploader (a config is built with `buildElectionMetadata`, bytes are
+   * published as given), or one already served, with its hash or hashed
+   * from the URL. The process is read first, so a process of another
+   * organizer or already closed is refused before anything is uploaded.
+   * Readers see the change as a new metadata version.
+   *
+   * @example
+   * ```typescript
+   * await orchestrator.updateMetadata(processId, { ...config, description: 'Corrected date' });
+   * ```
+   */
+  async *updateMetadataStream(
+    processId: string,
+    metadata: MetadataUpdate
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    await this.updatable(processId, 'metadata');
+    let published: PublishedMetadata;
+    if (!(metadata instanceof Uint8Array) && 'uri' in metadata) {
+      const uri = metadata.uri;
+      if (typeof uri !== 'string' || uri === '') {
+        throw new ProcessMetadataError('the metadata URI is empty', 'setProcessMetadata');
+      }
+      published = {
+        uri,
+        hash:
+          metadata.hash !== undefined
+            ? metadataHashOf(metadata.hash)
+            : await fetchMetadataHash(uri, this.documents),
+      };
+    } else {
+      const document =
+        metadata instanceof Uint8Array || 'version' in metadata
+          ? metadata
+          : buildElectionMetadata(metadata);
+      published = await publishMetadata(
+        document,
+        this.requireUploader('the metadata document'),
+        this.documents
+      );
+    }
+    yield* this.processRegistry.setProcessMetadata(processId, published.uri, published.hash);
+  }
+
+  /**
+   * {@link updateMetadataStream}, waiting for the transaction.
+   *
+   * @throws MetadataError, ProcessMetadataError, or the registry's revert
+   */
+  async updateMetadata(processId: string, metadata: MetadataUpdate): Promise<void> {
+    await SmartContractService.executeTx(this.updateMetadataStream(processId, metadata));
   }
 
   /**
@@ -583,26 +800,23 @@ export class ProcessOrchestrationService {
    * @private
    */
   private resolveBallotConfig(config: ProcessConfig): BallotMode {
-    const hasBallot = config.ballot !== undefined;
-    const hasPreset = config.electionPreset !== undefined;
+    const { ballot, electionPreset } = config;
 
-    if (hasBallot && hasPreset) {
+    if (ballot !== undefined && electionPreset !== undefined) {
       throw new Error('Provide ballot OR electionPreset, not both');
     }
-    if (!hasBallot && !hasPreset) {
-      throw new Error('Either ballot or electionPreset is required');
-    }
-
-    if (hasPreset) {
+    if (electionPreset !== undefined) {
       if (!('questions' in config)) {
         throw new Error(
           'electionPreset requires `questions`; use `ballot` directly for metadataUri configs'
         );
       }
-      return resolveElectionPreset(config.electionPreset!, config.questions);
+      return resolveElectionPreset(electionPreset, config.questions);
     }
-
-    return config.ballot!;
+    if (ballot === undefined) {
+      throw new Error('Either ballot or electionPreset is required');
+    }
+    return ballot;
   }
 
   /**
@@ -619,11 +833,6 @@ export class ProcessOrchestrationService {
       throw new Error("Cannot specify both 'duration' and 'endDate'. Use one or the other.");
     }
 
-    // Ensure at least one of duration or endDate is provided
-    if (duration === undefined && endDate === undefined) {
-      throw new Error("Must specify either 'duration' (in seconds) or 'endDate'.");
-    }
-
     // Calculate start time
     const startTime = startDate
       ? this.dateToUnixTimestamp(startDate)
@@ -634,14 +843,16 @@ export class ProcessOrchestrationService {
     if (duration !== undefined) {
       // Duration provided directly
       calculatedDuration = duration;
-    } else {
+    } else if (endDate !== undefined) {
       // Calculate duration from endDate
-      const endTime = this.dateToUnixTimestamp(endDate!);
+      const endTime = this.dateToUnixTimestamp(endDate);
       calculatedDuration = endTime - startTime;
 
       if (calculatedDuration <= 0) {
         throw new Error('End date must be after start date.');
       }
+    } else {
+      throw new Error("Must specify either 'duration' (in seconds) or 'endDate'.");
     }
 
     // Validate that start time is not in the past (with 30 second buffer)
@@ -684,48 +895,6 @@ export class ProcessOrchestrationService {
     }
 
     throw new Error('Invalid date format. Use Date object, ISO string, or Unix timestamp.');
-  }
-
-  /**
-   * Downloads a metadata document.
-   */
-  private async fetchMetadata(uri: string): Promise<Response> {
-    const response = await fetch(uri);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch metadata from ${uri}: ${response.status}`);
-    }
-    return response;
-  }
-
-  /**
-   * Creates metadata from the configuration with metadata fields
-   * This method should only be called with ProcessConfigWithMetadata
-   */
-  private createMetadata(config: ProcessConfigWithMetadata) {
-    const metadata = getElectionMetadataTemplate();
-
-    metadata.title.default = config.title;
-    metadata.description.default = config.description || '';
-
-    // TypeScript ensures at least one question exists due to tuple type
-    metadata.questions = config.questions.map(q => ({
-      title: { default: q.title },
-      description: { default: q.description || '' },
-      meta: {},
-      choices: q.choices.map(c => ({
-        title: { default: c.title },
-        value: c.value,
-        meta: {},
-      })),
-    }));
-
-    // Round-trip the preset through metadata.meta.electionPreset when
-    // present. (We can't use metadata.type — the sequencer reserves it.)
-    if (config.electionPreset !== undefined) {
-      metadata.meta = { ...metadata.meta, electionPreset: config.electionPreset };
-    }
-
-    return metadata;
   }
 
   /**
@@ -798,11 +967,11 @@ export class ProcessOrchestrationService {
   async endProcess(processId: string): Promise<void> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.endProcessStream(processId)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }
@@ -882,11 +1051,11 @@ export class ProcessOrchestrationService {
   async pauseProcess(processId: string): Promise<void> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.pauseProcessStream(processId)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }
@@ -966,11 +1135,11 @@ export class ProcessOrchestrationService {
   async cancelProcess(processId: string): Promise<void> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.cancelProcessStream(processId)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }
@@ -1052,11 +1221,11 @@ export class ProcessOrchestrationService {
   async resumeProcess(processId: string): Promise<void> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.resumeProcessStream(processId)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }
@@ -1139,11 +1308,11 @@ export class ProcessOrchestrationService {
   async setProcessMaxVoters(processId: string, maxVoters: number): Promise<void> {
     // Use the stream internally and consume it to get the final result
     for await (const event of this.setProcessMaxVotersStream(processId, maxVoters)) {
-      if (event.status === 'completed') {
+      if (event.status === TxStatus.Completed) {
         return;
-      } else if (event.status === 'failed') {
+      } else if (event.status === TxStatus.Failed) {
         throw event.error;
-      } else if (event.status === 'reverted') {
+      } else if (event.status === TxStatus.Reverted) {
         throw new Error(`Transaction reverted: ${event.reason || 'unknown reason'}`);
       }
     }

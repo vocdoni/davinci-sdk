@@ -1,0 +1,78 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Participatory budget: share 100 points",
+    "en": "Participatory budget: share 100 points",
+    "es": "Presupuestos participativos: reparte 100 puntos",
+    "ca": "Pressupostos participatius: reparteix 100 punts"
+  },
+  "description": {
+    "default": "Share 100 points among the five shortlisted projects, with at most 50 on any one of them. The points decide how the €200,000 participatory budget is split. Voting closes on its own when the time is up.",
+    "en": "Share 100 points among the five shortlisted projects, with at most 50 on any one of them. The points decide how the €200,000 participatory budget is split. Voting closes on its own when the time is up.",
+    "es": "Reparte 100 puntos entre los cinco proyectos finalistas, con un máximo de 50 por proyecto. Los puntos deciden cómo se reparten los 200.000 € del presupuesto participativo. La votación se cierra sola cuando se acaba el plazo.",
+    "ca": "Reparteix 100 punts entre els cinc projectes finalistes, amb un màxim de 50 per projecte. Els punts decideixen com es reparteixen els 200.000 € del pressupost participatiu. La votació es tanca sola quan s'acaba el termini."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "How many points do you give each project?",
+        "en": "How many points do you give each project?",
+        "es": "¿Cuántos puntos das a cada proyecto?",
+        "ca": "Quants punts dones a cada projecte?"
+      },
+      "description": {
+        "default": "Up to 100 points in total, at most 50 per project.",
+        "en": "Up to 100 points in total, at most 50 per project.",
+        "es": "Hasta 100 puntos en total y 50 como máximo por proyecto.",
+        "ca": "Fins a 100 punts en total i 50 com a màxim per projecte."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Repair the covered market roof",
+            "en": "Repair the covered market roof",
+            "es": "Reparar la cubierta del mercado",
+            "ca": "Reparar la coberta del mercat"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Ramps at the town hall and the library",
+            "en": "Ramps at the town hall and the library",
+            "es": "Rampas en el ayuntamiento y la biblioteca",
+            "ca": "Rampes a l'ajuntament i a la biblioteca"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Solar lighting in the parks",
+            "en": "Solar lighting in the parks",
+            "es": "Alumbrado solar en los parques",
+            "ca": "Enllumenat solar als parcs"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "A weekend bus to the hospital",
+            "en": "A weekend bus to the hospital",
+            "es": "Un autobús de fin de semana al hospital",
+            "ca": "Un autobús de cap de setmana a l'hospital"
+          },
+          "value": 3
+        },
+        {
+          "title": {
+            "default": "Grants for plastic-free shops",
+            "en": "Grants for plastic-free shops",
+            "es": "Ayudas para comercios sin plástico",
+            "ca": "Ajuts per a comerços sense plàstic"
+          },
+          "value": 4
+        }
+      ]
+    }
+  ]
+}

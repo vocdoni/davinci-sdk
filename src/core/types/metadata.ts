@@ -1,22 +1,31 @@
 import type { ElectionPreset } from './ballot';
 
-// Basic JSON types
-export type AnyJson = boolean | number | string | null | JsonArray | JsonMap | any;
+/** A JSON value. */
+export type AnyJson = boolean | number | string | null | JsonArray | JsonMap;
+/** A JSON object. */
 export interface JsonMap {
   [key: string]: AnyJson;
 }
-export interface JsonArray extends Array<AnyJson> {}
+/** A JSON array. */
+export type JsonArray = AnyJson[];
 
-// Custom metadata type
-export type CustomMeta = AnyJson | JsonArray | JsonMap;
+/** Free-form data a client keeps next to a question, a choice or the election. */
+export type CustomMeta = AnyJson;
 
-// Multi-language support
+/**
+ * Text in several languages: `default`, then one entry per language code.
+ * When there are translations, the default text is repeated under its own
+ * code, as in `{ default: 'Yes', en: 'Yes', es: 'Sí' }`.
+ */
 export type MultiLanguage<T> = {
   default: T;
   [lang: string]: T;
 };
 
-// Election choice types
+/** Plain text (the `default` language only) or text in several languages. */
+export type LocalizedText = string | MultiLanguage<string>;
+
+/** A choice of a question; `value` is the ballot field it fills. */
 export interface IChoice {
   title: MultiLanguage<string>;
   value: number;
@@ -27,7 +36,7 @@ export interface IChoice {
 
 export type Choice = Pick<IChoice, 'title' | 'value' | 'meta'>;
 
-// Election question types
+/** A question of the election. */
 export interface IQuestion {
   title: MultiLanguage<string>;
   description?: MultiLanguage<string>;
@@ -38,53 +47,69 @@ export interface IQuestion {
 
 export type Question = Pick<IQuestion, 'title' | 'description' | 'choices' | 'meta'>;
 
-// Protocol version type
+/** Metadata document version: the SDK writes `1.1`. */
 export type ProtocolVersion = '1.1' | '1.2';
 
 /**
- * Off-chain election metadata stored at `metadataURI`.
+ * The election metadata document served at a process's `metadataURI`, whose
+ * SHA-256 the registry stores as `metadataHash`. Its keys are written in the
+ * order of this interface; see `serializeMetadata`.
  *
- * The {@link ElectionPreset} used to create the process (when one was
- * used) is stored in `meta.electionPreset`. Processes created with a raw
- * `BallotMode` carry no `meta.electionPreset` value. Readers should treat
- * anything that doesn't match the current `ElectionPreset` shape as "no
- * preset" (see `parseElectionPresetFromMetadata` in `./ballot.ts`).
- *
- * Note: the top-level `type` field is reserved by the sequencer for its
- * own use and is not surfaced on this interface. Storing the preset
- * there does not round-trip correctly.
+ * The {@link ElectionPreset} a process was created with, if any, is kept in
+ * `meta.electionPreset`, which explorers read as the kind of ballot.
  */
 export interface ElectionMetadata {
   version: ProtocolVersion;
   title: MultiLanguage<string>;
   description: MultiLanguage<string>;
-  media: {
-    header: string;
-    logo: string;
+  media?: {
+    header?: string;
+    logo?: string;
   };
+  questions: Array<IQuestion>;
   meta?: {
     electionPreset?: ElectionPreset;
     [key: string]: unknown;
   };
-  questions: Array<IQuestion>;
 }
 
-// Template for creating new election metadata. The `meta.electionPreset`
-// field is intentionally omitted — it is populated by the SDK when the
-// caller passes an `electionPreset` during process creation.
+/** A choice to build a metadata document from. */
+export interface ChoiceConfig {
+  title: LocalizedText;
+  /** The ballot field this choice fills, from 0. */
+  value: number;
+  meta?: CustomMeta;
+}
+
+/** A question to build a metadata document from. */
+export interface QuestionConfig {
+  title: LocalizedText;
+  description?: LocalizedText;
+  choices: ReadonlyArray<ChoiceConfig>;
+  meta?: CustomMeta;
+}
+
+/** What `buildElectionMetadata` turns into a metadata document. */
+export interface ElectionMetadataConfig {
+  title: LocalizedText;
+  description?: LocalizedText;
+  questions: ReadonlyArray<QuestionConfig>;
+  /** Stored as `meta.electionPreset`. */
+  electionPreset?: ElectionPreset;
+  media?: { header?: string; logo?: string };
+  /** Other `meta` entries. */
+  meta?: JsonMap;
+}
+
+// An empty yes/no document, as `buildElectionMetadata` writes one.
 export const ElectionMetadataTemplate: ElectionMetadata = {
-  version: '1.2',
+  version: '1.1',
   title: {
     default: '',
   },
   description: {
     default: '',
   },
-  media: {
-    header: '',
-    logo: '',
-  },
-  meta: {},
   questions: [
     {
       title: {
@@ -93,28 +118,25 @@ export const ElectionMetadataTemplate: ElectionMetadata = {
       description: {
         default: '',
       },
-      meta: {},
       choices: [
         {
           title: {
             default: 'Yes',
           },
           value: 0,
-          meta: {},
         },
         {
           title: {
             default: 'No',
           },
           value: 1,
-          meta: {},
         },
       ],
     },
   ],
 };
 
-// Helper function to create a new metadata template
+/** A fresh copy of {@link ElectionMetadataTemplate}. */
 export const getElectionMetadataTemplate = (): ElectionMetadata => {
-  return JSON.parse(JSON.stringify(ElectionMetadataTemplate));
+  return JSON.parse(JSON.stringify(ElectionMetadataTemplate)) as ElectionMetadata;
 };

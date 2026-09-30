@@ -50,6 +50,12 @@ export * from './types';
 export * from './ProcessRegistryService';
 
 /**
+ * Census contracts of origin-3 processes (davinci-onchain-census-contract).
+ * @see {@link OnchainCensusService}
+ */
+export * from './OnchainCensusService';
+
+/**
  * Builders of the registry's write arguments (DKG key mode parameters,
  * metadata hash).
  * @see {@link params}

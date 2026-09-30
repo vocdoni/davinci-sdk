@@ -49,8 +49,6 @@ describe('VocdoniApiService', () => {
       `no usable sequencer node: ${A} (down: fetch failed), ${B} (observer)`
     );
     expect(() => none.sequencer).toThrow(`no usable key sequencer: ${A} (down: fetch failed)`);
-    // The census service does not depend on the nodes.
-    expect(none.census).toBeDefined();
 
     const keyDown = new VocdoniApiService({
       sequencerURLs: [A],

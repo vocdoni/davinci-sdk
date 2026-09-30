@@ -1,43 +1,51 @@
-import { Census } from './Census';
+import { getAddress, zeroPadValue, type Signer } from 'ethers';
+import { CensusError } from '../errors';
 import { CensusOrigin } from '../types';
+import { Census } from './Census';
 
 /**
- * CSP (Certificate Service Provider) census
- * Uses a public key and CSP server URI instead of a participant list
+ * A CSP census (origin 4): a credential service provider signs one
+ * attestation per voter with a secp256k1 key, and the census root is that
+ * key's Ethereum address. Nodes download nothing; the URI tells voters where
+ * the CSP is. See {@link CspSigner} for the CSP side.
+ *
+ * @example
+ * ```typescript
+ * const census = new CspCensus('0xCSP…', 'https://csp.example.org/process');
+ * census.censusRoot; // the address, left-padded to 32 bytes
+ * ```
  */
 export class CspCensus extends Census {
-  private _publicKey: string;
-  private _cspURI: string;
+  private readonly _cspAddress: string;
 
-  constructor(publicKey: string, cspURI: string) {
-    // CSP census always uses CensusOrigin.CSP
+  /**
+   * @param cspAddress - The CSP's Ethereum address
+   * @param uri - Where voters get their attestations (the registry needs one)
+   * @throws CensusError for a bad address or URI
+   */
+  constructor(cspAddress: string, uri: string) {
     super(CensusOrigin.CSP);
-
-    // Validate public key
-    if (!/^(0x)?[0-9a-fA-F]+$/.test(publicKey)) {
-      throw new Error('Public key is missing or invalid');
-    }
-
-    // Validate CSP URI
     try {
-      new URL(cspURI);
+      this._cspAddress = getAddress(cspAddress);
     } catch {
-      throw new Error('CSP URI is missing or invalid');
+      throw new CensusError(`not a CSP address: ${cspAddress}`);
     }
-
-    this._publicKey = publicKey;
-    this._cspURI = cspURI;
-
-    // For CSP, these are known immediately
-    this._censusRoot = publicKey; // Public key serves as root
-    this._censusURI = cspURI;
+    try {
+      new URL(uri);
+    } catch {
+      throw new CensusError(`the CSP URI is missing or invalid: ${uri}`);
+    }
+    this._censusRoot = zeroPadValue(this._cspAddress, 32).toLowerCase();
+    this._censusURI = uri;
   }
 
-  get publicKey(): string {
-    return this._publicKey;
+  /** The census of a CSP whose key is `signer`. */
+  static async fromSigner(signer: Signer, uri: string): Promise<CspCensus> {
+    return new CspCensus(await signer.getAddress(), uri);
   }
 
-  get cspURI(): string {
-    return this._cspURI;
+  /** The CSP's address, checksummed. */
+  get cspAddress(): string {
+    return this._cspAddress;
   }
 }

@@ -1,17 +1,18 @@
 import { getAddress, type Provider, type Signer } from 'ethers';
 import { VocdoniApiService } from './core/api/ApiService';
 import type { BaseServiceConfig } from './core/api/BaseService';
-import type { Uploader } from './core/types/uploader';
+import type { DocumentOptions, Uploader } from './core/types/uploader';
 import { ProcessRegistryService } from './contracts/ProcessRegistryService';
 import { DeploymentPinError } from './contracts/errors';
 import type { TxStatusEvent } from './contracts/SmartContractService';
-import { DavinciCSP } from './sequencer/DavinciCSP';
 import { BallotInputGenerator } from './sequencer/BallotInputGenerator';
 import {
   ProcessOrchestrationService,
   ProcessConfig,
   ProcessCreationResult,
   ProcessInfo,
+  type CensusUpdate,
+  type MetadataUpdate,
 } from './core/process';
 import { VoteOrchestrationService, VoteConfig, VoteResult, VoteStatusInfo } from './core/vote';
 import { VoteStatus, type SequencerInfo } from './sequencer/api/types';
@@ -74,6 +75,13 @@ export interface DavinciSDKConfig {
   /** Publishes census files and metadata documents; the SDK ships no hosting. */
   uploader?: Uploader;
 
+  /**
+   * How census files and metadata documents are downloaded and checked:
+   * `fetchImpl`, `timeoutMs`, `verify` (read back what is published, default
+   * true) and `allowPrivateHosts` (local development).
+   */
+  documents?: DocumentOptions;
+
   /** Where the ballot circuit files come from; default the pinned table URLs. */
   artifacts?: ArtifactsConfig;
 
@@ -92,10 +100,13 @@ export interface DavinciSDKConfig {
   /** Headers, `fetchImpl`, timeout and body cap of the sequencer clients. */
   sequencerConfig?: BaseServiceConfig;
 
-  /** Custom census proof providers. */
+  /** Census witness providers for voting (a CSP's attestations, a custom Merkle source). */
   censusProviders?: CensusProviders;
 
-  /** URL of a legacy census service, used to publish Merkle censuses. */
+  /**
+   * @deprecated Ignored: there is no census service. Merkle censuses are
+   * published through `uploader`.
+   */
   censusUrl?: string;
 
   /** @deprecated Use `sequencerUrls`; this URL is added to them. */
@@ -123,7 +134,6 @@ export interface DavinciSDKSettings {
   rpcUrls?: readonly string[];
   verifyDeployment: boolean | { pins: DeploymentPins };
   verifyProof: boolean;
-  censusUrl?: string;
 }
 
 /** What `init()` found at a configured sequencer node. */
@@ -181,6 +191,7 @@ export class DavinciSDK {
   private readonly settings: DavinciSDKSettings;
   private readonly signer: Signer;
   private readonly uploaderImpl?: Uploader;
+  private readonly documents: DocumentOptions;
   private readonly artifactsConfig?: ArtifactsConfig;
   private readonly sequencerConfig?: BaseServiceConfig;
   // The registry of the deprecated `addresses` form, before its chain is known.
@@ -199,7 +210,6 @@ export class DavinciSDK {
   private _nodeChecks: readonly NodeCheck[] = [];
   // The signer provider's chain as init() saw it; undefined without a provider.
   private signerChainId?: bigint;
-  private davinciCSP?: DavinciCSP;
   private ballotInputGenerator?: BallotInputGenerator;
   private initialized = false;
   private initializing?: Promise<void>;
@@ -239,6 +249,11 @@ export class DavinciSDK {
     }
     this.signer = config.signer;
     this.uploaderImpl = config.uploader;
+    const timeoutMs = config.documents?.timeoutMs;
+    if (timeoutMs !== undefined && !(typeof timeoutMs === 'number' && timeoutMs > 0)) {
+      throw new Error(`documents.timeoutMs ${String(timeoutMs)} is not a positive number`);
+    }
+    this.documents = { ...config.documents };
     this.artifactsConfig = config.artifacts;
     this.sequencerConfig = config.sequencerConfig;
     this.censusProviders = config.censusProviders || {};
@@ -251,7 +266,6 @@ export class DavinciSDK {
       verifyDeployment:
         typeof verify === 'boolean' ? verify : deepFreeze({ pins: { ...verify.pins } }),
       verifyProof: config.verifyProof ?? true,
-      censusUrl: config.censusUrl,
     };
   }
 
@@ -332,7 +346,6 @@ export class DavinciSDK {
     this.apiService = new VocdoniApiService({
       sequencerURLs: sequencerUrls,
       keySequencerURL: keySequencerUrl,
-      censusURL: this.settings.censusUrl,
       sequencerConfig: this.sequencerConfig,
       unusable: checks.flatMap(c =>
         c.reason === undefined ? [] : [{ url: c.url, reason: c.reason }]
@@ -484,19 +497,6 @@ export class DavinciSDK {
   }
 
   /**
-   * Get or initialize the DavinciCSP service for CSP cryptographic operations
-   */
-  async getCSP(): Promise<DavinciCSP> {
-    if (!this.davinciCSP) {
-      this.davinciCSP = new DavinciCSP();
-
-      await this.davinciCSP.init();
-    }
-
-    return this.davinciCSP;
-  }
-
-  /**
    * Get or initialize the BallotInputGenerator service for ballot input generation
    */
   async getBallotInputGenerator(): Promise<BallotInputGenerator> {
@@ -520,7 +520,8 @@ export class DavinciSDK {
     this._processOrchestrator ??= new ProcessOrchestrationService(
       this.processes,
       this.api,
-      this.signer
+      this.signer,
+      { uploader: this.uploaderImpl, documents: this.documents }
     );
     return this._processOrchestrator;
   }
@@ -530,7 +531,8 @@ export class DavinciSDK {
     this._readOrchestrator ??= new ProcessOrchestrationService(
       this.registry,
       this.api,
-      this.signer
+      this.signer,
+      { documents: this.documents }
     );
     return this._readOrchestrator;
   }
@@ -555,6 +557,10 @@ export class DavinciSDK {
    * This method fetches raw contract data and transforms it into a user-friendly format
    * that matches the ProcessConfig interface used for creation, plus additional runtime data.
    *
+   * The metadata document is downloaded and checked against the registry's
+   * `metadataHash`: title, description and questions come from it only when
+   * it matches (`metadataVerified`, `metadataStatus`).
+   *
    * Reads through the SDK's read provider: a voter's bare wallet is enough.
    *
    * @param processId - The process ID to fetch; it must be one of the network's registry
@@ -569,7 +575,7 @@ export class DavinciSDK {
    * console.log("Title:", processInfo.title);
    * console.log("Description:", processInfo.description);
    * console.log("Questions:", processInfo.questions);
-   * console.log("Census size:", processInfo.census.size);
+   * console.log("Metadata verified:", processInfo.metadataVerified);
    * console.log("Ballot config:", processInfo.ballot);
    *
    * // Plus additional runtime information
@@ -609,9 +615,9 @@ export class DavinciSDK {
    *   census: {
    *     type: CensusOrigin.OffchainStatic,
    *     root: "0x1234...",
-   *     size: 100,
-   *     uri: "ipfs://..."
+   *     uri: "https://files.example.org/census.json"
    *   },
+   *   maxVoters: 100,
    *   ballot: {
    *     numFields: 2,
    *     maxValue: "3",
@@ -681,10 +687,9 @@ export class DavinciSDK {
    * Requires a signer with a provider for blockchain interactions.
    *
    * The method automatically:
-   * - Gets encryption keys and initial state root from the sequencer
-   * - Handles process creation signatures
-   * - Coordinates between sequencer API and on-chain contract calls
-   * - Creates and pushes metadata
+   * - Publishes a Merkle census object and the metadata document through
+   *   the configured `uploader`, checking each URL as nodes and readers will
+   * - Gets the encryption key from the key sequencer for the next process id
    * - Submits the on-chain transaction
    *
    * @param config - Simplified process configuration
@@ -693,16 +698,13 @@ export class DavinciSDK {
    *
    * @example
    * ```typescript
-   * // Option 1: Using duration (traditional approach)
+   * // Option 1: a census object and the metadata fields (needs an uploader)
+   * const census = new OffchainCensus();
+   * census.add(['0x1111…', '0x2222…']);
    * const result1 = await sdk.createProcess({
    *   title: "My Election",
    *   description: "A simple election",
-   *   census: {
-   *     type: CensusOrigin.OffchainStatic,
-   *     root: "0x1234...",
-   *     size: 100,
-   *     uri: "ipfs://your-census-uri"
-   *   },
+   *   census,
    *   ballot: {
    *     numFields: 2,
    *     maxValue: "3",
@@ -1329,6 +1331,104 @@ export class DavinciSDK {
     this.requireInit('setting process maxVoters');
     const processOrchestrator = await this.organizer(processId);
     return processOrchestrator.setProcessMaxVoters(processId, maxVoters);
+  }
+
+  /**
+   * Moves an updatable census (origin 2) to a new version and returns an
+   * async generator of transaction status events. An `OffchainDynamicCensus`
+   * not yet published is uploaded first; a census file given by URL is
+   * checked as nodes read it. The process is read before anything is
+   * uploaded: a census of another origin fails with `CensusNotUpdatable`,
+   * and the process must be READY or PAUSED and the signer its organizer.
+   *
+   * Nodes load the new census in the background and answer votes 429 while
+   * they do; a pending vote whose member was removed or reweighted fails
+   * with `census changed, recast`.
+   *
+   * @param processId - The process ID
+   * @param census - The new census, or `{ root, uri }` of a census file already served
+   *
+   * @example
+   * ```typescript
+   * census.add(['0x4444…']); // the OffchainDynamicCensus the process was created with
+   * for await (const event of sdk.updateCensusStream(processId, census)) {
+   *   console.log(event.status);
+   * }
+   * ```
+   */
+  updateCensusStream(processId: string, census: CensusUpdate) {
+    return this.updateCensusStreamInternal(processId, census);
+  }
+
+  private async *updateCensusStreamInternal(
+    processId: string,
+    census: CensusUpdate
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('updating the census');
+    const processOrchestrator = await this.organizer(processId);
+    yield* processOrchestrator.updateCensusStream(processId, census);
+  }
+
+  /**
+   * {@link updateCensusStream}, waiting for the transaction.
+   *
+   * @example
+   * ```typescript
+   * census.remove('0x2222…');
+   * await sdk.updateCensus(processId, census);
+   * ```
+   */
+  async updateCensus(processId: string, census: CensusUpdate): Promise<void> {
+    this.requireInit('updating the census');
+    const processOrchestrator = await this.organizer(processId);
+    return processOrchestrator.updateCensus(processId, census);
+  }
+
+  /**
+   * Moves a process to a new metadata document and returns an async
+   * generator of transaction status events. A config or a document is
+   * published through the uploader (bytes as given); a document already
+   * served is given as `{ uri, hash? }`. The registry allows it while the
+   * process is READY or PAUSED, before the end; readers see a new version.
+   *
+   * @param processId - The process ID
+   * @param metadata - The new document, or where it is served
+   *
+   * @example
+   * ```typescript
+   * const stream = sdk.updateMetadataStream(processId, {
+   *   title: 'Where should the new dog park go?',
+   *   description: 'Corrected: the vote closes on Friday.',
+   *   questions,
+   * });
+   * for await (const event of stream) console.log(event.status);
+   * ```
+   */
+  updateMetadataStream(processId: string, metadata: MetadataUpdate) {
+    return this.updateMetadataStreamInternal(processId, metadata);
+  }
+
+  private async *updateMetadataStreamInternal(
+    processId: string,
+    metadata: MetadataUpdate
+  ): AsyncGenerator<TxStatusEvent<{ success: boolean }>> {
+    this.requireInit('updating the metadata');
+    const processOrchestrator = await this.organizer(processId);
+    yield* processOrchestrator.updateMetadataStream(processId, metadata);
+  }
+
+  /**
+   * {@link updateMetadataStream}, waiting for the transaction.
+   *
+   * @example
+   * ```typescript
+   * await sdk.updateMetadata(processId, { uri: 'https://files.example.org/metadata-2.json' });
+   * ```
+   */
+  async updateMetadata(processId: string, metadata: MetadataUpdate): Promise<void> {
+    this.requireInit('updating the metadata');
+    const processOrchestrator = await this.organizer(processId);
+    return processOrchestrator.updateMetadata(processId, metadata);
   }
 
   /**

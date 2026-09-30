@@ -1,0 +1,74 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Community kitchen: the Saturday lunch menu",
+    "en": "Community kitchen: the Saturday lunch menu",
+    "es": "Cocina comunitaria: el menú de los sábados",
+    "ca": "Cuina comunitària: el menú dels dissabtes"
+  },
+  "description": {
+    "default": "The community kitchen serves a shared lunch every Saturday. Choose the menu we cook most often next season; the others will rotate.",
+    "en": "The community kitchen serves a shared lunch every Saturday. Choose the menu we cook most often next season; the others will rotate.",
+    "es": "La cocina comunitaria sirve una comida compartida cada sábado. Elige el menú que cocinaremos más a menudo la próxima temporada; los demás irán rotando.",
+    "ca": "La cuina comunitària serveix un dinar compartit cada dissabte. Tria el menú que cuinarem més sovint la temporada vinent; els altres aniran rotant."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which menu should we cook most often?",
+        "en": "Which menu should we cook most often?",
+        "es": "¿Qué menú deberíamos cocinar más a menudo?",
+        "ca": "Quin menú hauríem de cuinar més sovint?"
+      },
+      "description": {
+        "default": "Pick one menu.",
+        "en": "Pick one menu.",
+        "es": "Elige un menú.",
+        "ca": "Tria un menú."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Paella and salad",
+            "en": "Paella and salad",
+            "es": "Paella y ensalada",
+            "ca": "Paella i amanida"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Lentil stew",
+            "en": "Lentil stew",
+            "es": "Lentejas estofadas",
+            "ca": "Llenties estofades"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Couscous with vegetables",
+            "en": "Couscous with vegetables",
+            "es": "Cuscús con verduras",
+            "ca": "Cuscús amb verdures"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Pasta with seasonal pesto",
+            "en": "Pasta with seasonal pesto",
+            "es": "Pasta con pesto de temporada",
+            "ca": "Pasta amb pesto de temporada"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "single_choice"
+    }
+  }
+}

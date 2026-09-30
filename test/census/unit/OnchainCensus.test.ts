@@ -1,112 +1,81 @@
-import { OnchainCensus } from '../../../src/census/classes/OnchainCensus';
-import { CensusOrigin } from '../../../src/census/types';
+import { ZeroHash, getAddress } from 'ethers';
+import { CensusError, CensusOrigin, CensusWitnessError, OnchainCensus } from '../../../src/census';
+import { CensusContractError, ONCHAIN_CENSUS_ABI } from '../../../src/contracts';
+import { slotFromAddress } from '../../../src/crypto';
+import { MockChain } from '../../helpers/mockChain';
+
+const CONTRACT = '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512';
+const MEMBER = '0x1111111111111111111111111111111111111111';
+
+// A davinci-zkvm census contract with one member of weight 5.
+function chainWith(slotOf = (a: string) => slotFromAddress(a)) {
+  const chain = new MockChain();
+  chain.contract(CONTRACT, ONCHAIN_CENSUS_ABI, {
+    getCensusRoot: () => [123n],
+    treeSize: () => [1n],
+    slotOf: args => [slotOf(args[0] as string)],
+    weightOf: args => [(args[0] as string).toLowerCase() === MEMBER ? 5n : 0n],
+  });
+  return chain;
+}
 
 describe('OnchainCensus', () => {
-  const validContractAddress = '0x1234567890123456789012345678901234567890';
-  const validUri = 'https://api.studio.thegraph.com/query/12345/token-subgraph/v1.0.0';
-
-  describe('Construction', () => {
-    it('should create an OnchainCensus with Onchain origin', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.censusOrigin).toBe(CensusOrigin.Onchain);
+  it('points the registry at the contract, with root zero and an informational URI', () => {
+    const census = new OnchainCensus(CONTRACT);
+    expect(census.censusOrigin).toBe(CensusOrigin.Onchain);
+    expect(census.requiresPublishing).toBe(false);
+    expect(census.isPublished).toBe(true);
+    expect(census.contractAddress).toBe(getAddress(CONTRACT));
+    expect(census.censusRoot).toBe(ZeroHash);
+    expect(census.censusURI).toBe(`onchain://${getAddress(CONTRACT)}`);
+    expect(census.toRegistryCensus()).toEqual({
+      origin: CensusOrigin.Onchain,
+      root: ZeroHash,
+      uri: `onchain://${getAddress(CONTRACT)}`,
+      contractAddress: getAddress(CONTRACT),
     });
-
-    it('should be published immediately upon construction', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.isPublished).toBe(true);
-    });
-
-    it('should NOT require publishing', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.requiresPublishing).toBe(false);
-    });
-
-    it('should use 32-byte zero value as census root when contractAddress is set', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.censusRoot).toBe(
-        '0x0000000000000000000000000000000000000000000000000000000000000000'
-      );
-    });
-
-    it('should use provided URI', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.censusURI).toBe(validUri);
-    });
-
-    it('should accept different URI formats', () => {
-      const customUri = 'https://subgraph.example.com/api/tokens';
-      const census = new OnchainCensus(validContractAddress, customUri);
-      expect(census.censusURI).toBe(customUri);
-    });
-
-    it('should store contract address', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.contractAddress).toBe(validContractAddress);
-    });
+    expect(new OnchainCensus(CONTRACT, 'https://explorer.example/address/x').censusURI).toBe(
+      'https://explorer.example/address/x'
+    );
   });
 
-  describe('Validation', () => {
-    it('should reject invalid contract address format', () => {
-      expect(() => new OnchainCensus('invalid', validUri)).toThrow(
-        'Contract address is missing or invalid'
-      );
-    });
-
-    it('should reject empty contract address', () => {
-      expect(() => new OnchainCensus('', validUri)).toThrow(
-        'Contract address is missing or invalid'
-      );
-    });
-
-    it('should reject contract address with wrong length', () => {
-      expect(() => new OnchainCensus('0x1234', validUri)).toThrow(
-        'Contract address is missing or invalid'
-      );
-    });
-
-    it('should accept contract address without 0x prefix', () => {
-      const addressWithout0x = '1234567890123456789012345678901234567890';
-      expect(() => new OnchainCensus(addressWithout0x, validUri)).not.toThrow();
-    });
-
-    it('should accept contract address with 0x prefix', () => {
-      expect(() => new OnchainCensus(validContractAddress, validUri)).not.toThrow();
-    });
-
-    it('should reject empty URI', () => {
-      expect(() => new OnchainCensus(validContractAddress, '')).toThrow(
-        'URI is required for onchain census'
-      );
-    });
+  it('refuses a bad address or an empty URI', () => {
+    expect(() => new OnchainCensus('0x1234')).toThrow(CensusError);
+    expect(() => new OnchainCensus(CONTRACT, ' ')).toThrow('must not be empty');
   });
 
-  describe('Differences from MerkleCensus', () => {
-    it('should not have a participants list', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect((census as any).participants).toBeUndefined();
-    });
+  it('checks the contract is a davinci-zkvm census', async () => {
+    const census = new OnchainCensus(CONTRACT);
+    expect(await census.check(chainWith())).toEqual({ root: 123n, size: 1 });
 
-    it('should not have an add method', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect((census as any).add).toBeUndefined();
-    });
+    const other = chainWith(() => 0x10n);
+    await expect(census.check(other)).rejects.toThrow(/derives ballot slot 16, not \d+/);
 
-    it('should not need publishing workflow', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-      expect(census.requiresPublishing).toBe(false);
-      expect(census.isPublished).toBe(true);
-    });
+    // The upstream census: no slotOf.
+    const upstream = new MockChain();
+    upstream.contract(
+      CONTRACT,
+      [
+        'function getCensusRoot() view returns (uint256)',
+        'function treeSize() view returns (uint256)',
+      ],
+      {
+        getCensusRoot: () => [1n],
+        treeSize: () => [0n],
+      }
+    );
+    await expect(census.check(upstream)).rejects.toThrow('has no slotOf');
+
+    const empty = new MockChain();
+    await expect(census.check(empty)).rejects.toThrow(CensusContractError);
+    await expect(census.check(empty)).rejects.toThrow(`no contract at ${getAddress(CONTRACT)}`);
   });
 
-  describe('Ready for process creation', () => {
-    it('should be immediately ready for process creation', () => {
-      const census = new OnchainCensus(validContractAddress, validUri);
-
-      // All required fields are available
-      expect(census.isPublished).toBe(true);
-      expect(census.censusRoot).toBeTruthy();
-      expect(census.censusURI).toBeTruthy();
-      expect(census.censusOrigin).toBe(CensusOrigin.Onchain);
-    });
+  it('gives a member its weight as witness and refuses a non-member', async () => {
+    const census = new OnchainCensus(CONTRACT);
+    expect(await census.witness(chainWith(), MEMBER)).toEqual({ type: 'merkle', weight: 5n });
+    await expect(
+      census.witness(chainWith(), '0x2222222222222222222222222222222222222222')
+    ).rejects.toThrow(CensusWitnessError);
   });
 });

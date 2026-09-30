@@ -1,0 +1,45 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Next community project"
+  },
+  "description": {
+    "default": "The residents' association has funding for one new project in 2027. Choose the one we should start first; the option with the most votes is funded."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which project should we fund first?"
+      },
+      "description": {
+        "default": "Pick one option."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Community garden on the empty lot behind the market"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Lighting and repairs along the riverside path"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "A monthly repair café in the civic centre"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Covered bike parking at the train station"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

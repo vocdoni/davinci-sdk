@@ -1,4 +1,3 @@
-import { VocdoniCensusService } from '../../census';
 import { SequencerUnavailableError, type UnusableNode } from '../../sequencer/errors';
 import { SequencerNodes } from '../../sequencer/SequencerNodes';
 import { VocdoniSequencerService } from '../../sequencer/SequencerService';
@@ -14,8 +13,6 @@ export interface VocdoniApiServiceConfig {
   keySequencerURL?: string;
   /** @deprecated A single node: use `sequencerURLs`. */
   sequencerURL?: string;
-  /** Legacy census service. */
-  censusURL?: string;
   /** Headers, `fetchImpl`, timeout and body cap of the sequencer clients. */
   sequencerConfig?: BaseServiceConfig;
   /**
@@ -26,13 +23,11 @@ export interface VocdoniApiServiceConfig {
 }
 
 /**
- * The HTTP clients: the sequencer nodes of one deployment and the legacy
- * census service. A role left without a usable node throws
- * {@link SequencerUnavailableError} from its getter, naming the nodes left
- * out; the other role and the census service still work.
+ * The sequencer clients of one deployment. A role left without a usable node
+ * throws {@link SequencerUnavailableError} from its getter, naming the nodes
+ * left out; the other role still works.
  */
 export class VocdoniApiService {
-  public readonly census: VocdoniCensusService;
   private readonly voteNodes?: SequencerNodes;
   private readonly keyNode?: VocdoniSequencerService;
   private readonly unusableVote: readonly UnusableNode[];
@@ -59,7 +54,6 @@ export class VocdoniApiService {
     this.unusableVote = unusable.filter(n => voteList.includes(n.url));
     this.unusableKey =
       explicitKey !== undefined ? unusable.filter(n => n.url === explicitKey) : this.unusableVote;
-    this.census = new VocdoniCensusService(config.censusURL ?? '');
   }
 
   /**

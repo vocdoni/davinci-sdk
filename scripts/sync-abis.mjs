@@ -1,13 +1,18 @@
 #!/usr/bin/env node
-// Copies the contract ABIs the SDK uses from a davinci-contracts checkout into
+// Copies the contract ABIs the SDK uses from a forge checkout into
 // src/contracts/abi/ and records the commit they came from in source.json.
 //
 //   node scripts/sync-abis.mjs <davinci-contracts checkout> [--out <forge out dir>]
+//   node scripts/sync-abis.mjs --census <davinci-onchain-census-contract checkout> [--out <dir>]
 //
-// The ABIs are read from the forge build output (`out/` by default). The script
-// refuses a checkout with uncommitted changes under src/ and a build whose
-// sources differ from the checkout, so the recorded commit is the one the ABIs
-// were compiled from. To build without touching the checkout:
+// The first form vendors the registry, DKG and verifier ABIs into abi/; the
+// second vendors the on-chain census contracts (the davinci-zkvm branch) into
+// abi/census/. The ABIs are read from the forge build output (`out/` by
+// default). The script refuses a checkout with uncommitted changes under src/
+// and a build whose sources differ from the checkout (every source a vendored
+// artifact's metadata names, plus the build-info sources when the build kept
+// them), so the recorded commit is the one the ABIs were compiled from. To
+// build without touching the checkout:
 //
 //   FOUNDRY_OUT=~/.cache/sdk-forge/out FOUNDRY_CACHE_PATH=~/.cache/sdk-forge/cache forge build
 //   node scripts/sync-abis.mjs <checkout> --out ~/.cache/sdk-forge/out
@@ -20,18 +25,31 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { keccak256 } from 'ethers';
 
 // Vendored file name -> forge artifact, relative to the out dir.
-const CONTRACTS = {
-  ProcessRegistry: 'ProcessRegistry.sol/ProcessRegistry.json',
-  DavinciDKGAdapter: 'DavinciDKGAdapter.sol/DavinciDKGAdapter.json',
-  ZiskVerifier: 'ZiskVerifier.sol/ZiskVerifier.json',
-  ICensusValidator: 'ICensusValidator.sol/ICensusValidator.json',
-  IDKGAppManager: 'IDKGAppManager.sol/IDKGAppManager.json',
-  IDKGManager: 'IDKGManager.sol/IDKGManager.json',
+const SOURCES = {
+  registry: {
+    repository: 'https://github.com/vocdoni/davinci-contracts',
+    dir: '.',
+    contracts: {
+      ProcessRegistry: 'ProcessRegistry.sol/ProcessRegistry.json',
+      DavinciDKGAdapter: 'DavinciDKGAdapter.sol/DavinciDKGAdapter.json',
+      ZiskVerifier: 'ZiskVerifier.sol/ZiskVerifier.json',
+      ICensusValidator: 'ICensusValidator.sol/ICensusValidator.json',
+      IDKGAppManager: 'IDKGAppManager.sol/IDKGAppManager.json',
+      IDKGManager: 'IDKGManager.sol/IDKGManager.json',
+    },
+  },
+  census: {
+    repository: 'https://github.com/vocdoni/davinci-onchain-census-contract',
+    dir: 'census',
+    contracts: {
+      OnchainCensus: 'OnchainCensus.sol/OnchainCensus.json',
+      OwnedCensus: 'OwnedCensus.sol/OwnedCensus.json',
+    },
+  },
 };
-
-const REPOSITORY = 'https://github.com/vocdoni/davinci-contracts';
 
 function fail(msg) {
   console.error(`sync-abis: ${msg}`);
@@ -50,8 +68,11 @@ if (outFlag !== -1) {
   if (!outDir) fail('--out needs a directory');
   args.splice(outFlag, 2);
 }
+const censusFlag = args.indexOf('--census');
+if (censusFlag !== -1) args.splice(censusFlag, 1);
+const source = SOURCES[censusFlag === -1 ? 'registry' : 'census'];
 if (args.length !== 1) {
-  fail('usage: node scripts/sync-abis.mjs <davinci-contracts checkout> [--out <forge out dir>]');
+  fail('usage: node scripts/sync-abis.mjs [--census] <forge checkout> [--out <forge out dir>]');
 }
 
 const checkout = resolve(args[0]);
@@ -65,35 +86,46 @@ if (git(checkout, 'status', '--porcelain', '--', 'src')) {
 }
 
 // Every src/ file the build compiled must equal the checkout's copy.
-const buildInfoDir = join(outDir, 'build-info');
-if (!existsSync(buildInfoDir)) fail(`${buildInfoDir} is missing; build with build_info = true`);
 let checked = 0;
-for (const f of readdirSync(buildInfoDir).filter(n => n.endsWith('.json'))) {
-  const info = JSON.parse(readFileSync(join(buildInfoDir, f), 'utf8'));
-  for (const [path, src] of Object.entries(info.input?.sources ?? {})) {
-    if (!path.startsWith('src/') || typeof src.content !== 'string') continue;
-    const local = join(checkout, path);
-    if (!existsSync(local) || readFileSync(local, 'utf8') !== src.content) {
-      fail(`${path} differs from the build in ${outDir}; rebuild before syncing`);
+const buildInfoDir = join(outDir, 'build-info');
+if (existsSync(buildInfoDir)) {
+  for (const f of readdirSync(buildInfoDir).filter(n => n.endsWith('.json'))) {
+    const info = JSON.parse(readFileSync(join(buildInfoDir, f), 'utf8'));
+    for (const [path, src] of Object.entries(info.input?.sources ?? {})) {
+      if (!path.startsWith('src/') || typeof src.content !== 'string') continue;
+      const local = join(checkout, path);
+      if (!existsSync(local) || readFileSync(local, 'utf8') !== src.content) {
+        fail(`${path} differs from the build in ${outDir}; rebuild before syncing`);
+      }
+      checked++;
+    }
+  }
+}
+
+const here = dirname(fileURLToPath(import.meta.url));
+const abiDir = join(here, '..', 'src', 'contracts', 'abi', source.dir);
+const files = {};
+for (const [name, artifact] of Object.entries(source.contracts)) {
+  const path = join(outDir, artifact);
+  if (!existsSync(path)) fail(`${path} is missing`);
+  const { abi, metadata } = JSON.parse(readFileSync(path, 'utf8'));
+  if (!Array.isArray(abi)) fail(`${path} has no abi`);
+  // Every source the artifact was compiled from, by the keccak256 solc recorded.
+  for (const [src, { keccak256: want }] of Object.entries(metadata?.sources ?? {})) {
+    const local = join(checkout, src);
+    if (!existsSync(local) || keccak256(readFileSync(local)) !== want) {
+      fail(`${src} differs from the build of ${artifact}; rebuild before syncing`);
     }
     checked++;
   }
-}
-if (checked === 0) fail(`no src/ sources found in ${buildInfoDir}`);
-
-const here = dirname(fileURLToPath(import.meta.url));
-const abiDir = join(here, '..', 'src', 'contracts', 'abi');
-const files = {};
-for (const [name, artifact] of Object.entries(CONTRACTS)) {
-  const path = join(outDir, artifact);
-  if (!existsSync(path)) fail(`${path} is missing`);
-  const { abi } = JSON.parse(readFileSync(path, 'utf8'));
-  if (!Array.isArray(abi)) fail(`${path} has no abi`);
   const text = `${JSON.stringify(abi, null, 2)}\n`;
   writeFileSync(join(abiDir, `${name}.json`), text);
   files[`${name}.json`] = createHash('sha256').update(text).digest('hex');
 }
+if (checked === 0) fail(`no sources to check in ${outDir}; build with metadata or build_info`);
 
-const source = { repository: REPOSITORY, commit, files };
-writeFileSync(join(abiDir, 'source.json'), `${JSON.stringify(source, null, 2)}\n`);
-console.log(`sync-abis: ${Object.keys(files).length} ABIs from ${commit} (${checked} sources checked)`);
+const record = { repository: source.repository, commit, files };
+writeFileSync(join(abiDir, 'source.json'), `${JSON.stringify(record, null, 2)}\n`);
+console.log(
+  `sync-abis: ${Object.keys(files).length} ABIs from ${commit} (${checked} sources checked)`
+);

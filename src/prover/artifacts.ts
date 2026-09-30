@@ -9,6 +9,7 @@
 import { sha256, toUtf8String } from 'ethers';
 import * as snarkjs from 'snarkjs';
 import { ballotVkHash as vkHashOf, type SnarkjsVerificationKey } from '../crypto/groth16';
+import { download } from '../core/download';
 import { isNode } from '../core/runtime';
 import { ArtifactError } from './errors';
 
@@ -236,59 +237,14 @@ async function readLocal(path: string): Promise<Uint8Array> {
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
-// Downloads `url`, failing once `timeoutMs` pass without the answer or more
-// of its body. The wait is raced as well as signalled, so a fetch that
-// ignores the signal cannot hang the load.
-async function download(
-  url: string,
-  fetchImpl: typeof fetch,
-  timeoutMs: number
-): Promise<Uint8Array> {
-  const abort = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const stalled = new Promise<never>((_, reject) => {
-    abort.signal.addEventListener('abort', () => reject(abort.signal.reason));
-  });
-  stalled.catch(() => undefined);
-  const arm = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => abort.abort(new Error(`no data for ${timeoutMs} ms`)), timeoutMs);
-  };
-  arm();
-  try {
-    const res = await Promise.race([fetchImpl(url, { signal: abort.signal }), stalled]);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (!res.body) return new Uint8Array(await Promise.race([res.arrayBuffer(), stalled]));
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    try {
-      for (;;) {
-        const { done, value } = await Promise.race([reader.read(), stalled]);
-        if (done) break;
-        chunks.push(value);
-        arm();
-      }
-    } catch (err) {
-      void reader.cancel().catch(() => undefined);
-      throw err;
-    }
-    const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
-    let at = 0;
-    for (const c of chunks) {
-      out.set(c, at);
-      at += c.length;
-    }
-    return out;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function read(src: Source, config: ArtifactsConfig): Promise<Uint8Array> {
   if ('data' in src) return src.data;
   if ('path' in src) return readLocal(src.path);
-  const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  return download(src.url, fetchImpl, config.timeoutMs ?? ARTIFACT_STALL_TIMEOUT_MS);
+  const { bytes } = await download(src.url, {
+    fetchImpl: config.fetchImpl,
+    stallTimeoutMs: config.timeoutMs ?? ARTIFACT_STALL_TIMEOUT_MS,
+  });
+  return bytes;
 }
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));

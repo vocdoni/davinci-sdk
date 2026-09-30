@@ -1,232 +1,88 @@
 /**
- * Census origin types
+ * @fileoverview Census origins, census file members and the witnesses a
+ * voter proves membership with.
  */
+
+import type { LeanIMTProof } from '../crypto/census';
+import type { CspAttestation } from '../crypto/ecdsa';
+
+/** Where a process's census lives (the registry's `CensusOrigin`). */
 export enum CensusOrigin {
-  /** Offchain static Merkle Tree census */
+  /**
+   * Static Merkle census: a lean-IMT root fixed at creation. Nodes download
+   * the census file at `censusURI` and rebuild the tree.
+   */
   OffchainStatic = 1,
-  /** Offchain dynamic Merkle Tree census */
+  /**
+   * Updatable Merkle census: like the static one, but the organizer can
+   * replace its root and URI (`setProcessCensus`) until the end.
+   */
   OffchainDynamic = 2,
-  /** Onchain Merkle Tree census */
+  /**
+   * An append-only census contract (davinci-onchain-census-contract, the
+   * davinci-zkvm branch). Nodes build the tree from its `CensusMemberAdded`
+   * logs; the registry accepts any root it recorded since the process began.
+   */
   Onchain = 3,
-  /** Credential Service Provider (CSP) census using BabyJubJub EdDSA */
+  /**
+   * A credential service provider: a secp256k1 key signs one attestation per
+   * voter, and its Ethereum address is the census root. The registry keeps
+   * the historical name `CSP_EDDSA_BABYJUBJUB_V1` for this origin.
+   */
   CSP = 4,
 }
 
+/** A member of a census file: `key` a lowercase `0x` address, `weight` a decimal integer. */
 export interface CensusParticipant {
   key: string;
-  weight?: string;
-}
-
-export interface BaseCensusProof {
-  /** The Merkle root (hex-prefixed). */
-  root: string;
-  /** The voter's address (hex-prefixed). */
-  address: string;
-  /** The weight as a decimal string. */
   weight: string;
-  /** Census origin type: OffchainStatic/OffchainDynamic/Onchain for merkle proofs, CSP for csp proofs */
-  censusOrigin: CensusOrigin;
 }
-
-export interface MerkleCensusProof extends BaseCensusProof {
-  censusOrigin: CensusOrigin.OffchainStatic | CensusOrigin.OffchainDynamic | CensusOrigin.Onchain;
-  /** The leaf value (hex-prefixed weight). */
-  value: string;
-  /** The serialized sibling path (hex-prefixed). */
-  siblings: string;
-}
-
-export interface CSPCensusProof extends BaseCensusProof {
-  censusOrigin: CensusOrigin.CSP;
-  /** The process id signed with the address (hex-prefixed). */
-  processId: string;
-  /** The public key of the csp (hex-prefixed). */
-  publicKey: string;
-  /** The signature that proves that the voter is in the census (hex-prefixed). */
-  signature: string;
-  /** Optional voter index slot assigned by CSP (sequencer field). */
-  voterIndex?: number;
-}
-
-export type CensusProof = MerkleCensusProof | CSPCensusProof;
 
 /**
- * Provider function for Merkle census proofs
+ * How a member of a Merkle census (origins 1 to 3) votes: its weight, and
+ * optionally its lean-IMT proof. Nodes derive the proof from their own tree
+ * and ignore the one sent, so the weight is what matters.
  */
-export type MerkleCensusProofProvider = (args: {
+export interface MerkleCensusWitness {
+  type: 'merkle';
+  /** The member's census weight, below 2^88. */
+  weight: bigint;
+  /** Proof of the member's leaf `(address << 88) | weight`. */
+  proof?: LeanIMTProof;
+}
+
+/** How a member of a CSP census votes: the CSP's attestation for its address, weight and index. */
+export interface CspCensusWitness {
+  type: 'csp';
+  attestation: CspAttestation;
+}
+
+/** A voter's census witness, by the kind of census. */
+export type CensusWitness = MerkleCensusWitness | CspCensusWitness;
+
+/** What a census witness provider is asked for. */
+export interface CensusWitnessRequest {
+  processId: string;
+  /** The voter's address. */
+  address: string;
+  /** The process's census as the registry stores it. */
+  origin: CensusOrigin;
+  /** `bytes32` hex: the lean-IMT root, or the CSP address. */
   censusRoot: string;
-  address: string;
-}) => Promise<MerkleCensusProof>;
+  /** The census contract of an on-chain census. */
+  contractAddress?: string;
+}
 
-/**
- * Provider function for CSP census proofs
- */
-export type CSPCensusProofProvider = (args: {
-  processId: string;
-  address: string;
-}) => Promise<CSPCensusProof>;
+/** Supplies a Merkle-census witness (origins 1 to 3). */
+export type MerkleWitnessProvider = (request: CensusWitnessRequest) => Promise<MerkleCensusWitness>;
 
-/**
- * Configuration for census proof providers
- */
+/** Supplies the CSP attestation of a voter (origin 4), from the CSP. */
+export type CspWitnessProvider = (request: CensusWitnessRequest) => Promise<CspAttestation>;
+
+/** Census witness providers for the vote flow. */
 export interface CensusProviders {
-  /** Optional override for Merkle census proof fetching */
-  merkle?: MerkleCensusProofProvider;
-  /** Required provider for CSP census proof generation */
-  csp?: CSPCensusProofProvider;
-}
-
-/**
- * Runtime validation functions for census proofs
- */
-
-/**
- * Type guard to check if an object is a valid BaseCensusProof
- */
-function isBaseCensusProof(proof: unknown): proof is BaseCensusProof {
-  return (
-    !!proof &&
-    typeof proof.root === 'string' &&
-    typeof proof.address === 'string' &&
-    typeof proof.censusOrigin === 'number' &&
-    Object.values(CensusOrigin).includes(proof.censusOrigin)
-  );
-}
-
-/**
- * Type guard to check if an object is a valid MerkleCensusProof
- */
-export function isMerkleCensusProof(proof: unknown): proof is MerkleCensusProof {
-  return (
-    isBaseCensusProof(proof) &&
-    (proof.censusOrigin === CensusOrigin.OffchainStatic ||
-      proof.censusOrigin === CensusOrigin.OffchainDynamic ||
-      proof.censusOrigin === CensusOrigin.Onchain) &&
-    typeof (proof as any).weight === 'string' &&
-    typeof (proof as any).value === 'string' &&
-    typeof (proof as any).siblings === 'string'
-  );
-}
-
-/**
- * Type guard to check if an object is a valid CSPCensusProof
- */
-export function isCSPCensusProof(proof: unknown): proof is CSPCensusProof {
-  return (
-    isBaseCensusProof(proof) &&
-    proof.censusOrigin === CensusOrigin.CSP &&
-    typeof (proof as any).weight === 'string' &&
-    typeof (proof as any).processId === 'string' &&
-    typeof (proof as any).publicKey === 'string' &&
-    typeof (proof as any).signature === 'string' &&
-    (((proof as any).voterIndex === undefined && (proof as any).index === undefined) ||
-      (typeof (proof as any).voterIndex === 'number' &&
-        Number.isInteger((proof as any).voterIndex) &&
-        (proof as any).voterIndex >= 0) ||
-      (typeof (proof as any).index === 'number' &&
-        Number.isInteger((proof as any).index) &&
-        (proof as any).index >= 0))
-  );
-}
-
-/**
- * Assertion function to validate MerkleCensusProof
- */
-export function assertMerkleCensusProof(proof: unknown): asserts proof is MerkleCensusProof {
-  if (!isMerkleCensusProof(proof)) {
-    throw new Error('Invalid Merkle census proof payload');
-  }
-}
-
-/**
- * Assertion function to validate CSPCensusProof
- */
-export function assertCSPCensusProof(proof: unknown): asserts proof is CSPCensusProof {
-  if (!isCSPCensusProof(proof)) {
-    throw new Error('Invalid CSP census proof payload');
-  }
-}
-
-export interface PublishCensusResponse {
-  /** The Merkle root of the published census (hex-prefixed). */
-  root: string;
-  /** The number of participants in the census. */
-  participantCount: number;
-  /** ISO timestamp when the working census was created. */
-  createdAt: string;
-  /** ISO timestamp when the census was published. */
-  publishedAt: string;
-  /** The constructed URI for accessing the census */
-  uri: string;
-  /** The size of the census. */
-  size: number;
-}
-
-export interface Snapshot {
-  /** ISO timestamp of the snapshot date. */
-  snapshotDate: string;
-  /** The Merkle root of the census (hex-prefixed). */
-  censusRoot: string;
-  /** The number of participants in the census. */
-  participantCount: number;
-  /** Minimum balance filter applied. */
-  minBalance: number;
-  /** User-defined query name. */
-  queryName: string;
-  /** ISO timestamp when the snapshot was created. */
-  createdAt: string;
-  /** Type of query executed (optional). */
-  queryType?: string;
-  /** Token decimals (optional). */
-  decimals?: number;
-  /** Query execution period (optional). */
-  period?: string;
-  /** Query parameters (optional). */
-  parameters?: Record<string, unknown>;
-  /** Weight configuration (optional). */
-  weightConfig?: {
-    strategy: string;
-    targetMinWeight: number;
-    maxWeight: number;
-  };
-}
-
-export interface SnapshotsResponse {
-  /** Array of snapshots. */
-  snapshots: Snapshot[];
-  /** Total number of snapshots. */
-  total: number;
-  /** Current page number. */
-  page: number;
-  /** Number of items per page. */
-  pageSize: number;
-  /** Whether there is a next page. */
-  hasNext: boolean;
-  /** Whether there is a previous page. */
-  hasPrev: boolean;
-}
-
-export interface SnapshotsQueryParams {
-  /** Page number (default: 1). */
-  page?: number;
-  /** Items per page (default: 20, max: 100). */
-  pageSize?: number;
-  /** Filter by minimum balance. */
-  minBalance?: number;
-  /** Filter by user-defined query name. */
-  queryName?: string;
-}
-
-export interface CensusSizeResponse {
-  /** The number of participants in the census. */
-  size: number;
-}
-
-export interface HealthResponse {
-  /** Service status. */
-  status: string;
-  /** ISO timestamp of the health check. */
-  timestamp: string;
-  /** Service name. */
-  service: string;
+  /** Replaces the default Merkle witness (the nodes' participants endpoint or the census contract). */
+  merkle?: MerkleWitnessProvider;
+  /** Asks the CSP for a voter's attestation; required to vote in a CSP census. */
+  csp?: CspWitnessProvider;
 }

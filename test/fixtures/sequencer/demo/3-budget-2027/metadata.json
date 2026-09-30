@@ -1,0 +1,45 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "2027 budget allocation (quadratic)"
+  },
+  "description": {
+    "default": "Members decide how next year's discretionary budget is shared across four lines. Every member has as many voice credits as their membership weight, and giving a line n votes costs n² credits, up to 10 votes per line, so a strong preference costs more than broad support. Members who join before the vote closes can take part."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "How many votes do you give each budget line?"
+      },
+      "description": {
+        "default": "From 0 to 10 votes per line; the squares must add up to at most your voice credits."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Upkeep of shared spaces"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Youth and sports programmes"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "Cultural events and festivals"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Emergency support fund"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

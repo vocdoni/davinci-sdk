@@ -1,0 +1,76 @@
+{
+  "version": "1.1",
+  "title": {
+    "default": "Photography competition: choose the themes",
+    "en": "Photography competition: choose the themes",
+    "es": "Concurso de fotografía: elige los temas",
+    "ca": "Concurs de fotografia: tria els temes"
+  },
+  "description": {
+    "default": "Choose one or two themes for this year's photography competition. The two with the most votes will be announced at the opening of the exhibition.",
+    "en": "Choose one or two themes for this year's photography competition. The two with the most votes will be announced at the opening of the exhibition.",
+    "es": "Elige uno o dos temas para el concurso de fotografía de este año. Los dos más votados se anunciarán en la inauguración de la exposición.",
+    "ca": "Tria un o dos temes per al concurs de fotografia d'aquest any. Els dos més votats s'anunciaran a la inauguració de l'exposició."
+  },
+  "questions": [
+    {
+      "title": {
+        "default": "Which themes would you like?",
+        "en": "Which themes would you like?",
+        "es": "¿Qué temas te gustarían?",
+        "ca": "Quins temes t'agradarien?"
+      },
+      "description": {
+        "default": "Choose one or two.",
+        "en": "Choose one or two.",
+        "es": "Elige uno o dos.",
+        "ca": "Tria'n un o dos."
+      },
+      "choices": [
+        {
+          "title": {
+            "default": "Water",
+            "en": "Water",
+            "es": "El agua",
+            "ca": "L'aigua"
+          },
+          "value": 0
+        },
+        {
+          "title": {
+            "default": "Hands at work",
+            "en": "Hands at work",
+            "es": "Manos que trabajan",
+            "ca": "Mans que treballen"
+          },
+          "value": 1
+        },
+        {
+          "title": {
+            "default": "The city at night",
+            "en": "The city at night",
+            "es": "La ciudad de noche",
+            "ca": "La ciutat de nit"
+          },
+          "value": 2
+        },
+        {
+          "title": {
+            "default": "Neighbours",
+            "en": "Neighbours",
+            "es": "Vecinos",
+            "ca": "Veïns"
+          },
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "electionPreset": {
+      "type": "multiple_choice",
+      "maxSelections": 2,
+      "minSelections": 1
+    }
+  }
+}
