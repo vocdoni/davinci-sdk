@@ -9,6 +9,7 @@ import {
   deployOwnedCensus,
   isPoseidonT3,
   linkOwnedCensus,
+  withoutMetadata,
 } from '../e2e/census';
 import censusSource from '../../src/contracts/abi/census/source.json';
 import vendored from '../e2e/contracts/census.json';
@@ -38,9 +39,11 @@ describe("the live suite's census contract", () => {
     expect(CENSUS_CONTRACT_COMMIT).toBe(censusSource.commit);
   });
 
-  it('is the creation code this suite builds', async () => {
+  it('is the creation code this suite builds, metadata aside', async () => {
     const library = anvilPoseidon();
-    expect(linkOwnedCensus(library)).toBe(anvil().ownedCensusBytecode.toLowerCase());
+    expect(withoutMetadata(linkOwnedCensus(library))).toBe(
+      withoutMetadata(anvil().ownedCensusBytecode)
+    );
     expect(isPoseidonT3(await chainProvider().getCode(library))).toBe(true);
     expect(isPoseidonT3('0x')).toBe(false);
     expect(isPoseidonT3(await chainProvider().getCode(anvil().registry))).toBe(false);

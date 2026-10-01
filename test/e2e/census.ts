@@ -43,13 +43,28 @@ export function linkOwnedCensus(library: string): string {
 }
 
 /**
- * Whether `runtime` is the vendored `PoseidonT3`'s runtime code. A library
- * embeds its own address after the leading PUSH20, so that is left out.
+ * `bytecode` without the CBOR metadata solc appends (its length is the last two
+ * bytes). The metadata hash depends on where and how a checkout was built, so
+ * two builds of one commit compare equal only without it.
+ */
+export function withoutMetadata(bytecode: string): string {
+  const hex = bytecode.toLowerCase();
+  const length = Number.parseInt(hex.slice(-4), 16);
+  if (!/^0x[0-9a-f]*$/.test(hex) || Number.isNaN(length) || (length + 2) * 2 > hex.length - 2) {
+    return hex;
+  }
+  return hex.slice(0, hex.length - (length + 2) * 2);
+}
+
+/**
+ * Whether `runtime` is the vendored `PoseidonT3`'s runtime code, metadata
+ * aside. A library embeds its own address after the leading PUSH20, so that
+ * is left out too.
  */
 export function isPoseidonT3(runtime: string): boolean {
   if (!/^0x73[0-9a-fA-F]{40}/.test(runtime)) return false;
   const unaddressed = `0x73${'0'.repeat(40)}${runtime.slice(44)}`;
-  return keccak256(unaddressed) === code.PoseidonT3.deployedBytecodeHash;
+  return keccak256(withoutMetadata(unaddressed)) === code.PoseidonT3.deployedBytecodeHash;
 }
 
 /** What {@link deployOwnedCensus} deployed. */

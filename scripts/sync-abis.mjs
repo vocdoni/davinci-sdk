@@ -141,7 +141,13 @@ for (const [name, artifact] of Object.entries(source.contracts)) {
 }
 
 // Creation code: the bytecode with its library link references, and the
-// keccak256 of the runtime code a deployment leaves.
+// keccak256 of the runtime code a deployment leaves, without solc's metadata
+// trailer: its hash depends on where and how the checkout was built.
+// `code` without the CBOR metadata solc appends, whose length is its last two bytes.
+function withoutMetadata(code) {
+  return code.slice(0, code.length - (parseInt(code.slice(-4), 16) + 2) * 2);
+}
+
 let codes = 0;
 if (source.bytecode) {
   const contracts = {};
@@ -155,7 +161,10 @@ if (source.bytecode) {
     contracts[name] =
       Object.keys(links).length > 0
         ? { bytecode: bytecode.object, linkReferences: links }
-        : { bytecode: bytecode.object, deployedBytecodeHash: keccak256(deployedBytecode.object) };
+        : {
+            bytecode: bytecode.object,
+            deployedBytecodeHash: keccak256(withoutMetadata(deployedBytecode.object)),
+          };
     codes++;
   }
   const text = JSON.stringify(
