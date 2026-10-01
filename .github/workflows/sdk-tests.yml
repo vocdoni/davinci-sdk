@@ -9,6 +9,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+  # release.yml runs the suite on the merge commit before tagging it.
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to test (default the triggering one)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -71,6 +80,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       # The contracts the vendored ABIs were built from: the suite deploys the same commits.
       - name: Read the pinned contract commits
