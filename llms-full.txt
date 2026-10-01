@@ -816,7 +816,7 @@ await sdk.updateCensus(processId, members); // publishes the new version, then s
 
 ## On-chain census (origin 3)
 
-The census is a contract of [davinci-onchain-census-contract](https://github.com/vocdoni/davinci-onchain-census-contract), branch `davinci-zkvm`: an append-only lean-IMT with fixed weights and one ballot slot per member. `OwnedCensus` is its owner-managed version. Deploy one with Foundry from that repository (it links the `PoseidonT3` library), then manage it with `OnchainCensusService`:
+The census is a contract of [davinci-onchain-census-contract](https://github.com/vocdoni/davinci-onchain-census-contract): an append-only lean-IMT with fixed weights and one ballot slot per member. `OwnedCensus` is its owner-managed version. Deploy one with Foundry from that repository (it links the `PoseidonT3` library), then manage it with `OnchainCensusService`:
 
 ```ts
 import { OnchainCensus, OnchainCensusService, SmartContractService } from '@vocdoni/davinci-sdk';

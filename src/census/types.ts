@@ -19,9 +19,9 @@ export enum CensusOrigin {
    */
   OffchainDynamic = 2,
   /**
-   * An append-only census contract (davinci-onchain-census-contract, the
-   * davinci-zkvm branch). Nodes build the tree from its `CensusMemberAdded`
-   * logs; the registry accepts any root it recorded since the process began.
+   * An append-only census contract of davinci-onchain-census-contract.
+   * Nodes build the tree from its `CensusMemberAdded` logs; the registry
+   * accepts any root it recorded since the process began.
    */
   Onchain = 3,
   /**

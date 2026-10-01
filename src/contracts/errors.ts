@@ -141,7 +141,7 @@ export class DeploymentPinError extends ContractServiceError {
 
 /**
  * A census contract call that failed, or a contract that is not an
- * append-only census of davinci-onchain-census-contract (davinci-zkvm branch).
+ * append-only census of davinci-onchain-census-contract.
  * A reverted write carries the contract's error (`SlotTaken`,
  * `AlreadyRegisteredAddress`, `InvalidCensusWeight`, ...) in `revert`.
  */

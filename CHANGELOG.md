@@ -96,7 +96,7 @@ The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci
 3. **Censuses.**
    - `OffchainCensus` and `OffchainDynamicCensus` keep `add`, `remove` and `participants`; weights must be below 2^88.
    - A CSP census is `new CspCensus(cspAddress, uri)` or `await new CspSigner(cspWallet).census(uri)`; voters pass `censusProviders.csp`, which returns the CSP's ECDSA attestation (`CspSigner.attest`).
-   - An on-chain census is a davinci-onchain-census-contract (`davinci-zkvm` branch) contract: `new OnchainCensus(contractAddress)`. Token contracts with an indexer are not supported.
+   - An on-chain census is a davinci-onchain-census-contract contract: `new OnchainCensus(contractAddress)`. Token contracts with an indexer are not supported.
    - `PublishedCensus` needs the lean-IMT root of a census file served by URL.
 
 4. **Creating processes.**

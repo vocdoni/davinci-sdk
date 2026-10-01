@@ -1,6 +1,6 @@
 /**
- * @fileoverview Deploying an `OwnedCensus` (davinci-onchain-census-contract,
- * davinci-zkvm branch) from the creation code vendored in
+ * @fileoverview Deploying an `OwnedCensus` (davinci-onchain-census-contract)
+ * from the creation code vendored in
  * `contracts/census.json` (`yarn sync:abis --census`), linked to its
  * `PoseidonT3` library: the copy poseidon-solidity deploys at the same
  * address on every chain when there is one, else a fresh one.

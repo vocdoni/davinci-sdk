@@ -1,6 +1,6 @@
 /**
- * @fileoverview A census contract of davinci-onchain-census-contract (the
- * davinci-zkvm branch), the census of an origin-3 process: an append-only
+ * @fileoverview A census contract of davinci-onchain-census-contract,
+ * the census of an origin-3 process: an append-only
  * lean-IMT of `(address << 88) | weight` leaves with fixed weights and one
  * ballot slot per member. Nodes build their tree from its `CensusMemberAdded`
  * logs; a weight change or two members on one slot makes it unusable.
@@ -142,7 +142,7 @@ export class OnchainCensusService extends SmartContractService {
       slot = await this.slotOf(this.address);
     } catch (err) {
       throw new CensusContractError(
-        `${this.address} has no slotOf: not a census contract of the davinci-zkvm branch`,
+        `${this.address} has no slotOf: not a davinci-onchain-census-contract census`,
         'check',
         undefined,
         err

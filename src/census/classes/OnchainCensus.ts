@@ -9,7 +9,7 @@ import { Census } from './Census';
 
 /**
  * An on-chain census (origin 3): a census contract of
- * davinci-onchain-census-contract, davinci-zkvm branch (append-only, fixed
+ * davinci-onchain-census-contract (append-only, fixed
  * weights, one ballot slot per member). The registry reads the root from the
  * contract at creation, so the root given is zero, and accepts any root the
  * contract recorded since the process began. Nodes index the members from

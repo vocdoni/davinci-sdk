@@ -3,7 +3,7 @@
 Two scripts that run whole elections on a DAVINCI deployment with the SDK in this repository:
 
 - **`src/election.ts`**: a census of fresh voters (a Merkle census file, or a CSP's signatures), a single-choice election in any key mode, every voter voting from its own SDK (one of them twice), statuses and receipts, an early close with notice, and the results.
-- **`src/onchain.ts`**: an election on an append-only census contract (`OwnedCensus` of davinci-onchain-census-contract, branch `davinci-zkvm`): weighted members spreading their weight, and a member added while voting runs.
+- **`src/onchain.ts`**: an election on an append-only census contract (`OwnedCensus` of davinci-onchain-census-contract): weighted members spreading their weight, and a member added while voting runs.
 
 Each run creates a real election and spends the organizer's gas. A run takes about ten minutes: the votes, a close with notice during which the nodes settle them, the grace window, then the key holder's results.
 

@@ -6,7 +6,7 @@
 //   node scripts/sync-abis.mjs --census <davinci-onchain-census-contract checkout> [--out <dir>]
 //
 // The first form vendors the registry, DKG and verifier ABIs into abi/; the
-// second vendors the on-chain census contracts (the davinci-zkvm branch) into
+// second vendors the on-chain census contracts into
 // abi/census/, and the creation code of OwnedCensus and PoseidonT3 into
 // test/e2e/contracts/census.json, which the live suite deploys on Gnosis
 // (the anvil suite checks it against its own build). The ABIs are read from

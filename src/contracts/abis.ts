@@ -42,7 +42,7 @@ export const DKG_MANAGER_ABI = dkgManagerAbi as JsonFragment[];
 export const CONTRACTS_ABI_COMMIT: string = abiSource.commit;
 
 /**
- * davinci-onchain-census-contract `OnchainCensus` (davinci-zkvm branch): the
+ * davinci-onchain-census-contract `OnchainCensus`: the
  * append-only lean-IMT census an origin-3 process points at, with
  * `ICensusValidator`, member weights, ballot slots and `CensusMemberAdded`.
  */

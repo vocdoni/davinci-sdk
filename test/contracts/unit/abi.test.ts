@@ -350,7 +350,7 @@ describe('vendored contract ABIs', () => {
   });
 });
 
-// davinci-onchain-census-contract, davinci-zkvm branch (671ef5b).
+// davinci-onchain-census-contract (671ef5b).
 const CENSUS_FUNCTIONS: Record<string, string> = {
   'getCensusRoot()': '0xc1da8691',
   'getRootBlockNumber(uint256)': '0x650e5fcf',
