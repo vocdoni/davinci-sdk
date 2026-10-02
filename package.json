@@ -30,6 +30,9 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint-staged": "lint-staged",
+    "changeset": "changeset",
+    "version-packages": "changeset version && yarn docs:build",
+    "release": "changeset publish",
     "sync:abis": "node scripts/sync-abis.mjs",
     "docs:build": "node scripts/build-llms.mjs",
     "docs:check": "node scripts/build-llms.mjs --check && node scripts/check-docs.mjs",
@@ -89,6 +92,8 @@
     "snarkjs": "^0.7.5"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.1",
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-inject": "^5.0.5",
     "@rollup/plugin-json": "^6.1.0",
