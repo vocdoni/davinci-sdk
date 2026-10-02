@@ -2,6 +2,8 @@
 
 Bug reports and pull requests are welcome. For a new feature or a larger change, open an issue first so the approach can be agreed on before you write it. Questions go to [Discord](https://chat.vocdoni.io). Report security issues privately, as [SECURITY.md](SECURITY.md) describes, never in a public issue.
 
+Coding agents follow [AGENTS.md](AGENTS.md) as well, which spells out the release rules below as hard rules.
+
 Be respectful in issues, reviews and chat. Report unacceptable behavior to [info@vocdoni.io](mailto:info@vocdoni.io).
 
 ## Setup
