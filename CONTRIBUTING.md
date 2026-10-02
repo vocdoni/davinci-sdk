@@ -56,6 +56,7 @@ yarn docs:build            # rebuild llms.txt and llms-full.txt from docs/ai
 yarn docs:check            # both are current, and every documentation code block type-checks
 yarn sync:abis <checkout>  # vendor the contract ABIs from a davinci-contracts checkout
 yarn lint-staged           # format and lint the staged files (no hook installs it)
+yarn changeset             # add a changeset: the release type and changelog text of a change
 ```
 
 ## Tests
@@ -96,17 +97,42 @@ The SDK mirrors the Rust implementation byte for byte, and its tests replay vect
 ## Documentation
 
 - A change of the public API updates the guides in `docs/ai/` in the same pull request. Run `yarn docs:build` after editing them, so `llms.txt` and `llms-full.txt` follow.
-- `yarn docs:check` type-checks every `ts` block of the README, SECURITY.md, the guides and the current major's CHANGELOG entry, plus the recipes and `examples/script`, against the SDK source. Mark a block that is not code as `ts nocheck`.
+- `yarn docs:check` type-checks every `ts` block of the README, SECURITY.md, the guides and the current major's CHANGELOG entries (changesets included, once versioned), plus the recipes and `examples/script`, against the SDK source. Mark a block that is not code as `ts nocheck`.
 - Use placeholders for node URLs and hosting in examples (`https://sequencer-1.example.org`).
-- Every user-visible change goes in [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]`, with migration notes for breaking ones.
+- Every user-visible change comes with a changeset, with migration notes for breaking ones (see [Changesets and releases](#changesets-and-releases)). Never edit [CHANGELOG.md](CHANGELOG.md) by hand.
 
 ## Pull requests
 
 1. Branch from `main` and keep each pull request to one change.
-2. Add or update tests with the change.
+2. Add or update tests with the change, and a changeset if users will notice it.
 3. Before pushing, run `yarn lint`, `yarn format:check`, `yarn tsc --noEmit`, `yarn test:unit` and `yarn docs:check`, and `yarn test:anvil` when contract calls or organizer flows change.
 4. Write commit messages as conventional commits with a lowercase summary: `feat(vote): …`, `fix(networks): …`, `docs(e2e): …`.
 5. In the description, say what changes and why, and link the issue it addresses.
+
+## Changesets and releases
+
+Releases are made with [Changesets](https://github.com/changesets/changesets). A pull request that changes what users get (the API, its behavior, the bundle, the dependencies) adds a changeset: a Markdown file in `.changeset/` that names the release type and holds the changelog text. Run `yarn changeset` and answer its prompts, or write the file by hand, for example:
+
+```md
+---
+'@vocdoni/davinci-sdk': patch
+---
+
+`waitForResults` no longer gives up when a node returns a 502 while the results are being proved.
+```
+
+- **Release type.** `patch` for fixes, `minor` for new features, `major` for breaking changes. A `major` changeset holds the migration notes.
+- **Text.** Write it for the people who use the SDK: what changed and what they have to do, not how it was implemented. It becomes the CHANGELOG entry and the GitHub release notes as written, under a link to the pull request. Code blocks are allowed, and `yarn docs:check` type-checks the `ts` ones once they are in the CHANGELOG.
+- **No changeset** for changes users don't see: tests, CI, documentation of the repository, refactors.
+
+Every push to `main` runs [`release.yml`](.github/workflows/release.yml), after the tests:
+
+1. While there are changesets on `main`, it opens or updates the **Version Packages** pull request. That pull request deletes the changesets, bumps `package.json` (the highest release type wins), prepends the new entry to `CHANGELOG.md` and rebuilds `llms-full.txt`.
+2. Merging the Version Packages pull request is the release: the workflow publishes the version to npm with trusted publishing, tags the commit as `v<version>` (for example `v2.1.0`) and creates the GitHub release with the CHANGELOG entry as its notes.
+
+The Version Packages pull request is opened with the workflow's token, so GitHub runs no checks on it. The workflow runs the tests on the merge commit before it publishes, and a failure stops the release. Review the Version Packages pull request like any other. Don't edit it: the workflow rewrites it on every push to `main`. To fix the wording of an entry, edit its changeset on `main`.
+
+`yarn changeset status --verbose` shows the changesets of your branch and the release they add up to. It fails on a branch that has none, which is expected for changes users don't see.
 
 ## License
 
