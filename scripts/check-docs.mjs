@@ -23,8 +23,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const work = join(root, 'node_modules', '.cache', 'davinci-docs');
 
 const DOCS = ['README.md', 'SECURITY.md', 'CHANGELOG.md', ...markdownUnder('docs')];
-// Where a file's checked part ends.
-const UNTIL = { 'CHANGELOG.md': /^## \[1\./ };
+// Where a file's checked part ends: the CHANGELOG's first entry of an older
+// major (`## [1.0.0] - …` by hand, `## 1.0.0` by Changesets).
+const MAJOR = Number(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version.split('.')[0]);
+const UNTIL = {
+  'CHANGELOG.md': { test: l => /^## \[?(\d+)\./.exec(l)?.[1] < MAJOR },
+};
 // The SDK's own module declarations (snarkjs, circomlibjs).
 const AMBIENT = filesUnder('src', '.d.ts').map(f => join(root, f));
 const CODE = [...filesUnder('docs/ai/recipes', '.ts'), ...filesUnder('examples/script/src', '.ts')];
