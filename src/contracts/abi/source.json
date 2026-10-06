@@ -1,15 +1,15 @@
 {
   "repository": "https://github.com/vocdoni/davinci-contracts",
-  "commit": "74debe9e479c8529b0b8a736d1ea928d46fa10ec",
+  "commit": "a59a9921a0e7ea30c6637d033f2f9dfb7ce67aaf",
   "files": {
-    "ProcessRegistry.json": "02252a4805987b57dbc7bb1ccac1c2c3d2d17b2d992be92ec692fbbb0522c363",
+    "ProcessRegistry.json": "ba787314ca24cb0c8453561dfde3793938d147d931be2db876e87e910cd3477a",
     "DavinciDKGAdapter.json": "ec0a2749cb12cfd43ec3b10254637a11c8b748740e9e18f1b4371533a589b423",
     "ZiskVerifier.json": "22431cbd2927017e37290f228117c66b2ef67f61d9f828c52eb5467202224957",
     "ICensusValidator.json": "d2d82b24d28cf5cdc8d665dd489ce709e1e2094466be729b0059298bbf9fad94",
     "IDKGAppManager.json": "307f360cce34789f285cef93c67bb312588cbbfd123ed25545dfc67bf14f51d0",
     "IDKGManager.json": "b9df914b76a84ab92e8505b1160a569d74c4d6fa149fe425817ff8901518d9ef",
-    "CouncilAdapter.json": "8e4ab7124029a27e549a61192d809749e5136696a995fcb5178493bab9a937cf",
-    "ICouncilManager.json": "8810a702e5c2d6dc637ea58e7d37f5ef00a2a3627e18e3fce6e8a424195466c4",
-    "ICouncilManagerErrors.json": "0954102dbd3bfd9a5a8b1a7f154124fff89367ac5c69e60747df54d96b0927de"
+    "CouncilAdapter.json": "c6a878e6b10facdf6cea24037f7da341d0e37c23a4db5534a905ee538b090786",
+    "ICouncilManager.json": "dc3f4a333a3e1973faa5a030b3c167f67004c4a0aef39a0e857d49324ff8b795",
+    "ICouncilManagerErrors.json": "6fd733dae227723c15a9728a12f29719380168e45dc8463ed226abb6c32da96d"
   }
 }

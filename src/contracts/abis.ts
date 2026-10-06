@@ -31,16 +31,47 @@ export const DAVINCI_DKG_ADAPTER_ABI = dkgAdapterAbi as JsonFragment[];
 
 /**
  * `CouncilAdapter`: the registry's bridge to a Council manager
- * (`bindings`, `plaintexts`, `manager`).
+ * (`bindings`, `plaintexts`, `isDecryptionOpen`, `manager`).
  */
 export const COUNCIL_ADAPTER_ABI = councilAdapterAbi as JsonFragment[];
 
 /**
  * Council `ICouncilManager` (the adapter's surface: `bindProcess`,
- * `submitRequest`, `getPlaintexts`, `getRequest`, `getBinding`,
- * `getPublicKey`), vendored verbatim by davinci-contracts.
+ * `submitRequest`, `getPlaintexts`, `getRequestMeta`, `getBinding`,
+ * `getPublicKey`, `isDecryptionOpen`), vendored verbatim by davinci-contracts.
  */
 export const COUNCIL_MANAGER_ABI = councilManagerAbi as JsonFragment[];
+
+/**
+ * The Council manager's phase-policy view, `getPolicy(cid)` (Council
+ * architecture §1.2): how and when a ceremony's decryption opens. Not part
+ * of the adapter surface davinci-contracts vendors, so written out here;
+ * `abi.test.ts` pins its selector and layout.
+ */
+export const COUNCIL_POLICY_ABI: JsonFragment[] = [
+  {
+    type: 'function',
+    name: 'getPolicy',
+    stateMutability: 'view',
+    inputs: [{ name: 'cid', type: 'bytes12' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'registrationMode', type: 'uint8' },
+          { name: 'decryptionMode', type: 'uint8' },
+          { name: 'dealingDuration', type: 'uint64' },
+          { name: 'decryptionOpenAt', type: 'uint64' },
+          { name: 'manualDecryptionFallbackAt', type: 'uint64' },
+          { name: 'manualOpenedAt', type: 'uint64' },
+          { name: 'decryptionOpen', type: 'bool' },
+          { name: 'scheduledRegistrationCloseDue', type: 'bool' },
+        ],
+      },
+    ],
+  },
+];
 
 /** The Council manager errors a registry call can bubble up (`ICouncilManagerErrors`). */
 export const COUNCIL_MANAGER_ERRORS_ABI = councilManagerErrorsAbi as JsonFragment[];

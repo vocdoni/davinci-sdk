@@ -8,6 +8,7 @@ import {
   COUNCIL_ADAPTER_ABI,
   COUNCIL_MANAGER_ABI,
   COUNCIL_MANAGER_ERRORS_ABI,
+  COUNCIL_POLICY_ABI,
   CONTRACTS_ABI_COMMIT,
   DAVINCI_DKG_ADAPTER_ABI,
   DAVINCI_ERRORS_ABI,
@@ -20,9 +21,9 @@ import {
   decodeDavinciError,
 } from '../../../src/contracts/abis';
 
-// Drift guard for the vendored ABIs (davinci-contracts 74debe9, the council
-// branch over 36c0b0a; its ICouncilManager is davinci-dkg-council's,
-// verbatim). Every value below is written out by hand from that commit's
+// Drift guard for the vendored ABIs (davinci-contracts a59a992, the council
+// branch over 36c0b0a with the v2 decryption gate; its ICouncilManager is
+// davinci-dkg-council's v2 adapter surface, verbatim). Every value below is written out by hand from that commit's
 // contracts; a sync that moves any of them must be a deliberate change here
 // too.
 
@@ -88,6 +89,7 @@ const COUNCIL_ADAPTER_FUNCTIONS: Record<string, string> = {
   'plaintexts(bytes12,bytes32,uint16,uint16)': '0x088858bc',
   'reveal(bytes12,bytes32,uint256)': '0x64fe50ac',
   'bindings(bytes32)': '0x2680c7d8',
+  'isDecryptionOpen(bytes12)': '0x5f0ddacd',
   'registry()': '0x7b103999',
   'manager()': '0x481c6a75',
 };
@@ -98,9 +100,10 @@ const COUNCIL_MANAGER_FUNCTIONS: Record<string, string> = {
   'bindProcess(bytes12,bytes31,address)': '0x58d66923',
   'submitRequest(bytes12,bytes31,uint256[4][])': '0x548efb71',
   'getPlaintexts(bytes32)': '0xab095fca',
-  'getRequest(bytes32)': '0xfb1e61ca',
+  'getRequestMeta(bytes32)': '0x44b1625d',
   'getBinding(address,bytes31)': '0x8833c93c',
   'getPublicKey(bytes12)': '0x9528479e',
+  'isDecryptionOpen(bytes12)': '0x5f0ddacd',
 };
 
 const REMOVED_FUNCTIONS = ['MAX_CENSUS_ORIGIN', 'BLOB_INDEX', 'stVerifier', 'rVerifier', 'blobsDA'];
@@ -128,7 +131,7 @@ const REGISTRY_EVENTS: Record<string, string> = {
     '0xdca6075f07367349a836825d3ee7c35c204d2e727ae81a5b7a48aca95b9c270b',
 };
 
-// All 62 registry errors, by name.
+// All 63 registry errors, by name.
 const REGISTRY_ERRORS: Record<string, string> = {
   BallotModeMaxValueSumTooLarge: '0x271fb805',
   BallotModeMaxValueTooLarge: '0x481eb79f',
@@ -140,6 +143,7 @@ const REGISTRY_ERRORS: Record<string, string> = {
   CircuitFailed: '0x54aabb00',
   CouncilDisabled: '0xe00ffde9',
   DKGDisabled: '0x0003eb8f',
+  DecryptionNotOpen: '0xa5d6eb98',
   EmptyTransition: '0x7f19b8aa',
   GraceOpen: '0xc23ee5e6',
   InvalidAccumulator: '0xa88d6454',
@@ -255,6 +259,7 @@ const FOREIGN_ERRORS: Record<string, [JsonFragment[], Record<string, string>]> =
       InvalidPoint: '0xb8fedf87',
       NotInSubgroup: '0x09463a59',
       UnknownRequest: '0x6d080297',
+      DecryptionNotOpen: '0xa5d6eb98',
     },
   ],
 };
@@ -319,7 +324,7 @@ describe('vendored contract ABIs', () => {
       commit: string;
       files: Record<string, string>;
     };
-    expect(source.commit).toBe('74debe9e479c8529b0b8a736d1ea928d46fa10ec');
+    expect(source.commit).toBe('a59a9921a0e7ea30c6637d033f2f9dfb7ce67aaf');
     expect(CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual([
       'CouncilAdapter.json',
@@ -380,6 +385,27 @@ describe('vendored contract ABIs', () => {
       'fieldCount:uint8',
       'processId:bytes31',
     ]);
+  });
+
+  it('pin the Council policy view written out from the spec', () => {
+    const iface = new Interface(COUNCIL_POLICY_ABI);
+    const f = must(iface.getFunction('getPolicy(bytes12)'), 'getPolicy');
+    expect(f.selector).toBe('0xba5daf68');
+    expect(f.outputs).toHaveLength(1);
+    expect(must(f.outputs[0].components, 'PhasePolicyView').map(layout)).toEqual([
+      'registrationMode:uint8',
+      'decryptionMode:uint8',
+      'dealingDuration:uint64',
+      'decryptionOpenAt:uint64',
+      'manualDecryptionFallbackAt:uint64',
+      'manualOpenedAt:uint64',
+      'decryptionOpen:bool',
+      'scheduledRegistrationCloseDue:bool',
+    ]);
+  });
+
+  it('decode the registry gate revert, the Council manager selector', () => {
+    expect(decodeDavinciError('0xa5d6eb98')?.name).toBe('DecryptionNotOpen');
   });
 
   it('pin the registry constructor: the Council manager after the DKG manager', () => {
