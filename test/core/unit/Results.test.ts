@@ -1,6 +1,8 @@
 import { Interface, Wallet, ZeroAddress, sha256 } from 'ethers';
 import {
   COUNCIL_ADAPTER_ABI,
+  COUNCIL_POLICY_ABI,
+  CouncilDisabledError,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
   DkgDisabledError,
@@ -35,6 +37,7 @@ import { MockChain, revertWith } from '../../helpers/mockChain';
 const REGISTRY = GNOSIS.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
 const COUNCIL_ADAPTER = '0x000000000000000000000000000000000000C1a7';
+const COUNCIL_MANAGER = '0x000000000000000000000000000000000000c0DE';
 const APP_MANAGER = '0x9999F38Ff8Bf959E98Ddd5D4551f82775219c01B';
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
 const PID = computeProcessId(ORGANIZER, '0xf5848002', 3);
@@ -237,6 +240,11 @@ interface Chain {
   votersCount: bigint;
   ready: boolean;
   secret: bigint;
+  /** The Council ceremony's decryption gate and policy (PhaseMode 0 Manual, 1 Scheduled). */
+  gateOpen: boolean;
+  decryptionMode: number;
+  decryptionOpenAt: bigint;
+  fallbackAt: bigint;
 }
 
 // A process that ended at NOW - 3600, grace 180: the window closed at NOW - 3420. The
@@ -263,6 +271,10 @@ function setup(overrides: Partial<Chain> = {}) {
     votersCount: 10n,
     ready: false,
     secret: 0n,
+    gateOpen: true,
+    decryptionMode: 1,
+    decryptionOpenAt: BigInt(NOW - 7300),
+    fallbackAt: 0n,
     ...overrides,
   };
   const plaintextCalls: unknown[][] = [];
@@ -324,10 +336,35 @@ function setup(overrides: Partial<Chain> = {}) {
     },
   });
   const councilCalls: unknown[][] = [];
+  const gateCalls: unknown[][] = [];
   chain.contract(COUNCIL_ADAPTER, COUNCIL_ADAPTER_ABI, {
     plaintexts: args => {
       councilCalls.push([...args]);
       return [state.ready, [5n, 3n, 2n]];
+    },
+    isDecryptionOpen: args => {
+      gateCalls.push([...args]);
+      return [state.gateOpen];
+    },
+    manager: () => [COUNCIL_MANAGER],
+  });
+  const policyCalls: unknown[][] = [];
+  chain.contract(COUNCIL_MANAGER, COUNCIL_POLICY_ABI, {
+    getPolicy: args => {
+      policyCalls.push([...args]);
+      const manual = state.decryptionMode === 0;
+      return [
+        {
+          registrationMode: 1,
+          decryptionMode: state.decryptionMode,
+          dealingDuration: 86_400n,
+          decryptionOpenAt: manual ? 0n : state.decryptionOpenAt,
+          manualDecryptionFallbackAt: manual ? state.fallbackAt : 0n,
+          manualOpenedAt: 0n,
+          decryptionOpen: state.gateOpen,
+          scheduledRegistrationCloseDue: false,
+        },
+      ];
     },
   });
   chain.contract(APP_MANAGER, DKG_APP_MANAGER_ABI, {
@@ -367,7 +404,17 @@ function setup(overrides: Partial<Chain> = {}) {
     documents: { fetchImpl: host.fetchImpl },
     writer: () => new ProcessRegistryService(REGISTRY, wallet),
   });
-  return { chain, state, service, registry, plaintextCalls, councilCalls, hooks };
+  return {
+    chain,
+    state,
+    service,
+    registry,
+    plaintextCalls,
+    councilCalls,
+    gateCalls,
+    policyCalls,
+    hooks,
+  };
 }
 
 async function dkgOf(registry: ProcessRegistryService) {
@@ -445,6 +492,63 @@ describe('VoteOrchestrationService.getResultsStatus', () => {
     ).toBe('results');
   });
 
+  it('keeps COUNCIL results locked until the ceremony opens decryption, zeros included', async () => {
+    const OPENS = NOW + 182 * 86_400;
+    const closed = {
+      keyMode: KeyMode.Council,
+      status: ProcessStatus.ENDED,
+      gateOpen: false,
+      decryptionOpenAt: BigInt(OPENS),
+    };
+    const waiting = setup(closed);
+    const status = await waiting.service.getResultsStatus(PID);
+    expect(status).toMatchObject({
+      state: 'awaiting-opening',
+      keyMode: KeyMode.Council,
+      decryptionOpening: { mode: 'scheduled', opensAt: new Date(OPENS * 1000) },
+    });
+    expect(waiting.gateCalls).toEqual([[EPOCH]]);
+    expect(waiting.policyCalls).toEqual([[EPOCH]]);
+    // Nothing is asked of the committee while the gate is closed.
+    expect(waiting.councilCalls).toEqual([]);
+    // Requested, with active fields or none (an all-zero tally): still locked.
+    expect((await stateOf({ ...closed, requested: true })).state).toBe('awaiting-opening');
+    expect((await stateOf({ ...closed, requested: true, count: 0 })).state).toBe(
+      'awaiting-opening'
+    );
+    // A manual opening: the organizer's, or the fallback date when there is one.
+    expect(
+      (await stateOf({ ...closed, decryptionMode: 0, fallbackAt: BigInt(OPENS) })).decryptionOpening
+    ).toEqual({ mode: 'manual', opensAt: new Date(OPENS * 1000) });
+    expect((await stateOf({ ...closed, decryptionMode: 0 })).decryptionOpening).toEqual({
+      mode: 'manual',
+      opensAt: null,
+    });
+    // Before the window closes the gate is not read.
+    const early = setup(closed);
+    early.chain.headTime = NOW - 3500;
+    expect((await early.service.getResultsStatus(PID)).state).toBe('grace');
+    expect(early.gateCalls).toEqual([]);
+
+    // Open: the zero tally is finalizable at once, the others follow the committee.
+    const open = { ...closed, gateOpen: true, requested: true };
+    const zero = setup({ ...open, count: 0 });
+    const opened = await zero.service.getResultsStatus(PID);
+    expect(opened.state).toBe('finalizable');
+    expect(opened.decryptionOpening).toBeUndefined();
+    expect(zero.policyCalls).toEqual([]);
+    expect((await stateOf(open)).state).toBe('decrypting');
+    expect((await stateOf({ ...open, ready: true })).state).toBe('finalizable');
+  });
+
+  it('never reads the Council gate for the other key modes', async () => {
+    for (const keyMode of [KeyMode.Sequencer, KeyMode.DkgAutomatic, KeyMode.DkgLocked]) {
+      const other = setup({ keyMode, status: ProcessStatus.ENDED, gateOpen: false });
+      expect((await other.service.getResultsStatus(PID)).state).not.toBe('awaiting-opening');
+      expect(other.gateCalls).toEqual([]);
+    }
+  });
+
   it('says when a locked key is still sealed, and follows it once revealed', async () => {
     const locked = { keyMode: KeyMode.DkgLocked, status: ProcessStatus.ENDED, requested: true };
     expect((await stateOf(locked)).state).toBe('locked');
@@ -473,6 +577,34 @@ describe('ProcessRegistryService DKG reads', () => {
     expect(await registry.isProcessKeyRevealed(dkg)).toBe(false);
     state.secret = 1n;
     expect(await registry.isProcessKeyRevealed(dkg)).toBe(true);
+  });
+
+  it('reads the Council decryption gate, and the policy only while it is closed', async () => {
+    const { registry, state, gateCalls, policyCalls, chain } = setup({ keyMode: KeyMode.Council });
+    const dkg = await dkgOf(registry);
+    expect(await registry.getCouncilDecryptionGate(dkg)).toEqual({ open: true });
+    expect(policyCalls).toEqual([]);
+    state.gateOpen = false;
+    state.decryptionOpenAt = 1_807_012_800n;
+    expect(await registry.getCouncilDecryptionGate(dkg)).toEqual({
+      open: false,
+      mode: 'scheduled',
+      opensAt: 1_807_012_800n,
+    });
+    state.decryptionMode = 0;
+    expect(await registry.getCouncilDecryptionGate(dkg)).toEqual({
+      open: false,
+      mode: 'manual',
+      opensAt: null,
+    });
+    expect(gateCalls).toHaveLength(3);
+    // A DKG process has no Council gate: nothing is read.
+    expect(await registry.getCouncilDecryptionGate({ ...dkg, council: false })).toEqual({
+      open: true,
+    });
+    expect(gateCalls).toHaveLength(3);
+    chain.contract(REGISTRY, PROCESS_REGISTRY_ABI, { councilAdapter: () => [ZeroAddress] });
+    await expect(registry.getCouncilDecryptionGate(dkg)).rejects.toThrow(CouncilDisabledError);
   });
 
   it('refuses them on a registry without DKG', async () => {
@@ -508,6 +640,24 @@ describe('VoteOrchestrationService.waitForResults', () => {
       total: 5n,
       mean: 0.5,
     });
+  });
+
+  it('names the Council opening date when it times out before it', async () => {
+    const OPENS = NOW + 86_400;
+    const { service } = setup({
+      keyMode: KeyMode.Council,
+      status: ProcessStatus.ENDED,
+      requested: true,
+      count: 0,
+      gateOpen: false,
+      decryptionOpenAt: BigInt(OPENS),
+    });
+    const err = await errorOf(service.waitForResults(PID, { timeoutMs: 10, pollIntervalMs: 2 }));
+    expect(err).toBeInstanceOf(ResultsError);
+    expect((err as ResultsError).reason).toBe('timeout');
+    expect((err as ResultsError).status.state).toBe('awaiting-opening');
+    expect(err?.message).toContain('has not opened decryption');
+    expect(err?.message).toContain(new Date(OPENS * 1000).toISOString());
   });
 
   it('fails for a canceled process', async () => {

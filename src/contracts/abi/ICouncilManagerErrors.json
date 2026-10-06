@@ -16,6 +16,11 @@
   },
   {
     "type": "error",
+    "name": "DecryptionNotOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidPoint",
     "inputs": []
   },

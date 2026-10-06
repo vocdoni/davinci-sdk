@@ -41,6 +41,25 @@
   },
   {
     "type": "function",
+    "name": "isDecryptionOpen",
+    "inputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "manager",
     "inputs": [],
     "outputs": [
