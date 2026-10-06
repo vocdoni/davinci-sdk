@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/vocdoni/davinci-contracts",
-  "commit": "a59a9921a0e7ea30c6637d033f2f9dfb7ce67aaf",
+  "commit": "f4abc5da9ef4fa5636712a883ab1f0f738ebbfbe",
   "files": {
     "ProcessRegistry.json": "ba787314ca24cb0c8453561dfde3793938d147d931be2db876e87e910cd3477a",
     "DavinciDKGAdapter.json": "ec0a2749cb12cfd43ec3b10254637a11c8b748740e9e18f1b4371533a589b423",

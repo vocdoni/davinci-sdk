@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The vendored ABIs come from davinci-contracts `a59a992` (the council branch over `36c0b0a`): `ProcessRegistry` gains `councilAdapter()`, `CouncilDisabled` and `DecryptionNotOpen`, and its constructor takes `_councilManager` after `_dkgManager`; `CouncilAdapter` has `isDecryptionOpen`, and `COUNCIL_MANAGER_ABI` is the Council v2 adapter surface (`getRequestMeta` instead of `getRequest`, plus `isDecryptionOpen`). Selectors, events and the `newProcess` and `getProcess` layouts are unchanged.
+- The vendored ABIs come from davinci-contracts `f4abc5d` (the council branch over `36c0b0a`): `ProcessRegistry` gains `councilAdapter()`, `CouncilDisabled` and `DecryptionNotOpen`, and its constructor takes `_councilManager` after `_dkgManager`; `CouncilAdapter` has `isDecryptionOpen`, and `COUNCIL_MANAGER_ABI` is the Council v2 adapter surface (`getRequestMeta` instead of `getRequest`, plus `isDecryptionOpen`). Selectors, events and the `newProcess` and `getProcess` layouts are unchanged.
 - `ResultsState` has the new member `awaiting-opening`: an exhaustive `switch` or `Record<ResultsState, …>` over it needs a case.
 - `getProcess` decodes key mode 3 and still refuses any mode it does not know. **Releases before this one throw `unknown key mode 3` on a Council process: upgrade every reader of a chain before the first one is created there.**
 - `createProcess` names every key mode: an unknown one is refused instead of being sent as `DKG_AUTOMATIC`, and `ceremonyId` is refused outside `'council'`.
