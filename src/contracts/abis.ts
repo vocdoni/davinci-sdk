@@ -10,6 +10,9 @@
 
 import { Interface, type BytesLike, type JsonFragment, type Result } from 'ethers';
 import censusValidatorAbi from './abi/ICensusValidator.json';
+import councilAdapterAbi from './abi/CouncilAdapter.json';
+import councilManagerAbi from './abi/ICouncilManager.json';
+import councilManagerErrorsAbi from './abi/ICouncilManagerErrors.json';
 import dkgAdapterAbi from './abi/DavinciDKGAdapter.json';
 import dkgAppManagerAbi from './abi/IDKGAppManager.json';
 import dkgManagerAbi from './abi/IDKGManager.json';
@@ -20,11 +23,27 @@ import onchainCensusAbi from './abi/census/OnchainCensus.json';
 import ownedCensusAbi from './abi/census/OwnedCensus.json';
 import censusAbiSource from './abi/census/source.json';
 
-/** `ProcessRegistry`: processes, census, metadata, grace window, DKG key modes. */
+/** `ProcessRegistry`: processes, census, metadata, grace window, DKG and Council key modes. */
 export const PROCESS_REGISTRY_ABI = processRegistryAbi as JsonFragment[];
 
 /** `DavinciDKGAdapter`: the registry's bridge to the DKG committee (`registrationEpoch`, `aidFor`). */
 export const DAVINCI_DKG_ADAPTER_ABI = dkgAdapterAbi as JsonFragment[];
+
+/**
+ * `CouncilAdapter`: the registry's bridge to a Council manager
+ * (`bindings`, `plaintexts`, `manager`).
+ */
+export const COUNCIL_ADAPTER_ABI = councilAdapterAbi as JsonFragment[];
+
+/**
+ * Council `ICouncilManager` (the adapter's surface: `bindProcess`,
+ * `submitRequest`, `getPlaintexts`, `getRequest`, `getBinding`,
+ * `getPublicKey`), vendored verbatim by davinci-contracts.
+ */
+export const COUNCIL_MANAGER_ABI = councilManagerAbi as JsonFragment[];
+
+/** The Council manager errors a registry call can bubble up (`ICouncilManagerErrors`). */
+export const COUNCIL_MANAGER_ERRORS_ABI = councilManagerErrorsAbi as JsonFragment[];
 
 /** `ZiskVerifier`: the PLONK verifier the registry calls (`getRootCVadcopFinal`). */
 export const ZISK_VERIFIER_ABI = ziskVerifierAbi as JsonFragment[];
@@ -68,6 +87,8 @@ export const DAVINCI_ERRORS_ABI: JsonFragment[] = (() => {
     ZISK_VERIFIER_ABI,
     DKG_APP_MANAGER_ABI,
     DKG_MANAGER_ABI,
+    COUNCIL_ADAPTER_ABI,
+    COUNCIL_MANAGER_ERRORS_ABI,
   ];
   for (const abi of sources) {
     const iface = new Interface(abi);

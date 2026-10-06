@@ -1,6 +1,6 @@
 /**
- * @fileoverview Builders for the registry's write arguments: the DKG key
- * mode parameters and the metadata hash `newProcess` binds.
+ * @fileoverview Builders for the registry's write arguments: the DKG and
+ * Council key mode parameters and the metadata hash `newProcess` binds.
  */
 
 import { sha256, toUtf8Bytes, zeroPadValue } from 'ethers';
@@ -64,6 +64,20 @@ export function dkgLockedParams(epochId: string, proof: OrganizerProof): DkgPara
     popAy: proof.aY,
     popZ: proof.z,
   };
+}
+
+/**
+ * `DKGParams` of a COUNCIL process: the ceremony id, nothing else. The
+ * ceremony must be Live, and its organizer must have allowed the registry's
+ * Council adapter and authorized the account that creates the process.
+ *
+ * @param ceremonyId - The Council ceremony, non-zero `bytes12` hex
+ */
+export function councilParams(ceremonyId: string): DkgParams {
+  parseHexBytes(ceremonyId, 12, 'ceremony id');
+  const id = `0x${ceremonyId.replace(/^0x/i, '').toLowerCase()}`;
+  if (id === ZERO_EPOCH) throw new TypeError('the ceremony id is zero');
+  return { ...sequencerKeyParams(), mode: KeyMode.Council, epochId: id };
 }
 
 /**

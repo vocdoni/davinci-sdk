@@ -100,6 +100,13 @@ export class ProcessNotFoundError extends ContractServiceError {}
 export class DkgDisabledError extends ContractServiceError {}
 
 /**
+ * Error thrown when the COUNCIL key mode or a Council read is used on a
+ * registry deployed without a Council manager (`councilAdapter()` is zero
+ * or missing).
+ */
+export class CouncilDisabledError extends ContractServiceError {}
+
+/**
  * The registry created `created`, not the id a sequencer key was issued for
  * (another `newProcess` from the same account landed first). No sequencer
  * holds that process's key: cancel it with `setProcessStatus(CANCELED)`.

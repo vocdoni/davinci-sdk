@@ -612,13 +612,14 @@ export class DavinciSDK {
    *
    * The key mode (`keyMode`) decides who can decrypt the results:
    * `'sequencer'` (default) the key node, `'dkg'` a davinci-dkg committee,
-   * and `'dkg-locked'` the committee once the organizer reveals the secret
-   * returned in `organizerSecret`. Results come after the grace window that
-   * follows the end.
+   * `'dkg-locked'` the committee once the organizer reveals the secret
+   * returned in `organizerSecret`, and `'council'` the invite-only committee
+   * of the Council ceremony in `ceremonyId`. Results come after the grace
+   * window that follows the end.
    *
    * Refusals come as `failed` events: a `ProcessCreateError` (with the
-   * registry error in `revertName`), `DkgDisabledError`, a census, metadata or
-   * sequencer error, or `WrongProcessIdError` when another creation from the
+   * registry error in `revertName`), `DkgDisabledError`,
+   * `CouncilDisabledError`, a census, metadata or sequencer error, or `WrongProcessIdError` when another creation from the
    * same account took the key's id (cancel that process, see
    * `cancelOpenProcesses`). Requires a signer with a provider on the
    * network's chain.

@@ -1,5 +1,6 @@
 import { Interface, Wallet, ZeroAddress, sha256 } from 'ethers';
 import {
+  COUNCIL_ADAPTER_ABI,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
   DkgDisabledError,
@@ -33,6 +34,7 @@ import { MockChain, revertWith } from '../../helpers/mockChain';
 
 const REGISTRY = GNOSIS.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
+const COUNCIL_ADAPTER = '0x000000000000000000000000000000000000C1a7';
 const APP_MANAGER = '0x9999F38Ff8Bf959E98Ddd5D4551f82775219c01B';
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
 const PID = computeProcessId(ORGANIZER, '0xf5848002', 3);
@@ -293,7 +295,7 @@ function setup(overrides: Partial<Chain> = {}) {
         },
         keyMode: state.keyMode,
         dkgEpochId: state.keyMode === KeyMode.Sequencer ? `0x${'00'.repeat(12)}` : EPOCH,
-        dkgFirstIndex: 40,
+        dkgFirstIndex: state.keyMode === KeyMode.Council ? 0 : 40,
         dkgCount: state.count,
         dkgZeroSkipped: 0,
         dkgResultsRequested: state.requested,
@@ -308,6 +310,7 @@ function setup(overrides: Partial<Chain> = {}) {
     graceMaxTotal: () => [1800],
     noticeMin: () => [60],
     dkgAdapter: () => [ADAPTER],
+    councilAdapter: () => [COUNCIL_ADAPTER],
     finalizeResultsFromDKG: () => {
       hooks.onFinalize?.();
       return hooks.finalizeRevert ? revertWith(PROCESS_REGISTRY_ABI, hooks.finalizeRevert) : [];
@@ -318,6 +321,13 @@ function setup(overrides: Partial<Chain> = {}) {
     plaintexts: args => {
       plaintextCalls.push([...args]);
       return [state.ready, state.ready ? [5n, 3n, 2n] : []];
+    },
+  });
+  const councilCalls: unknown[][] = [];
+  chain.contract(COUNCIL_ADAPTER, COUNCIL_ADAPTER_ABI, {
+    plaintexts: args => {
+      councilCalls.push([...args]);
+      return [state.ready, [5n, 3n, 2n]];
     },
   });
   chain.contract(APP_MANAGER, DKG_APP_MANAGER_ABI, {
@@ -357,7 +367,7 @@ function setup(overrides: Partial<Chain> = {}) {
     documents: { fetchImpl: host.fetchImpl },
     writer: () => new ProcessRegistryService(REGISTRY, wallet),
   });
-  return { chain, state, service, registry, plaintextCalls, hooks };
+  return { chain, state, service, registry, plaintextCalls, councilCalls, hooks };
 }
 
 async function dkgOf(registry: ProcessRegistryService) {
@@ -416,6 +426,23 @@ describe('VoteOrchestrationService.getResultsStatus', () => {
     expect((await stateOf({ ...requested, ready: true })).state).toBe('finalizable');
     // Still inside the grace window, a DKG process is in its grace.
     expect((await stateOf(dkg, NOW - 3500)).state).toBe('grace');
+  });
+
+  it('follows a COUNCIL key like an automatic one, through the Council adapter', async () => {
+    const council = { keyMode: KeyMode.Council, status: ProcessStatus.READY };
+    expect((await stateOf(council, NOW - 3500)).state).toBe('grace');
+    expect((await stateOf(council)).state).toBe('awaiting-request');
+    const requested = { ...council, status: ProcessStatus.ENDED, requested: true };
+    const decrypting = setup(requested);
+    const status = await decrypting.service.getResultsStatus(PID);
+    expect(status).toMatchObject({ state: 'decrypting', keyMode: KeyMode.Council });
+    // The whole request from the Council adapter; the DKG adapter is never asked.
+    expect(decrypting.councilCalls).toEqual([[EPOCH, AID, 0n, 3n]]);
+    expect(decrypting.plaintextCalls).toEqual([]);
+    expect((await stateOf({ ...requested, ready: true })).state).toBe('finalizable');
+    expect(
+      (await stateOf({ ...requested, status: ProcessStatus.RESULTS, result: [5n, 3n, 2n] })).state
+    ).toBe('results');
   });
 
   it('says when a locked key is still sealed, and follows it once revealed', async () => {

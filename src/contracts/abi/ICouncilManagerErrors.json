@@ -1,0 +1,62 @@
+[
+  {
+    "type": "error",
+    "name": "AlreadyBound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadyRequested",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadFieldCount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPoint",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonCanonical",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAllowedAdapter",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAuthorizedCreator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInSubgroup",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownBinding",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownCeremony",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownRequest",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongPhase",
+    "inputs": []
+  }
+]

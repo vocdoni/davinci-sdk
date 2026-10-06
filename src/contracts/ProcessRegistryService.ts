@@ -3,6 +3,7 @@ import {
   Interface,
   ZeroAddress,
   getAddress,
+  isError,
   keccak256,
   toBeHex,
   zeroPadBytes,
@@ -21,6 +22,7 @@ import {
   type TxStatusEvent,
 } from './SmartContractService';
 import {
+  COUNCIL_ADAPTER_ABI,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
   PROCESS_REGISTRY_ABI,
@@ -29,6 +31,7 @@ import {
 } from './abis';
 import {
   CensusNotUpdatable,
+  CouncilDisabledError,
   ContractServiceError,
   DeploymentPinError,
   DkgDisabledError,
@@ -66,7 +69,7 @@ import {
   type RegistryEvent,
   type ResultsDecryptionRequestedCallback,
 } from './types';
-import { dkgAutomaticParams, dkgLockedParams, sequencerKeyParams } from './params';
+import { councilParams, dkgAutomaticParams, dkgLockedParams, sequencerKeyParams } from './params';
 import { type BjjPoint, toBjjPoint } from '../crypto/babyjubjub';
 import { proveOrganizerKey, randomOrganizerSecret } from '../crypto/dkg';
 import { type BallotModeValues, packBallotMode } from '../crypto/ballot';
@@ -195,6 +198,14 @@ function ballotMode(m: BallotModeValues) {
   };
 }
 
+// The key modes this release decodes; a newer mode is refused, never guessed.
+const KNOWN_KEY_MODES: readonly KeyMode[] = [
+  KeyMode.Sequencer,
+  KeyMode.DkgAutomatic,
+  KeyMode.DkgLocked,
+  KeyMode.Council,
+];
+
 function normalizePid(processId: string): string {
   const h = processId.replace(/^0x/, '');
   if (!/^[0-9a-fA-F]{62}$/.test(h)) throw new TypeError(`${processId} is not a process id`);
@@ -209,7 +220,7 @@ function decodeProcess(processId: string, r: Result): OnchainProcess {
   const status = small(field(r, 'status'), 'status');
   if (!(status in ProcessStatus)) throw new TypeError(`unknown process status ${status}`);
   const keyMode = small(field(r, 'keyMode'), 'keyMode') as KeyMode;
-  if (!(keyMode in KeyMode)) throw new TypeError(`unknown key mode ${keyMode}`);
+  if (!KNOWN_KEY_MODES.includes(keyMode)) throw new TypeError(`unknown key mode ${keyMode}`);
   const key = tuple(field(r, 'encryptionKey'), 'encryptionKey');
   const bm = tuple(field(r, 'ballotMode'), 'ballotMode');
   const c = tuple(field(r, 'census'), 'census');
@@ -250,6 +261,7 @@ function decodeProcess(processId: string, r: Result): OnchainProcess {
     ...(keyMode !== KeyMode.Sequencer && {
       dkg: {
         locked: keyMode === KeyMode.DkgLocked,
+        council: keyMode === KeyMode.Council,
         epochId: bytesHex(field(r, 'dkgEpochId'), 'dkgEpochId'),
         aid: bytesHex(field(r, 'dkgAid'), 'dkgAid'),
         resultsRequested: bool(field(r, 'dkgResultsRequested'), 'dkgResultsRequested'),
@@ -422,6 +434,8 @@ export interface CreateProcessParams extends Omit<NewProcessParams, 'dkg'> {
   keyMode: KeyMode;
   /** The key a sequencer issued for `processId`; SEQUENCER mode only. */
   encryptionKey?: BjjPoint;
+  /** The Council ceremony (`bytes12` hex) the process binds to; COUNCIL mode only. */
+  ceremonyId?: string;
 }
 
 /**
@@ -600,6 +614,35 @@ export class ProcessRegistryService extends SmartContractService {
     return a === ZeroAddress ? null : a;
   }
 
+  /**
+   * The registry's Council adapter; null when the COUNCIL mode is disabled
+   * or the registry predates it (it has no `councilAdapter()`: the call
+   * reverts without data). Any other failure of the read is thrown.
+   */
+  async getCouncilAdapter(): Promise<string | null> {
+    let raw: unknown;
+    try {
+      raw = await this.read('councilAdapter');
+    } catch (err) {
+      if (isError(err, 'CALL_EXCEPTION') && (err.data ?? '0x') === '0x') return null;
+      throw err;
+    }
+    const a = getAddress(text(raw, 'councilAdapter'));
+    return a === ZeroAddress ? null : a;
+  }
+
+  // The Council adapter, or CouncilDisabledError.
+  private async councilAdapter(operation: string): Promise<Contract> {
+    const a = await this.getCouncilAdapter();
+    if (!a) {
+      throw new CouncilDisabledError(
+        'the registry has no Council adapter: the COUNCIL key mode is disabled',
+        operation
+      );
+    }
+    return new Contract(a, COUNCIL_ADAPTER_ABI, this.contract.runner);
+  }
+
   // The adapter, or DkgDisabledError.
   private async adapter(operation: string): Promise<Contract> {
     const a = await this.getDkgAdapter();
@@ -643,18 +686,22 @@ export class ProcessRegistryService extends SmartContractService {
   }
 
   /**
-   * The committee's decryption of a DKG process's tally
-   * (`adapter.plaintexts`): `ready` once every ciphertext the decryption
-   * request submitted is combined, and then the plaintexts in submission
-   * order. A request with no active field submitted none, so it is ready with
-   * none. `finalizeResultsFromDKG` stores them.
+   * The committee's decryption of a DKG or COUNCIL process's tally
+   * (`adapter.plaintexts`, on the adapter of the key mode): `ready` once
+   * every ciphertext the decryption request submitted is combined, and then
+   * the plaintexts in submission order. A request with no active field
+   * submitted none, so it is ready with none. `finalizeResultsFromDKG`
+   * stores them.
    *
    * @param dkg - The process's `dkg` (`getProcess`), after the request
-   * @throws DkgDisabledError on a registry without DKG
+   * @throws DkgDisabledError on a registry without DKG, CouncilDisabledError
+   *   for a COUNCIL process on a registry without Council
    */
   async getDkgPlaintexts(dkg: OnchainDkg): Promise<{ ready: boolean; values: bigint[] }> {
     if (dkg.count === 0) return { ready: true, values: [] };
-    const adapter = await this.adapter('plaintexts');
+    const adapter = dkg.council
+      ? await this.councilAdapter('plaintexts')
+      : await this.adapter('plaintexts');
     const r = tuple(
       await adapter
         .getFunction('plaintexts')
@@ -670,12 +717,14 @@ export class ProcessRegistryService extends SmartContractService {
   /**
    * Whether the organizer of a DKG_LOCKED process revealed its secret
    * (`revealProcessKey`), read from the DKG application manager: the
-   * committee combines nothing before. Always false for DKG_AUTOMATIC.
+   * committee combines nothing before. Always false for DKG_AUTOMATIC and
+   * COUNCIL (no organizer key; nothing is read).
    *
    * @param dkg - The process's `dkg` (`getProcess`)
    * @throws DkgDisabledError on a registry without DKG
    */
   async isProcessKeyRevealed(dkg: OnchainDkg): Promise<boolean> {
+    if (dkg.council) return false;
     const adapter = await this.adapter('appManager');
     const manager = getAddress(
       text(await adapter.getFunction('appManager').staticCall(), 'appManager')
@@ -694,7 +743,7 @@ export class ProcessRegistryService extends SmartContractService {
    * results program vks, `rootCVadcopFinal` and the ballot VK hash equal the
    * release pins, `chainID()` equals the provider's chain, the verifier's
    * runtime code hashes to the pinned code hash and its root is the pinned
-   * one, and a DKG adapter, if any, names this registry.
+   * one, and a DKG or Council adapter, if any, names this registry.
    *
    * @param pins - Overrides of {@link RELEASE_PINS} (a local deployment)
    * @throws DeploymentPinError at the first mismatch
@@ -733,7 +782,13 @@ export class ProcessRegistryService extends SmartContractService {
       const back = (await adapter.getFunction('registry').staticCall()) as unknown;
       check('dkgAdapter.registry', this.address, getAddress(text(back, 'registry')));
     }
-    return { chainId, verifier, dkgAdapter };
+    const councilAdapter = await this.getCouncilAdapter();
+    if (councilAdapter) {
+      const adapter = new Contract(councilAdapter, COUNCIL_ADAPTER_ABI, provider);
+      const back = (await adapter.getFunction('registry').staticCall()) as unknown;
+      check('councilAdapter.registry', this.address, getAddress(text(back, 'registry')));
+    }
+    return { chainId, verifier, dkgAdapter, councilAdapter };
   }
 
   // The deployment block of a known network's registry, when `fromBlock` is not given.
@@ -811,8 +866,9 @@ export class ProcessRegistryService extends SmartContractService {
    *
    * SEQUENCER mode takes the key a node issued for `getNextProcessId(sender)`;
    * pass that id as `expectedProcessId`, and the stream fails before sending
-   * if the registry no longer assigns it. The DKG modes take no key: their
-   * `dkg` comes from `dkgAutomaticParams()` or `dkgLockedParams()`. One send,
+   * if the registry no longer assigns it. The DKG and Council modes take no
+   * key: their `dkg` comes from `dkgAutomaticParams()`, `dkgLockedParams()` or
+   * `councilParams()`. One send,
    * no retry: {@link createProcess} builds the key mode arguments and retries
    * a DKG creation once, like the Rust organizer.
    *
@@ -903,34 +959,52 @@ export class ProcessRegistryService extends SmartContractService {
    * - DKG_LOCKED: no key; an organizer secret is drawn here, proved for the
    *   registration epoch and `aidFor(processId)`, and returned in the
    *   `Completed` response. Results stay locked until `revealProcessKey`.
+   * - COUNCIL: no key; `ceremonyId` names a Live Council ceremony whose
+   *   organizer allowed the registry's Council adapter and authorized this
+   *   account. No retry: a refused binding fails with the manager's revert.
    *
    * Failures come as `Failed` or `Reverted` events: {@link DkgDisabledError}
-   * for a DKG mode on a registry without DKG, else a {@link ProcessCreateError}
-   * (or {@link WrongProcessIdError}) with the decoded revert.
+   * for a DKG mode on a registry without DKG, {@link CouncilDisabledError}
+   * for COUNCIL on a registry without Council, else a
+   * {@link ProcessCreateError} (or {@link WrongProcessIdError}) with the
+   * decoded revert.
    */
   async *createProcess(
     params: CreateProcessParams
   ): AsyncGenerator<TxStatusEvent<CreatedProcess>, void, unknown> {
     const method = 'newProcess';
-    const { processId, keyMode, ...rest } = params;
-    const dkg = keyMode !== KeyMode.Sequencer;
+    const { processId, keyMode, ceremonyId, ...rest } = params;
+    // Every mode explicitly: a mode this release does not know is refused.
+    const dkg = keyMode === KeyMode.DkgAutomatic || keyMode === KeyMode.DkgLocked;
     const locked = keyMode === KeyMode.DkgLocked;
+    const council = keyMode === KeyMode.Council;
+    const committee = dkg || council;
     let pid: string;
     try {
+      if (!KNOWN_KEY_MODES.includes(keyMode)) {
+        throw new ProcessCreateError(`newProcess: unknown key mode ${String(keyMode)}`, method);
+      }
       pid = normalizePid(processId);
-      if (dkg && params.encryptionKey) {
+      if (committee && params.encryptionKey) {
         throw new ProcessCreateError(
-          'newProcess: the DKG key modes take no encryption key',
+          'newProcess: the DKG and Council key modes take no encryption key',
           method
         );
       }
-      if (!dkg && !params.encryptionKey) {
+      if (!committee && !params.encryptionKey) {
         throw new ProcessCreateError('newProcess: SEQUENCER mode needs the sequencer key', method);
       }
-      if (dkg) {
+      if (council && ceremonyId === undefined) {
+        throw new ProcessCreateError('newProcess: COUNCIL mode needs the ceremony id', method);
+      }
+      if (!council && ceremonyId !== undefined) {
+        throw new ProcessCreateError('newProcess: only COUNCIL mode takes a ceremony id', method);
+      }
+      if (committee) {
         // SEQUENCER mode checks the id in newProcess (expectedProcessId).
         await this.checkNextProcessId(pid);
-        await this.adapter(method);
+        if (council) await this.councilAdapter(method);
+        else await this.adapter(method);
       }
     } catch (err) {
       yield { status: TxStatus.Failed, error: createError(err) };
@@ -946,8 +1020,12 @@ export class ProcessRegistryService extends SmartContractService {
           secret = randomOrganizerSecret();
           const aid = await this.aidFor(pid);
           dkgParams = dkgLockedParams(epochId, proveOrganizerKey({ epochId, aid, secret }));
+        } else if (dkg) {
+          dkgParams = dkgAutomaticParams();
+        } else if (council) {
+          dkgParams = councilParams(ceremonyId as string);
         } else {
-          dkgParams = dkg ? dkgAutomaticParams() : sequencerKeyParams();
+          dkgParams = sequencerKeyParams();
         }
       } catch (err) {
         yield { status: TxStatus.Failed, error: createError(err) };
@@ -957,7 +1035,7 @@ export class ProcessRegistryService extends SmartContractService {
       let failure: TxStatusEvent<CreatedProcess> | undefined;
       const stream = this.newProcess(
         { ...rest, dkg: dkgParams },
-        dkg ? {} : { expectedProcessId: pid }
+        committee ? {} : { expectedProcessId: pid }
       );
       for await (const event of stream) {
         if (event.status === TxStatus.Completed) {

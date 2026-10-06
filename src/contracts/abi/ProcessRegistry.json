@@ -38,6 +38,11 @@
         "internalType": "address"
       },
       {
+        "name": "_councilManager",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "_defaultGrace",
         "type": "uint32",
         "internalType": "uint32"
@@ -132,6 +137,19 @@
         "name": "",
         "type": "uint32",
         "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "councilAdapter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1648,6 +1666,11 @@
   {
     "type": "error",
     "name": "CircuitFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CouncilDisabled",
     "inputs": []
   },
   {

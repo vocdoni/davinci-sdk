@@ -126,6 +126,7 @@ describe('DKG key modes (davinci-contracts MockDKG)', () => {
     expect(p.keyMode).toBe(KeyMode.DkgAutomatic);
     expect(p.dkg).toEqual({
       locked: false,
+      council: false,
       epochId: epoch,
       aid: await sdk.registry.aidFor(created.processId),
       resultsRequested: false,

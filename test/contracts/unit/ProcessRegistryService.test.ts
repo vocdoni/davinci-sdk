@@ -17,7 +17,10 @@ import {
   type Result,
 } from 'ethers';
 import {
+  COUNCIL_ADAPTER_ABI,
+  COUNCIL_MANAGER_ERRORS_ABI,
   CensusNotUpdatable,
+  CouncilDisabledError,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
   DeploymentPinError,
@@ -36,6 +39,7 @@ import {
   TxStatus,
   WrongProcessIdError,
   ZISK_VERIFIER_ABI,
+  councilParams,
   dkgAutomaticParams,
   dkgLockedParams,
   metadataHash,
@@ -43,6 +47,7 @@ import {
   parseRegistryLogs,
   sequencerKeyParams,
   type ContractServiceError,
+  type CreateProcessParams,
   type NewProcessParams,
   type TxStatusEvent,
 } from '../../../src/contracts';
@@ -54,6 +59,9 @@ import { MockChain, revertWith, type CallHandler } from '../../helpers/mockChain
 const REGISTRY = '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D';
 const VERIFIER = '0x150547716bD6f15D872508b66b2ae7ce17677C9C';
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
+const COUNCIL_ADAPTER = getAddress(`0x${'c0'.repeat(20)}`);
+const CID = `0x${'c1'.repeat(12)}`;
+const RID = `0x${'7e'.repeat(32)}`;
 const KEY = '0x' + '11'.repeat(32);
 const iface = new Interface(PROCESS_REGISTRY_ABI);
 const PID = `0x${'ab'.repeat(20)}f5848002${'00'.repeat(6)}01`;
@@ -119,6 +127,7 @@ const pinsOk: Record<string, CallHandler> = {
   chainID: () => [100],
   ziskVerifier: () => [VERIFIER],
   dkgAdapter: () => [ADAPTER],
+  councilAdapter: () => [COUNCIL_ADAPTER],
 };
 
 // A registry on a mock chain, with `calls` overriding the defaults.
@@ -157,12 +166,20 @@ function setup(calls: Record<string, CallHandler> = {}) {
     registrationEpoch: () => [`0x${'0e'.repeat(12)}`],
     registry: () => [REGISTRY],
   });
+  const councilCalls: unknown[][] = [];
+  chain.contract(COUNCIL_ADAPTER, COUNCIL_ADAPTER_ABI, {
+    registry: () => [REGISTRY],
+    plaintexts: args => {
+      councilCalls.push([...args]);
+      return [true, [4n, 9n]];
+    },
+  });
   chain.contract(VERIFIER, ZISK_VERIFIER_ABI, {
     getRootCVadcopFinal: () => [RELEASE_PINS.rootCVadcopFinal],
   });
   chain.setCode(VERIFIER, '0x6001600101');
   const registry = new ProcessRegistryService(REGISTRY, wallet, { receiptTimeoutMs: 2000 });
-  return { chain, wallet, registry, state };
+  return { chain, wallet, registry, state, councilCalls };
 }
 
 async function drain<T>(stream: AsyncGenerator<TxStatusEvent<T>>): Promise<TxStatusEvent<T>[]> {
@@ -269,6 +286,7 @@ describe('ProcessRegistryService reads', () => {
     expect(p.keyMode).toBe(KeyMode.DkgLocked);
     expect(p.dkg).toEqual({
       locked: true,
+      council: false,
       epochId: `0x${'0e'.repeat(12)}`,
       aid: `0x${'0d'.repeat(32)}`,
       resultsRequested: true,
@@ -280,6 +298,63 @@ describe('ProcessRegistryService reads', () => {
     state.process = process({ organizationId: ZeroAddress });
     await expect(registry.getProcess(PID)).rejects.toBeInstanceOf(ProcessNotFoundError);
     await expect(registry.getProcess('0x1234')).rejects.toThrow(TypeError);
+  });
+
+  it('decodes a COUNCIL process, routes its plaintexts and refuses newer modes', async () => {
+    const { registry, state, councilCalls, chain } = setup();
+    state.process = process({
+      status: 1,
+      keyMode: 3,
+      dkgEpochId: CID,
+      dkgAid: RID,
+      dkgCount: 2,
+      dkgZeroSkipped: 0b1010,
+      dkgResultsRequested: true,
+    });
+    const p = await registry.getProcess(PID);
+    expect(p.keyMode).toBe(KeyMode.Council);
+    const dkg = p.dkg;
+    expect(dkg).toEqual({
+      locked: false,
+      council: true,
+      epochId: CID,
+      aid: RID,
+      resultsRequested: true,
+      firstIndex: 0,
+      count: 2,
+      zeroSkipped: 0b1010,
+    });
+    if (!dkg) throw new Error('no dkg side');
+    // The plaintexts come from the Council adapter, the whole request at once.
+    expect(await registry.getDkgPlaintexts(dkg)).toEqual({ ready: true, values: [4n, 9n] });
+    expect(councilCalls).toEqual([[CID, RID, 0n, 2n]]);
+    const before = chain.requests.length;
+    expect(await registry.isProcessKeyRevealed(dkg)).toBe(false);
+    expect(chain.requests).toHaveLength(before);
+
+    state.process = process({ keyMode: 4 });
+    await expect(registry.getProcess(PID)).rejects.toThrow('unknown key mode 4');
+  });
+
+  it('reads the Council adapter of a registry with, without or before the mode', async () => {
+    const { registry, chain } = setup();
+    expect(await registry.getCouncilAdapter()).toBe(COUNCIL_ADAPTER);
+
+    const off = setup({ councilAdapter: () => [ZeroAddress] });
+    expect(await off.registry.getCouncilAdapter()).toBeNull();
+    const dkg = { council: true, count: 1 } as Parameters<typeof registry.getDkgPlaintexts>[0];
+    await expect(off.registry.getDkgPlaintexts(dkg)).rejects.toBeInstanceOf(CouncilDisabledError);
+
+    // A registry from before the mode has no councilAdapter(): it reverts without data.
+    const old = PROCESS_REGISTRY_ABI.filter(f => f.name !== 'councilAdapter');
+    chain.contract(REGISTRY, old, pinsOk);
+    expect(await registry.getCouncilAdapter()).toBeNull();
+    // Any other failure is not taken for a missing adapter.
+    chain.contract(REGISTRY, PROCESS_REGISTRY_ABI, {
+      ...pinsOk,
+      councilAdapter: () => revertWith(PROCESS_REGISTRY_ABI, 'Unauthorized'),
+    });
+    await expect(registry.getCouncilAdapter()).rejects.toThrow();
   });
 
   it('reads the grace window, pins and DKG entry points', async () => {
@@ -665,6 +740,80 @@ describe('ProcessRegistryService.createProcess', () => {
     expect(simulations(stale.chain)).toHaveLength(0);
   });
 
+  it('creates a COUNCIL process bound to its ceremony, without retrying', async () => {
+    const { registry, chain, wallet } = setup();
+    chain.onMine = () => ({ status: 1, logs: [createdLog(PID, wallet.address)] });
+    const events = await drain(
+      registry.createProcess({
+        ...params(KeyMode.Council),
+        ceremonyId: `0x${CID.slice(2).toUpperCase()}`,
+      })
+    );
+    expect(events.map(e => e.status)).toEqual([TxStatus.Pending, TxStatus.Completed]);
+    const done = events[1] as { response: { processId: string; organizerSecret?: bigint } };
+    expect(done.response.processId).toBe(PID);
+    expect(done.response.organizerSecret).toBeUndefined();
+    expect(sentDkg(chain, 0)).toEqual([3n, CID, 0n, 0n, 0n, 0n, 0n]);
+    expect(
+      (iface.decodeFunctionData('newProcess', chain.sent[0].data)[8] as Result).toArray()
+    ).toEqual([0n, 0n]);
+    expect(councilParams(CID)).toEqual({
+      ...sequencerKeyParams(),
+      mode: KeyMode.Council,
+      epochId: CID,
+    });
+
+    // A binding the manager refuses keeps its name and is not retried.
+    const refused = setup({
+      newProcess: () => revertWith(COUNCIL_MANAGER_ERRORS_ABI, 'NotAuthorizedCreator'),
+    });
+    const err = failure(
+      await drain(refused.registry.createProcess({ ...params(KeyMode.Council), ceremonyId: CID }))
+    );
+    expect(err).toBeInstanceOf(ProcessCreateError);
+    expect(err.revertName).toBe('NotAuthorizedCreator');
+    expect(simulations(refused.chain)).toHaveLength(1);
+  });
+
+  it('checks the COUNCIL arguments and the adapter before sending', async () => {
+    const { registry, chain } = setup();
+    const cases: [Partial<CreateProcessParams>, string][] = [
+      [{ keyMode: KeyMode.Council }, 'COUNCIL mode needs the ceremony id'],
+      [
+        { keyMode: KeyMode.Council, ceremonyId: CID, encryptionKey: KEY_POINT },
+        'take no encryption key',
+      ],
+      [{ keyMode: KeyMode.DkgAutomatic, ceremonyId: CID }, 'only COUNCIL mode takes a ceremony id'],
+      [{ keyMode: KeyMode.Sequencer, ceremonyId: CID, encryptionKey: KEY_POINT }, 'only COUNCIL'],
+      [{ keyMode: KeyMode.Council, ceremonyId: `0x${'00'.repeat(12)}` }, 'ceremony id is zero'],
+      [{ keyMode: KeyMode.Council, ceremonyId: '0x1234' }, 'ceremony id must be 12 bytes'],
+      [{ keyMode: 7 as KeyMode }, 'unknown key mode 7'],
+    ];
+    for (const [override, message] of cases) {
+      const err = failure(
+        await drain(registry.createProcess({ ...params(KeyMode.Council), ...override }))
+      );
+      expect(err.message, message).toContain(message);
+    }
+    expect(chain.sent).toHaveLength(0);
+
+    for (const councilAdapter of [() => [ZeroAddress], undefined]) {
+      const off = setup(councilAdapter ? { councilAdapter } : {});
+      if (!councilAdapter) {
+        off.chain.contract(
+          REGISTRY,
+          PROCESS_REGISTRY_ABI.filter(f => f.name !== 'councilAdapter'),
+          { ...pinsOk, getNextProcessId: () => [PID] }
+        );
+      }
+      const disabled = failure(
+        await drain(off.registry.createProcess({ ...params(KeyMode.Council), ceremonyId: CID }))
+      );
+      expect(disabled).toBeInstanceOf(CouncilDisabledError);
+      expect(off.chain.sent).toHaveLength(0);
+    }
+  });
+
   it('names the revert of a read the creation needs', async () => {
     const { registry, chain } = setup();
     chain.contract(ADAPTER, DAVINCI_DKG_ADAPTER_ABI, {
@@ -895,6 +1044,7 @@ describe('ProcessRegistryService.verifyDeployment', () => {
       chainId: 100n,
       verifier: VERIFIER,
       dkgAdapter: ADAPTER,
+      councilAdapter: COUNCIL_ADAPTER,
     });
     // The release's own verifier code hash is not the mock's code.
     await expect(registry.verifyDeployment()).rejects.toMatchObject({
@@ -926,6 +1076,14 @@ describe('ProcessRegistryService.verifyDeployment', () => {
             registry: () => ['0x' + '01'.repeat(20)],
           }),
       ],
+      [
+        'councilAdapter.registry',
+        {},
+        c =>
+          c.contract(COUNCIL_ADAPTER, COUNCIL_ADAPTER_ABI, {
+            registry: () => ['0x' + '01'.repeat(20)],
+          }),
+      ],
     ];
     for (const [pin, calls, tweak] of wrong) {
       const { registry, chain } = setup(calls);
@@ -937,10 +1095,32 @@ describe('ProcessRegistryService.verifyDeployment', () => {
       expect(err, pin).toBeInstanceOf(DeploymentPinError);
       expect(err.field).toBe(pin);
     }
-    const { registry } = setup({ dkgAdapter: () => [ZeroAddress] });
-    expect(
-      (await registry.verifyDeployment({ ziskVerifierCodeHash: codeHash })).dkgAdapter
-    ).toBeNull();
+    const { registry } = setup({
+      dkgAdapter: () => [ZeroAddress],
+      councilAdapter: () => [ZeroAddress],
+    });
+    const info = await registry.verifyDeployment({ ziskVerifierCodeHash: codeHash });
+    expect(info.dkgAdapter).toBeNull();
+    expect(info.councilAdapter).toBeNull();
+  });
+
+  it('accepts a registry from before the COUNCIL mode, and fails on an unreadable one', async () => {
+    const before = setup();
+    before.chain.contract(
+      REGISTRY,
+      PROCESS_REGISTRY_ABI.filter(f => f.name !== 'councilAdapter'),
+      pinsOk
+    );
+    const info = await before.registry.verifyDeployment({ ziskVerifierCodeHash: codeHash });
+    expect(info.councilAdapter).toBeNull();
+    expect(info.dkgAdapter).toBe(ADAPTER);
+
+    const broken = setup({
+      councilAdapter: () => revertWith(PROCESS_REGISTRY_ABI, 'Unauthorized'),
+    });
+    await expect(
+      broken.registry.verifyDeployment({ ziskVerifierCodeHash: codeHash })
+    ).rejects.toThrow();
   });
 });
 

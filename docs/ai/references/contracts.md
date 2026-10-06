@@ -20,7 +20,7 @@ const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcP
 });
 ```
 
-The ABIs are vendored from davinci-contracts at a pinned commit (`CONTRACTS_ABI_COMMIT`) and exported: `PROCESS_REGISTRY_ABI`, `DAVINCI_DKG_ADAPTER_ABI`, `ZISK_VERIFIER_ABI`, `CENSUS_VALIDATOR_ABI`, `DKG_APP_MANAGER_ABI`, `DKG_MANAGER_ABI`, and the census contracts' `ONCHAIN_CENSUS_ABI` and `OWNED_CENSUS_ABI`.
+The ABIs are vendored from davinci-contracts at a pinned commit (`CONTRACTS_ABI_COMMIT`) and exported: `PROCESS_REGISTRY_ABI`, `DAVINCI_DKG_ADAPTER_ABI`, `ZISK_VERIFIER_ABI`, `CENSUS_VALIDATOR_ABI`, `DKG_APP_MANAGER_ABI`, `DKG_MANAGER_ABI`, `COUNCIL_ADAPTER_ABI`, `COUNCIL_MANAGER_ABI`, `COUNCIL_MANAGER_ERRORS_ABI`, and the census contracts' `ONCHAIN_CENSUS_ABI` and `OWNED_CENSUS_ABI`.
 
 ## Writes are streams of `TxStatusEvent`
 
@@ -56,7 +56,8 @@ await SmartContractService.executeTx(writer.setProcessStatus(processId, ProcessS
 | `getProcessCount()`, `getNextProcessId(creator)`, `getProcessNonce(creator)`, `getPidPrefix()` | ids |
 | `getProcessEndTime(pid)`, `getProcessGraceEnd(pid)`, `getGraceParams()` | the timeline |
 | `getBallotVKHash()`, `getBatchProgramVK()`, `getResultsProgramVK()`, `getRootCVadcopFinal()`, `getZiskVerifier()`, `getChainID()` | the pins |
-| `getDkgAdapter()` (null when DKG is disabled), `aidFor(pid)`, `getRegistrationEpoch()`, `getDkgPlaintexts(dkg)`, `isProcessKeyRevealed(dkg)` | the DKG side |
+| `getDkgAdapter()` (null when DKG is disabled), `aidFor(pid)`, `getRegistrationEpoch()`, `getDkgPlaintexts(dkg)`, `isProcessKeyRevealed(dkg)` | the DKG side; `getDkgPlaintexts` reads a COUNCIL process (`dkg.council`) from the Council adapter |
+| `getCouncilAdapter()` | the Council adapter; null when the mode is disabled or the registry predates it |
 
 ## Writes
 
@@ -80,10 +81,10 @@ The facade's versions add the local checks (organizer, status, time window) and 
 ```ts
 import { RELEASE_PINS } from '@vocdoni/davinci-sdk';
 
-const { chainId, verifier, dkgAdapter } = await registry.verifyDeployment();
+const { chainId, verifier, dkgAdapter, councilAdapter } = await registry.verifyDeployment();
 ```
 
-It checks the registry's batch and results program vks, vadcop root and ballot VK hash against `RELEASE_PINS`, its `chainID()` against the provider's chain, the `ZiskVerifier`'s code hash and root, and that the DKG adapter points back at the registry. A difference throws `DeploymentPinError { field, expected, got }`. `verifyDeployment(pins)` overrides entries, for a local deployment. `init()` runs it unless `verifyDeployment: false`.
+It checks the registry's batch and results program vks, vadcop root and ballot VK hash against `RELEASE_PINS`, its `chainID()` against the provider's chain, the `ZiskVerifier`'s code hash and root, and that the DKG and Council adapters point back at the registry. A difference throws `DeploymentPinError { field, expected, got }`. `verifyDeployment(pins)` overrides entries, for a local deployment. `init()` runs it unless `verifyDeployment: false`.
 
 ## Events
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Council key mode.** `keyMode: 'council'` (`KeyMode.Council`, 3) with a required `ceremonyId` (`bytes12` hex) binds a process to a Live Council ceremony, an invite-only threshold DKG whose organizer allowed the registry's Council adapter and authorized the creating account; its committee decrypts the tally through the same `requestResultsDecryption` / `finalizeResultsFromDKG` path and `getResultsStatus` states as `'dkg'`. `councilParams`, `CouncilDisabledError`, `ProcessRegistryService.getCouncilAdapter`, `OnchainDkg.council` (`epochId` is then the ceremony id and `aid` the request id), `DeploymentInfo.councilAdapter`, and the vendored `COUNCIL_ADAPTER_ABI`, `COUNCIL_MANAGER_ABI` (the real manager's adapter surface) and `COUNCIL_MANAGER_ERRORS_ABI`, whose errors `decodeDavinciError` names.
+
+### Changed
+
+- The vendored ABIs come from davinci-contracts `74debe9` (the council branch over `36c0b0a`): `ProcessRegistry` gains `councilAdapter()` and `CouncilDisabled`, and its constructor takes `_councilManager` after `_dkgManager`. Selectors, events and the `newProcess` and `getProcess` layouts are unchanged.
+- `getProcess` decodes key mode 3 and still refuses any mode it does not know. **Releases before this one throw `unknown key mode 3` on a Council process: upgrade every reader of a chain before the first one is created there.**
+- `createProcess` names every key mode: an unknown one is refused instead of being sent as `DKG_AUTOMATIC`, and `ceremonyId` is refused outside `'council'`.
+- `verifyDeployment` also checks that the Council adapter, if any, points back at the registry. A registry without `councilAdapter()` (the Gnosis deployment) reads as having none; any other failure of that read is thrown.
+
 ## [2.0.0] - 2026-09-30
 
 The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci-sequencer), the zkVM batch and results provers (davinci-zkvm), the `BallotProof(16)` ballot circuit, and the `ProcessRegistry` with the grace window and the DKG key modes (davinci-contracts). The Gnosis deployment is built in as a network preset. Nothing of the 1.x stack (davinci-node, the census service, the `/info`-based addresses) is supported any more: every integration has to migrate, following the notes at the end of this entry.

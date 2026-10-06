@@ -5,7 +5,7 @@
 //   node scripts/sync-abis.mjs <davinci-contracts checkout> [--out <forge out dir>]
 //   node scripts/sync-abis.mjs --census <davinci-onchain-census-contract checkout> [--out <dir>]
 //
-// The first form vendors the registry, DKG and verifier ABIs into abi/; the
+// The first form vendors the registry, DKG, Council and verifier ABIs into abi/; the
 // second vendors the on-chain census contracts into
 // abi/census/, and the creation code of OwnedCensus and PoseidonT3 into
 // test/e2e/contracts/census.json, which the live suite deploys on Gnosis
@@ -41,6 +41,9 @@ const SOURCES = {
       ICensusValidator: 'ICensusValidator.sol/ICensusValidator.json',
       IDKGAppManager: 'IDKGAppManager.sol/IDKGAppManager.json',
       IDKGManager: 'IDKGManager.sol/IDKGManager.json',
+      CouncilAdapter: 'CouncilAdapter.sol/CouncilAdapter.json',
+      ICouncilManager: 'ICouncilManager.sol/ICouncilManager.json',
+      ICouncilManagerErrors: 'ICouncilManagerErrors.sol/ICouncilManagerErrors.json',
     },
   },
   census: {

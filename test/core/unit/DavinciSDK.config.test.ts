@@ -116,6 +116,7 @@ function deploy(
     ballotVKHash: () => [RELEASE_PINS.ballotVKHash],
     ziskVerifier: () => [VERIFIER],
     dkgAdapter: () => [ADAPTER],
+    councilAdapter: () => [ZeroAddress],
     getProcess: () => [onchainProcess()],
     defaultGrace: () => [180],
     graceFloor: () => [150],

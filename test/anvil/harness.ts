@@ -181,10 +181,21 @@ export async function acrossTheEnd(
 /** The main registry (no DKG) or the one on the mock DKG, with `runner`. */
 export function registryService(
   runner: Wallet | JsonRpcProvider,
-  which: 'main' | 'dkg' = 'main'
+  which: Registry = 'main'
 ): ProcessRegistryService {
+  return new ProcessRegistryService(registryOf(which).address, runner);
+}
+
+/** The suite's registries: without managers, with the mock DKG, with the mock Council. */
+export type Registry = 'main' | 'dkg' | 'council';
+
+function registryOf(which: Registry): { address: string; block: number } {
   const env = anvil();
-  return new ProcessRegistryService(which === 'main' ? env.registry : env.dkgRegistry, runner);
+  if (which === 'dkg') return { address: env.dkgRegistry, block: env.dkgRegistryBlock };
+  if (which === 'council') {
+    return { address: env.councilRegistry, block: env.councilRegistryBlock };
+  }
+  return { address: env.registry, block: env.registryBlock };
 }
 
 /** Deploys an `OwnedCensus` owned by `owner`. */
@@ -197,8 +208,8 @@ export async function deployOwnedCensus(owner: Wallet): Promise<string> {
 
 // ─── The SDK ─────────────────────────────────────────────────────────
 
-/** A node for the main registry or the DKG one. */
-export function startNode(which: 'main' | 'dkg' = 'main'): Promise<MockNode> {
+/** A node for one of the suite's registries. */
+export function startNode(which: Registry = 'main'): Promise<MockNode> {
   return MockNode.start(registryService(rpcProvider(), which));
 }
 
@@ -210,17 +221,16 @@ export function startNode(which: 'main' | 'dkg' = 'main'): Promise<MockNode> {
 export async function connect(
   account: number,
   node: MockNode,
-  options: { registry?: 'main' | 'dkg'; config?: Partial<DavinciSDKConfig> } = {}
+  options: { registry?: Registry; config?: Partial<DavinciSDKConfig> } = {}
 ): Promise<DavinciSDK> {
-  const env = anvil();
-  const dkg = options.registry === 'dkg';
+  const registry = registryOf(options.registry ?? 'main');
   const sdk = new DavinciSDK({
     signer: devWallet(account, chainProvider()),
     network: {
       name: 'anvil',
       chainId: ANVIL_CHAIN_ID,
-      processRegistry: dkg ? env.dkgRegistry : env.registry,
-      startBlock: dkg ? env.dkgRegistryBlock : env.registryBlock,
+      processRegistry: registry.address,
+      startBlock: registry.block,
     },
     sequencerUrls: [node.url],
     uploader: node.uploader,
