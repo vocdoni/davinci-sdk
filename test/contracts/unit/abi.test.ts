@@ -21,7 +21,7 @@ import {
   decodeDavinciError,
 } from '../../../src/contracts/abis';
 
-// Drift guard for the vendored ABIs (davinci-contracts a59a992, the council
+// Drift guard for the vendored ABIs (davinci-contracts f4abc5d, the council
 // branch over 36c0b0a with the v2 decryption gate; its ICouncilManager is
 // davinci-dkg-council's v2 adapter surface, verbatim). Every value below is written out by hand from that commit's
 // contracts; a sync that moves any of them must be a deliberate change here
@@ -324,7 +324,7 @@ describe('vendored contract ABIs', () => {
       commit: string;
       files: Record<string, string>;
     };
-    expect(source.commit).toBe('a59a9921a0e7ea30c6637d033f2f9dfb7ce67aaf');
+    expect(source.commit).toBe('f4abc5da9ef4fa5636712a883ab1f0f738ebbfbe');
     expect(CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual([
       'CouncilAdapter.json',
