@@ -33,6 +33,7 @@ describe('the anvil deployment', () => {
     const info = await registry.verifyDeployment();
     expect(info.chainId).toBe(BigInt(ANVIL_CHAIN_ID));
     expect(info.dkgAdapter).toBeNull();
+    expect(info.councilAdapter).toBeNull();
     expect(await registry.getZiskVerifier()).toBe(info.verifier);
     expect(await registry.getBallotVKHash()).toBe(RELEASE_PINS.ballotVKHash);
     expect(await registry.getGraceParams()).toEqual(ANVIL_GRACE);

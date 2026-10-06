@@ -29,7 +29,8 @@ interface ProcessConfig {
     endDate?: Date | string | number;
   };
   maxVoters?: number; // default: the member count of a Merkle census object
-  keyMode?: 'sequencer' | 'dkg' | 'dkg-locked'; // default 'sequencer' (references/key-modes.md)
+  keyMode?: 'sequencer' | 'dkg' | 'dkg-locked' | 'council'; // default 'sequencer' (references/key-modes.md)
+  ceremonyId?: string; // bytes12 hex; required with 'council', refused otherwise
   grace?: number; // seconds, within the registry's graceFloor..graceCeil (references/grace.md)
   paused?: boolean; // create it PAUSED
 

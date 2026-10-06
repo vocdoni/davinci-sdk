@@ -4,6 +4,7 @@ import { ProcessRegistryService } from '../../contracts/ProcessRegistryService';
 import {
   CensusNotUpdatable,
   ContractServiceError,
+  CouncilDisabledError,
   DkgDisabledError,
   ProcessCensusError,
   ProcessCreateError,
@@ -20,7 +21,7 @@ import {
   decodeDavinciError,
   type DavinciErrorDescription,
 } from '../../contracts/abis';
-import { RESULT_CAP } from '../../contracts/params';
+import { RESULT_CAP, councilParams } from '../../contracts/params';
 import {
   KeyMode,
   ProcessStatus,
@@ -143,8 +144,13 @@ export interface CensusConfig {
  * - `'dkg-locked'` (DKG_LOCKED): a committee key plus an organizer key. The
  *   creation returns the organizer secret, and nothing is decrypted until it
  *   is revealed (`revealProcessKey`).
+ * - `'council'` (COUNCIL): the key of the Council ceremony in
+ *   `ceremonyId`, an invite-only committee that decrypts the final tally
+ *   after the grace window. The ceremony must be Live, and its organizer must
+ *   have allowed the registry's Council adapter and authorized the creating
+ *   account. Processes bound to one ceremony share its key.
  */
-export type ProcessKeyMode = 'sequencer' | 'dkg' | 'dkg-locked';
+export type ProcessKeyMode = 'sequencer' | 'dkg' | 'dkg-locked' | 'council';
 
 /** Fields of both process config variants. */
 interface BaseProcessConfig {
@@ -212,6 +218,12 @@ interface BaseProcessConfig {
 
   /** Who holds the election key; `'sequencer'` by default. See {@link ProcessKeyMode}. */
   keyMode?: KeyMode | ProcessKeyMode;
+
+  /**
+   * The Council ceremony the process binds to, `bytes12` hex: required with
+   * `keyMode: 'council'`, refused with any other key mode.
+   */
+  ceremonyId?: string;
 
   /**
    * The grace window, in seconds, instead of the registry's `defaultGrace`:
@@ -366,6 +378,8 @@ interface PreparedCreation {
   maxVoters: bigint;
   ballotMode: BallotModeValues;
   keyMode: KeyMode;
+  /** COUNCIL only. */
+  ceremonyId?: string;
   census: RegistryCensus;
   metadata: PublishedMetadata;
 }
@@ -542,6 +556,7 @@ function keyModeOf(mode: KeyMode | ProcessKeyMode | undefined): KeyMode {
   }
   if (mode === 'dkg' || mode === KeyMode.DkgAutomatic) return KeyMode.DkgAutomatic;
   if (mode === 'dkg-locked' || mode === KeyMode.DkgLocked) return KeyMode.DkgLocked;
+  if (mode === 'council' || mode === KeyMode.Council) return KeyMode.Council;
   throw new ProcessCreateError(`unknown key mode ${String(mode)}`, 'newProcess');
 }
 
@@ -790,7 +805,8 @@ export class ProcessOrchestrationService {
    *
    * 1. Checks the config against the registry and the circuit: the timing on
    *    the chain clock, the ballot mode, `maxVoters` and the result cap, and
-   *    for a `'dkg'`/`'dkg-locked'` key that the registry has a DKG adapter.
+   *    for a `'dkg'`/`'dkg-locked'` key that the registry has a DKG adapter,
+   *    for a `'council'` key the `ceremonyId` and the Council adapter.
    * 2. Publishes the census and the metadata document (or checks the ones
    *    given by URL).
    * 3. Under a lock per account (so concurrent creations from one account
@@ -801,7 +817,8 @@ export class ProcessOrchestrationService {
    *    the registration epoch and the process's DKG application id. A DKG
    *    creation is retried once when the epoch's key pool is exhausted or,
    *    for `'dkg-locked'`, when the registration epoch moved: that yields a
-   *    second `Pending`. A `paused` config creates it PAUSED.
+   *    second `Pending`. A `'council'` creation binds the process to its
+   *    ceremony, never retried. A `paused` config creates it PAUSED.
    * 4. With `grace` (checked against the registry's bounds in step 1),
    *    `setProcessGrace` follows: a `Pending` event with
    *    `step: 'setProcessGrace'`, then the `Completed` event, which carries
@@ -813,7 +830,8 @@ export class ProcessOrchestrationService {
    * `WrongProcessIdError`: the process exists but no node can finalize it,
    * so cancel it (`cancelOpenProcesses` finds it). Failures come as `Failed`
    * events: a `ProcessCreateError` (with `revertName` for a rule the registry
-   * enforces), `DkgDisabledError`, a census, metadata or sequencer error.
+   * enforces), `DkgDisabledError`, `CouncilDisabledError`, a census, metadata or
+   * sequencer error.
    *
    * @param config - Process configuration
    * @returns AsyncGenerator yielding transaction status events with ProcessCreationResult
@@ -927,7 +945,28 @@ export class ProcessOrchestrationService {
       checkGrace(grace, params);
     }
 
-    if (keyMode !== KeyMode.Sequencer && (await this.processRegistry.getDkgAdapter()) === null) {
+    // The Council ceremony: required in COUNCIL mode, refused in any other.
+    const ceremonyId = config.ceremonyId;
+    if (keyMode === KeyMode.Council) {
+      if (ceremonyId === undefined) throw create("keyMode 'council' needs a ceremonyId");
+      try {
+        councilParams(ceremonyId);
+      } catch (err) {
+        throw create(`ceremonyId ${ceremonyId}: ${(err as Error).message}`, 'InvalidDKGParams');
+      }
+      if ((await this.processRegistry.getCouncilAdapter()) === null) {
+        throw new CouncilDisabledError(
+          'the registry has no Council adapter: the COUNCIL key mode is disabled',
+          'newProcess'
+        );
+      }
+    } else if (ceremonyId !== undefined) {
+      throw create(`ceremonyId is only for keyMode 'council', not ${KeyMode[keyMode]}`);
+    }
+    if (
+      (keyMode === KeyMode.DkgAutomatic || keyMode === KeyMode.DkgLocked) &&
+      (await this.processRegistry.getDkgAdapter()) === null
+    ) {
       throw new DkgDisabledError(
         'the registry has no DKG adapter: DKG key modes are disabled',
         'newProcess'
@@ -945,6 +984,7 @@ export class ProcessOrchestrationService {
       maxVoters: BigInt(maxVoters),
       ballotMode,
       keyMode,
+      ...(ceremonyId !== undefined && { ceremonyId }),
       census: registryCensus,
       metadata,
     };
@@ -978,6 +1018,7 @@ export class ProcessOrchestrationService {
       processId,
       keyMode: p.keyMode,
       ...(encryptionKey && { encryptionKey }),
+      ...(p.ceremonyId !== undefined && { ceremonyId: p.ceremonyId }),
     });
     let created: ProcessCreationResult | undefined;
     for await (const event of stream) {

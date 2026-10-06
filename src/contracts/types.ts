@@ -28,12 +28,21 @@ export enum KeyMode {
   DkgAutomatic = 1,
   /** A pool key plus an organizer key: nothing is decrypted until `revealProcessKey`. */
   DkgLocked = 2,
+  /**
+   * The key of a Live Council ceremony (invite-only threshold DKG); its
+   * committee decrypts the final tally. Every process bound to a ceremony
+   * shares its key.
+   */
+  Council = 3,
 }
 
 /** `DAVINCITypes.DKGParams`: all zero in SEQUENCER mode. */
 export interface DkgParams {
   mode: KeyMode;
-  /** `bytes12` hex: the epoch a locked process registers in; zero otherwise. */
+  /**
+   * `bytes12` hex: the epoch a locked process registers in, or the ceremony
+   * of a COUNCIL process; zero otherwise.
+   */
   epochId: string;
   /** Organizer key and proof of possession, reduced TE (DKG_LOCKED only). */
   orgPKx: bigint;
@@ -79,17 +88,25 @@ export interface NewProcessParams {
   dkg?: DkgParams;
 }
 
-/** DKG side of a process (key mode other than SEQUENCER). */
+/**
+ * DKG side of a process (key mode other than SEQUENCER): a davinci-dkg
+ * application, or for COUNCIL a Council ceremony binding.
+ */
 export interface OnchainDkg {
   /** DKG_LOCKED rather than DKG_AUTOMATIC. */
   locked: boolean;
-  /** `bytes12` hex. */
+  /**
+   * COUNCIL: `epochId` is the ceremony id, `aid` the request id, and the
+   * registry's Council adapter (not the DKG adapter) holds the results.
+   */
+  council: boolean;
+  /** `bytes12` hex: the DKG epoch, or the Council ceremony id. */
   epochId: string;
-  /** Application id, `bytes32` hex. */
+  /** Application id, or the Council request id; `bytes32` hex. */
   aid: string;
   /** `requestResultsDecryption` ran. */
   resultsRequested: boolean;
-  /** DKG index of the first submitted ciphertext. */
+  /** DKG index of the first submitted ciphertext (always 0 for COUNCIL). */
   firstIndex: number;
   /** Ciphertexts submitted (identity fields are skipped). */
   count: number;
@@ -161,6 +178,11 @@ export interface DeploymentInfo {
   verifier: string;
   /** The registry's DKG adapter; null when the DKG key modes are disabled. */
   dkgAdapter: string | null;
+  /**
+   * The registry's Council adapter; null when the COUNCIL mode is disabled
+   * or the registry predates it.
+   */
+  councilAdapter: string | null;
 }
 
 /** Where a registry event was logged. */

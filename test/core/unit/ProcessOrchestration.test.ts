@@ -18,6 +18,7 @@ import {
 } from '../../../src/census';
 import {
   CensusNotUpdatable,
+  CouncilDisabledError,
   ContractServiceError,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
@@ -698,6 +699,58 @@ describe('ProcessOrchestrationService.createProcess', () => {
     await expect(
       orchestrator.createProcess({ ...config, keyMode: 'committee' as 'dkg' })
     ).rejects.toThrow('unknown key mode committee');
+    expect(host.uploads).toHaveLength(0);
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('creates COUNCIL processes bound to their ceremony', async () => {
+    const cid = `0x${'c1'.repeat(12)}`;
+    const adapter = getAddress(`0x${'c0'.repeat(20)}`);
+    const { orchestrator, keyRequests, sent } = setup({
+      calls: { councilAdapter: () => [adapter] },
+    });
+    const csp = new PublishedCensus(CensusOrigin.CSP, A, 'https://csp.example.org');
+    const config = { title: 't', census: csp, ballot, timing, questions, maxVoters: 5 };
+    const named = await orchestrator.createProcess({
+      ...config,
+      keyMode: 'council',
+      ceremonyId: cid,
+    });
+    expect(named).toEqual({ processId: PID, transactionHash: expect.any(String) as string });
+    await orchestrator.createProcess({ ...config, keyMode: KeyMode.Council, ceremonyId: cid });
+    expect(keyRequests).toHaveLength(0);
+
+    const [n, e] = sent();
+    expect([...(n.args.getValue('encryptionKey') as Result)]).toEqual([0n, 0n]);
+    expect(dkgOf(n.args)).toEqual([3n, cid, 0n, 0n, 0n, 0n, 0n]);
+    expect(dkgOf(e.args)[0]).toBe(3n);
+  });
+
+  it('refuses a COUNCIL key without a ceremony or Council before any upload', async () => {
+    const cid = `0x${'c1'.repeat(12)}`;
+    const { orchestrator, host, chain } = setup({
+      calls: { councilAdapter: () => [ZeroAddress] },
+    });
+    const config = { title: 't', census: members(A), ballot, timing, questions };
+    const disabled = await errorOf(
+      orchestrator.createProcess({ ...config, keyMode: 'council', ceremonyId: cid })
+    );
+    expect(disabled).toBeInstanceOf(CouncilDisabledError);
+    const cases: [Parameters<typeof orchestrator.createProcess>[0], string][] = [
+      [{ ...config, keyMode: 'council' }, "keyMode 'council' needs a ceremonyId"],
+      [
+        { ...config, keyMode: 'council', ceremonyId: `0x${'00'.repeat(12)}` },
+        'the ceremony id is zero',
+      ],
+      [{ ...config, keyMode: 'council', ceremonyId: '0xc1' }, 'ceremony id must be 12 bytes'],
+      [{ ...config, keyMode: 'dkg', ceremonyId: cid }, "ceremonyId is only for keyMode 'council'"],
+      [{ ...config, ceremonyId: cid }, "ceremonyId is only for keyMode 'council'"],
+    ];
+    for (const [c, message] of cases) {
+      const err = await errorOf(orchestrator.createProcess(c));
+      expect(err, message).toBeInstanceOf(ProcessCreateError);
+      expect(err?.message).toContain(message);
+    }
     expect(host.uploads).toHaveLength(0);
     expect(chain.sent).toHaveLength(0);
   });

@@ -40,6 +40,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63) |
 | `InvalidGrace` (`ProcessGraceError`) | `grace` outside `graceFloor..graceCeil` |
 | `DkgDisabledError` (`revertName` `DKGDisabled`) | a DKG key mode on a registry without DKG |
+| `CouncilDisabledError` | `keyMode: 'council'` on a registry without a Council manager, or deployed before the mode |
 | `NoLiveEpoch`, `PoolExhausted` | no committee epoch can take the process now (the SDK already retried once); try again in a few minutes |
 | `InvalidCensusRoot`, `InvalidCensusURI`, `InvalidCensusAddress`, `InvalidCensusOrigin` | the census fields do not fit its origin |
 | `InvalidMetadata` | an empty metadata URI or a zero hash |

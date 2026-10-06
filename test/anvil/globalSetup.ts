@@ -15,6 +15,10 @@
  *   organizer secret checked on reveal. It skips the committee (its Schnorr
  *   proof check, key generation and decryption), which only a live
  *   davinci-dkg deployment exercises.
+ * - `councilRegistry`: no DKG manager; the Council manager is
+ *   davinci-contracts' `MockCouncilManager` (`test/mocks/`): the real
+ *   `CouncilAdapter`, with ceremonies, authorizations and plaintexts set by
+ *   the tests instead of signed actions and proofs.
  *
  * The contract sources are the commits the vendored ABIs came from
  * (`src/contracts/abi/source.json`, `src/contracts/abi/census/source.json`).
@@ -297,7 +301,7 @@ async function startAnvil(log: string): Promise<{ child: ChildProcess; url: stri
 async function deployAll(
   dir: string,
   url: string,
-  dkgManager?: string
+  managers: { dkg?: string; council?: string } = {}
 ): Promise<{ address: string; block: number }> {
   await forge(
     dir,
@@ -314,7 +318,8 @@ async function deployAll(
       GRACE_CEIL: String(ANVIL_GRACE.graceCeil),
       GRACE_MAX_TOTAL: String(ANVIL_GRACE.graceMaxTotal),
       NOTICE_MIN: String(ANVIL_GRACE.noticeMin),
-      ...(dkgManager && { DKG_MANAGER: dkgManager }),
+      ...(managers.dkg && { DKG_MANAGER: managers.dkg }),
+      ...(managers.council && { COUNCIL_MANAGER: managers.council }),
     }
   );
   const record = join(
@@ -366,7 +371,12 @@ export default async function setup(project: TestProject): Promise<() => void> {
     const main = await deployAll(contracts, anvil.url);
     const mockDkg = artifact(contracts, 'MockDKG.sol/MockDKG.json');
     const mockDkgAddress = await deploy(deployer, mockDkg);
-    const withDkg = await deployAll(contracts, anvil.url, mockDkgAddress);
+    const withDkg = await deployAll(contracts, anvil.url, { dkg: mockDkgAddress });
+    const mockCouncil = artifact(contracts, 'MockCouncilManager.sol/MockCouncilManager.json');
+    const mockCouncilAddress = await deploy(deployer, mockCouncil);
+    const withCouncil = await deployAll(contracts, anvil.url, {
+      council: mockCouncilAddress,
+    });
 
     const poseidon = await deploy(deployer, artifact(census, 'PoseidonT3.sol/PoseidonT3.json'));
     const ownedCensus = linked(artifact(census, 'OwnedCensus.sol/OwnedCensus.json'), {
@@ -382,6 +392,10 @@ export default async function setup(project: TestProject): Promise<() => void> {
       dkgRegistryBlock: withDkg.block,
       mockDkg: mockDkgAddress,
       mockDkgAbi: JSON.stringify(mockDkg.abi),
+      councilRegistry: withCouncil.address,
+      councilRegistryBlock: withCouncil.block,
+      mockCouncil: mockCouncilAddress,
+      mockCouncilAbi: JSON.stringify(mockCouncil.abi),
       ownedCensusBytecode: ownedCensus,
     };
     project.provide('anvil', env);
