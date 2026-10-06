@@ -229,6 +229,8 @@ export interface WaitForResultsOptions {
   /**
    * Longest wait. Default: until the grace window closes, plus
    * {@link RESULTS_MARGIN_MS}, following the end and the window as they move.
+   * A COUNCIL process whose ceremony opens decryption later (state
+   * `awaiting-opening`, possibly months later) needs a longer one.
    */
   timeoutMs?: number;
   /** Default {@link RESULTS_POLL_MS}. */
@@ -284,11 +286,26 @@ const WAITING_FOR: Record<ResultsState, string> = {
   'awaiting-key-holder': 'only the node that issued the election key can publish them',
   'awaiting-request': 'no node has asked the DKG committee to decrypt',
   locked: 'the organizer has not revealed the DKG-locked key',
+  'awaiting-opening': 'the Council ceremony has not opened decryption',
   decrypting: 'the DKG committee has not combined its decryption',
   finalizable: 'nobody has stored the decrypted tally (finalizeResultsFromDKG)',
   results: 'the results are on-chain',
   canceled: 'the process was canceled',
 };
+
+// What `status` is still waiting for, with the Council opening date if known.
+function waitingFor(status: ResultsStatus): string {
+  const opening = status.decryptionOpening;
+  if (!opening) return WAITING_FOR[status.state];
+  const at = opening.opensAt?.toISOString();
+  const how =
+    opening.mode === 'scheduled'
+      ? `it opens on ${at ?? 'its scheduled date'}`
+      : at
+        ? `its organizer opens it, or it opens on ${at}`
+        : 'its organizer opens it';
+  return `${WAITING_FOR[status.state]} (${how})`;
+}
 
 // `status` is `target` or a later step (an error is reached only as the target).
 function reached(status: VoteStatus, target: VoteStatus): boolean {
@@ -970,6 +987,17 @@ export class VoteOrchestrationService {
     }
     const dkg = p.dkg;
     if (p.keyMode === KeyMode.Sequencer || !dkg) return { ...base, state: 'awaiting-key-holder' };
+    const gate = await this.registry.getCouncilDecryptionGate(dkg);
+    if (!gate.open) {
+      return {
+        ...base,
+        state: 'awaiting-opening',
+        decryptionOpening: {
+          mode: gate.mode,
+          opensAt: gate.opensAt === null ? null : dateOrNull(gate.opensAt),
+        },
+      };
+    }
     if (dkg.locked && !(await this.registry.isProcessKeyRevealed(dkg))) {
       return { ...base, state: 'locked' };
     }
@@ -982,11 +1010,13 @@ export class VoteOrchestrationService {
    * Waits for a process's results and returns them decoded. Results unlock
    * when the grace window after the end closes; then the node holding a
    * sequencer key publishes them, or a DKG committee decrypts them (after
-   * the organizer's reveal, for a locked key). `onStatus` sees each state.
+   * the organizer's reveal, for a locked key; for a COUNCIL key, once its
+   * ceremony opens decryption). `onStatus` sees each state.
    *
    * @throws ResultsError `canceled`; `locked` when a DKG-locked key is still
    *   sealed after the grace window (unless `waitForReveal`); `timeout`, whose
-   *   message says what the process was still waiting for
+   *   message says what the process was still waiting for (with the Council
+   *   opening date, if any)
    * @throws with `finalize`: an Error when there is no signer to send it, or
    *   the ProcessResultError of a transaction that fails for another reason
    *   than a node finalizing first
@@ -1053,7 +1083,7 @@ export class VoteOrchestrationService {
       if (Date.now() >= deadline) {
         throw new ResultsError(
           'timeout',
-          `process ${pid} has no results after the wait: ${WAITING_FOR[status.state]}`,
+          `process ${pid} has no results after the wait: ${waitingFor(status)}`,
           status
         );
       }

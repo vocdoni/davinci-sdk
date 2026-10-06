@@ -77,6 +77,11 @@ export type ResultsSource = Pick<
  *   the committee to decrypt yet (they do on their first heartbeat after it).
  * - `locked`: a DKG-locked key the organizer has not revealed: nothing is
  *   decrypted until `revealProcessKey`.
+ * - `awaiting-opening`: a COUNCIL key whose ceremony has not opened
+ *   decryption: the results stay locked until the committee may decrypt
+ *   them, on the scheduled date or when the organizer opens it
+ *   (`decryptionOpening`). Even a tally of zeros waits; nodes publish it
+ *   once the gate opens.
  * - `decrypting`: the committee is combining its decryption shares.
  * - `finalizable`: the committee's plaintexts are ready; the first
  *   `finalizeResultsFromDKG` (anyone may send it) stores them.
@@ -89,6 +94,7 @@ export type ResultsState =
   | 'awaiting-key-holder'
   | 'awaiting-request'
   | 'locked'
+  | 'awaiting-opening'
   | 'decrypting'
   | 'finalizable'
   | 'results'
@@ -105,6 +111,13 @@ export interface ResultsStatus {
   chainTime: Date;
   /** The decoded tally, in state `results`. */
   results?: ProcessResults;
+  /**
+   * In state `awaiting-opening`: how the Council ceremony opens decryption.
+   * `scheduled` opens by itself at `opensAt`. `manual` opens when the
+   * ceremony's organizer opens it, or by itself at `opensAt` (its fallback
+   * date) when it has one; `opensAt` is null without a fallback.
+   */
+  decryptionOpening?: { mode: 'scheduled' | 'manual'; opensAt: Date | null };
 }
 
 const sameMode = (a: BallotModeValues, b: BallotModeValues) =>

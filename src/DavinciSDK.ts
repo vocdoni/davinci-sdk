@@ -928,7 +928,8 @@ export class DavinciSDK {
    * `getGraceEnd`; every late landing pushes it out). Then the node holding a
    * sequencer key publishes them, usually within a couple of minutes, or a
    * DKG committee decrypts them in 1 to 5 more; a DKG-locked key first needs
-   * the organizer's `revealProcessKey`.
+   * the organizer's `revealProcessKey`, and a COUNCIL key its ceremony's
+   * decryption opening (state `awaiting-opening`), which can be months later.
    *
    * By default it waits until the grace window closes, plus 15 minutes.
    * `finalize: true` sends the permissionless `finalizeResultsFromDKG` from
@@ -959,7 +960,9 @@ export class DavinciSDK {
    * returns an async generator of transaction status events. Anyone may
    * send it once the committee's plaintexts are ready; nodes normally do
    * within seconds. The registry refuses it before the grace end
-   * (`GraceOpen`) and before the committee is done (`ResultsNotReady`).
+   * (`GraceOpen`), before the committee is done (`ResultsNotReady`) and, for
+   * a COUNCIL process, before its ceremony opens decryption
+   * (`DecryptionNotOpen`, even when every field is zero).
    *
    * @throws Error when the stream is first read, before any event: the SDK is
    *   not initialized, the process id is not the network's, or the signer has

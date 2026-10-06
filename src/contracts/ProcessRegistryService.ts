@@ -23,6 +23,7 @@ import {
 } from './SmartContractService';
 import {
   COUNCIL_ADAPTER_ABI,
+  COUNCIL_POLICY_ABI,
   DAVINCI_DKG_ADAPTER_ABI,
   DKG_APP_MANAGER_ABI,
   PROCESS_REGISTRY_ABI,
@@ -50,6 +51,7 @@ import {
 import {
   KeyMode,
   ProcessStatus,
+  type CouncilDecryptionGate,
   type DeploymentInfo,
   type DkgParams,
   type GraceParams,
@@ -715,6 +717,38 @@ export class ProcessRegistryService extends SmartContractService {
   }
 
   /**
+   * The decryption gate of a COUNCIL process's ceremony, as the registry
+   * reads it before publishing results (`councilAdapter.isDecryptionOpen`).
+   * While it is closed, how it opens comes from the manager's `getPolicy`.
+   * Always open for the DKG modes (nothing is read).
+   *
+   * @param dkg - The process's `dkg` (`getProcess`)
+   * @throws CouncilDisabledError for a COUNCIL process on a registry without Council
+   */
+  async getCouncilDecryptionGate(dkg: OnchainDkg): Promise<CouncilDecryptionGate> {
+    if (!dkg.council) return { open: true };
+    const adapter = await this.councilAdapter('isDecryptionOpen');
+    const open = (await adapter.getFunction('isDecryptionOpen').staticCall(dkg.epochId)) as unknown;
+    if (bool(open, 'isDecryptionOpen')) return { open: true };
+    const manager = getAddress(text(await adapter.getFunction('manager').staticCall(), 'manager'));
+    const council = new Contract(manager, COUNCIL_POLICY_ABI, this.contract.runner);
+    const policy = tuple(
+      await council.getFunction('getPolicy').staticCall(dkg.epochId),
+      'getPolicy'
+    );
+    // PhaseMode: Manual = 0, Scheduled = 1.
+    if (small(field(policy, 'decryptionMode'), 'decryptionMode') === 1) {
+      return {
+        open: false,
+        mode: 'scheduled',
+        opensAt: big(field(policy, 'decryptionOpenAt'), 'decryptionOpenAt'),
+      };
+    }
+    const fallback = big(field(policy, 'manualDecryptionFallbackAt'), 'manualDecryptionFallbackAt');
+    return { open: false, mode: 'manual', opensAt: fallback === 0n ? null : fallback };
+  }
+
+  /**
    * Whether the organizer of a DKG_LOCKED process revealed its secret
    * (`revealProcessKey`), read from the DKG application manager: the
    * committee combines nothing before. Always false for DKG_AUTOMATIC and
@@ -1232,7 +1266,8 @@ export class ProcessRegistryService extends SmartContractService {
   /**
    * Permissionless nudge that reads the committee's plaintexts into the
    * results of a DKG process, once the grace window closed and the
-   * decryption was requested (else `GraceOpen` or `ResultsNotReady`).
+   * decryption was requested (else `GraceOpen` or `ResultsNotReady`), and
+   * for COUNCIL once its ceremony opened decryption (else `DecryptionNotOpen`).
    */
   finalizeResultsFromDKG(processId: string) {
     return this.writeDone(

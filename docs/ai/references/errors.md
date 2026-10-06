@@ -102,6 +102,7 @@ A `VoteError('timeout')` from a status wait means the default wait (grace end pl
 | `ResultsError('locked')` | a `dkg-locked` key not revealed after the grace window (`revealProcessKey`, or `waitForReveal: true`) |
 | `ResultsError('timeout')` | the message says what the process still waits for, e.g. "only the node that issued the election key can publish them" |
 | `ProcessResultError` `GraceOpen` / `ResultsNotReady` | `finalizeResults` before the grace end or before the committee finished |
+| `ProcessResultError` `DecryptionNotOpen` | `finalizeResults` on a Council process whose ceremony has not opened decryption (state `awaiting-opening`); retry after the opening |
 
 ## Handling a transaction stream
 

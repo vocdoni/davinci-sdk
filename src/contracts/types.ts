@@ -115,6 +115,22 @@ export interface OnchainDkg {
 }
 
 /**
+ * The decryption gate of a COUNCIL process's ceremony (Council protocol
+ * §8.7), as the registry reads it through its Council adapter. The committee
+ * decrypts nothing and the registry publishes no result, not even an all-zero
+ * tally, until it is open; once open it stays open, for every process bound
+ * to the ceremony. A policy, not a time lock: enough colluding members can
+ * always decrypt off chain earlier.
+ *
+ * While closed: `scheduled` opens by itself at `opensAt`; `manual` opens when
+ * the ceremony's organizer opens it, or by itself at `opensAt` (the fallback
+ * date) when the ceremony set one, else `opensAt` is null.
+ */
+export type CouncilDecryptionGate =
+  | { open: true }
+  | { open: false; mode: 'scheduled' | 'manual'; opensAt: bigint | null };
+
+/**
  * A process as the registry stores it (`getProcess`). This, not a
  * sequencer's view, is what voters build ballots from.
  */

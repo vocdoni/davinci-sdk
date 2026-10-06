@@ -122,7 +122,7 @@
   },
   {
     "type": "function",
-    "name": "getRequest",
+    "name": "getRequestMeta",
     "inputs": [
       {
         "name": "requestId",
@@ -150,11 +150,25 @@
         "name": "partialBitmap",
         "type": "uint16",
         "internalType": "uint16"
-      },
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isDecryptionOpen",
+    "inputs": [
       {
-        "name": "cts",
-        "type": "uint256[4][]",
-        "internalType": "uint256[4][]"
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
