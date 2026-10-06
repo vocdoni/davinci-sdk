@@ -358,7 +358,8 @@ interface ProcessConfig {
     endDate?: Date | string | number;
   };
   maxVoters?: number; // default: the member count of a Merkle census object
-  keyMode?: 'sequencer' | 'dkg' | 'dkg-locked'; // default 'sequencer' (references/key-modes.md)
+  keyMode?: 'sequencer' | 'dkg' | 'dkg-locked' | 'council'; // default 'sequencer' (references/key-modes.md)
+  ceremonyId?: string; // bytes12 hex; required with 'council', refused otherwise
   grace?: number; // seconds, within the registry's graceFloor..graceCeil (references/grace.md)
   paused?: boolean; // create it PAUSED
 
@@ -532,13 +533,14 @@ For results use `waitForResults` or `decodeResults(info)` (`references/results.m
 
 # `references/key-modes.md` — Who holds the election key
 
-Companion to the [[davinci-sdk]] skill. Every process has one of three key modes, chosen at creation with `keyMode`. The key encrypts every ballot; whoever holds its secret can decrypt the tally, and could open the ballots published in the settlement blobs. The mode decides who that is and who publishes the results.
+Companion to the [[davinci-sdk]] skill. Every process has one of four key modes, chosen at creation with `keyMode`. The key encrypts every ballot; whoever holds its secret can decrypt the tally, and could open the ballots published in the settlement blobs. The mode decides who that is and who publishes the results.
 
 | `keyMode` | `KeyMode` | Who holds the secret | Who publishes the results |
 | --- | --- | --- | --- |
 | `'sequencer'` (default) | `Sequencer` (0) | the key node (`keySequencerUrl`) | only that node |
 | `'dkg'` | `DkgAutomatic` (1) | a davinci-dkg committee, as threshold shares | any node asks the committee, which decrypts the final tally |
 | `'dkg-locked'` | `DkgLocked` (2) | the committee plus the organizer | the committee, once the organizer reveals its secret |
+| `'council'` | `Council` (3) | an invite-only Council committee, as threshold shares | the committee decrypts the final tally; anyone stores it |
 
 In every mode only the final tally is decrypted, after the grace window (`references/grace.md`), and never the individual ballots.
 
@@ -587,6 +589,23 @@ await sdk.revealProcessKey(processId, organizerSecret);
 
 Until the reveal, `getResultsStatus` reports `locked` after the grace window, and `waitForResults` fails with `ResultsError('locked')` unless `waitForReveal: true` (`references/results.md`).
 
+## Council key (`'council'`)
+
+```ts
+const { processId } = await sdk.createProcess({
+  ...config,
+  keyMode: 'council',
+  ceremonyId: '0x00c0c1a7e0000000000000a1', // bytes12 hex of a Live Council ceremony
+});
+```
+
+The key is the public key of a Council ceremony: an invite-only threshold DKG whose members were invited by its organizer, instead of the public davinci-dkg committee. The ceremony must be `Live`, and its organizer must already have allowed the registry's Council adapter (`sdk.registry.getCouncilAdapter()`) and authorized the account that creates the process. The process is bound to the ceremony under a request id; results go through the same calls as `'dkg'` (`requestResultsDecryption`, then `finalizeResultsFromDKG` once the members have combined every field), and `getResultsStatus` reports the same states.
+
+- `ceremonyId` is required with `'council'` and refused with every other mode. There is no organizer secret and nothing to reveal (`revealProcessKey` reverts with `InvalidKeyMode`).
+- Every process bound to one ceremony shares its key. Organizers who need two votes kept apart run two ceremonies.
+- A registry without a Council manager, or one deployed before the mode, refuses it: `CouncilDisabledError`, before anything is uploaded. A ceremony that is not Live, an adapter it does not allow or a creator it does not authorize fails the creation with the manager's error in `revertName` (`WrongPhase`, `NotAllowedAdapter`, `NotAuthorizedCreator`, `UnknownCeremony`); it is not retried.
+- SDK releases before this mode throw `unknown key mode 3` when they read a Council process; every reader of a chain must upgrade before the first one is created there.
+
 ## Reading the mode
 
 ```ts
@@ -597,6 +616,10 @@ if (info.keyMode === KeyMode.DkgLocked) {
   console.log('epoch', info.dkg?.epochId, 'decryption requested:', info.dkg?.resultsRequested);
 }
 const revealed = info.dkg ? await sdk.registry.isProcessKeyRevealed(info.dkg) : false;
+if (info.keyMode === KeyMode.Council) {
+  // dkg.epochId is the ceremony id and dkg.aid the request id the process decrypts under.
+  console.log('ceremony', info.dkg?.epochId, 'request', info.dkg?.aid);
+}
 ```
 
 ## Choosing
@@ -604,6 +627,7 @@ const revealed = info.dkg ? await sdk.registry.isProcessKeyRevealed(info.dkg) : 
 - **Tests, demos, trusted operator:** `'sequencer'`. Fastest results, no committee.
 - **Public elections:** `'dkg'`. No single party can decrypt ballots or withhold the results.
 - **Results released on the organizer's schedule** (an embargo, an announcement): `'dkg-locked'`, with the secret stored safely.
+- **A committee the organization picks itself** (a board, an assembly that votes several times): `'council'`, bound to that committee's ceremony.
 
 ## Cross-references
 
@@ -1408,6 +1432,7 @@ Results unlock when the grace window closes (`graceEnd`, `references/grace.md`);
 | `'sequencer'` | The key node decrypts the accumulator, proves the decryption in a zkVM guest and calls `setProcessResults`. It usually prepares the proof during the grace window. | seconds to a couple of minutes |
 | `'dkg'` | A node sends `requestResultsDecryption` (the process moves to ENDED), the committee combines its decryption shares, and a node stores the tally with `finalizeResultsFromDKG`. | 1 to 5 minutes |
 | `'dkg-locked'` | The same, once the organizer has called `revealProcessKey`. Nothing is decrypted before. | as `'dkg'`, from the reveal |
+| `'council'` | As `'dkg'`, with the Council ceremony's members combining the whole request. | as long as `t` members take to show up |
 
 With a sequencer key, only the key node can publish the results: if it is gone, they never come.
 
@@ -1826,7 +1851,7 @@ const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcP
 });
 ```
 
-The ABIs are vendored from davinci-contracts at a pinned commit (`CONTRACTS_ABI_COMMIT`) and exported: `PROCESS_REGISTRY_ABI`, `DAVINCI_DKG_ADAPTER_ABI`, `ZISK_VERIFIER_ABI`, `CENSUS_VALIDATOR_ABI`, `DKG_APP_MANAGER_ABI`, `DKG_MANAGER_ABI`, and the census contracts' `ONCHAIN_CENSUS_ABI` and `OWNED_CENSUS_ABI`.
+The ABIs are vendored from davinci-contracts at a pinned commit (`CONTRACTS_ABI_COMMIT`) and exported: `PROCESS_REGISTRY_ABI`, `DAVINCI_DKG_ADAPTER_ABI`, `ZISK_VERIFIER_ABI`, `CENSUS_VALIDATOR_ABI`, `DKG_APP_MANAGER_ABI`, `DKG_MANAGER_ABI`, `COUNCIL_ADAPTER_ABI`, `COUNCIL_MANAGER_ABI`, `COUNCIL_MANAGER_ERRORS_ABI`, and the census contracts' `ONCHAIN_CENSUS_ABI` and `OWNED_CENSUS_ABI`.
 
 ## Writes are streams of `TxStatusEvent`
 
@@ -1862,7 +1887,8 @@ await SmartContractService.executeTx(writer.setProcessStatus(processId, ProcessS
 | `getProcessCount()`, `getNextProcessId(creator)`, `getProcessNonce(creator)`, `getPidPrefix()` | ids |
 | `getProcessEndTime(pid)`, `getProcessGraceEnd(pid)`, `getGraceParams()` | the timeline |
 | `getBallotVKHash()`, `getBatchProgramVK()`, `getResultsProgramVK()`, `getRootCVadcopFinal()`, `getZiskVerifier()`, `getChainID()` | the pins |
-| `getDkgAdapter()` (null when DKG is disabled), `aidFor(pid)`, `getRegistrationEpoch()`, `getDkgPlaintexts(dkg)`, `isProcessKeyRevealed(dkg)` | the DKG side |
+| `getDkgAdapter()` (null when DKG is disabled), `aidFor(pid)`, `getRegistrationEpoch()`, `getDkgPlaintexts(dkg)`, `isProcessKeyRevealed(dkg)` | the DKG side; `getDkgPlaintexts` reads a COUNCIL process (`dkg.council`) from the Council adapter |
+| `getCouncilAdapter()` | the Council adapter; null when the mode is disabled or the registry predates it |
 
 ## Writes
 
@@ -1886,10 +1912,10 @@ The facade's versions add the local checks (organizer, status, time window) and 
 ```ts
 import { RELEASE_PINS } from '@vocdoni/davinci-sdk';
 
-const { chainId, verifier, dkgAdapter } = await registry.verifyDeployment();
+const { chainId, verifier, dkgAdapter, councilAdapter } = await registry.verifyDeployment();
 ```
 
-It checks the registry's batch and results program vks, vadcop root and ballot VK hash against `RELEASE_PINS`, its `chainID()` against the provider's chain, the `ZiskVerifier`'s code hash and root, and that the DKG adapter points back at the registry. A difference throws `DeploymentPinError { field, expected, got }`. `verifyDeployment(pins)` overrides entries, for a local deployment. `init()` runs it unless `verifyDeployment: false`.
+It checks the registry's batch and results program vks, vadcop root and ballot VK hash against `RELEASE_PINS`, its `chainID()` against the provider's chain, the `ZiskVerifier`'s code hash and root, and that the DKG and Council adapters point back at the registry. A difference throws `DeploymentPinError { field, expected, got }`. `verifyDeployment(pins)` overrides entries, for a local deployment. `init()` runs it unless `verifyDeployment: false`.
 
 ## Events
 
@@ -2004,6 +2030,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63) |
 | `InvalidGrace` (`ProcessGraceError`) | `grace` outside `graceFloor..graceCeil` |
 | `DkgDisabledError` (`revertName` `DKGDisabled`) | a DKG key mode on a registry without DKG |
+| `CouncilDisabledError` | `keyMode: 'council'` on a registry without a Council manager, or deployed before the mode |
 | `NoLiveEpoch`, `PoolExhausted` | no committee epoch can take the process now (the SDK already retried once); try again in a few minutes |
 | `InvalidCensusRoot`, `InvalidCensusURI`, `InvalidCensusAddress`, `InvalidCensusOrigin` | the census fields do not fit its origin |
 | `InvalidMetadata` | an empty metadata URI or a zero hash |

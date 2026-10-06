@@ -11,6 +11,7 @@ Results unlock when the grace window closes (`graceEnd`, `references/grace.md`);
 | `'sequencer'` | The key node decrypts the accumulator, proves the decryption in a zkVM guest and calls `setProcessResults`. It usually prepares the proof during the grace window. | seconds to a couple of minutes |
 | `'dkg'` | A node sends `requestResultsDecryption` (the process moves to ENDED), the committee combines its decryption shares, and a node stores the tally with `finalizeResultsFromDKG`. | 1 to 5 minutes |
 | `'dkg-locked'` | The same, once the organizer has called `revealProcessKey`. Nothing is decrypted before. | as `'dkg'`, from the reveal |
+| `'council'` | As `'dkg'`, with the Council ceremony's members combining the whole request. | as long as `t` members take to show up |
 
 With a sequencer key, only the key node can publish the results: if it is gone, they never come.
 

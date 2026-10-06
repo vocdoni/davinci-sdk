@@ -1,0 +1,191 @@
+[
+  {
+    "type": "function",
+    "name": "bindProcess",
+    "inputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "requestId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "pkX",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pkY",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getBinding",
+    "inputs": [
+      {
+        "name": "adapter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "requestId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "requested",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPlaintexts",
+    "inputs": [
+      {
+        "name": "requestId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ready",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "values",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPublicKey",
+    "inputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRequest",
+    "inputs": [
+      {
+        "name": "requestId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "fieldCount",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "completedBitmap",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "partialBitmap",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "cts",
+        "type": "uint256[4][]",
+        "internalType": "uint256[4][]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "submitRequest",
+    "inputs": [
+      {
+        "name": "cid",
+        "type": "bytes12",
+        "internalType": "bytes12"
+      },
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "cts",
+        "type": "uint256[4][]",
+        "internalType": "uint256[4][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "requestId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  }
+]

@@ -45,6 +45,16 @@ export interface AnvilEnv {
   mockDkg: string;
   /** Its ABI, as JSON. */
   mockDkgAbi: string;
+  /**
+   * `ProcessRegistry` whose Council manager is davinci-contracts'
+   * `MockCouncilManager`, and no DKG manager.
+   */
+  councilRegistry: string;
+  councilRegistryBlock: number;
+  /** The `MockCouncilManager` behind `councilRegistry`. */
+  mockCouncil: string;
+  /** Its ABI, as JSON. */
+  mockCouncilAbi: string;
   /** `OwnedCensus` creation code, linked to the deployed `PoseidonT3`. */
   ownedCensusBytecode: string;
 }

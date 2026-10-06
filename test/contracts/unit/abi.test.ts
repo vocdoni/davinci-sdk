@@ -5,6 +5,9 @@ import { Interface, type JsonFragment, type ParamType } from 'ethers';
 import {
   CENSUS_CONTRACTS_ABI_COMMIT,
   CENSUS_VALIDATOR_ABI,
+  COUNCIL_ADAPTER_ABI,
+  COUNCIL_MANAGER_ABI,
+  COUNCIL_MANAGER_ERRORS_ABI,
   CONTRACTS_ABI_COMMIT,
   DAVINCI_DKG_ADAPTER_ABI,
   DAVINCI_ERRORS_ABI,
@@ -17,12 +20,16 @@ import {
   decodeDavinciError,
 } from '../../../src/contracts/abis';
 
-// Drift guard for the vendored ABIs (davinci-contracts 36c0b0a). Every value
-// below is written out by hand from that commit's contracts; a sync that moves
-// any of them must be a deliberate change here too.
+// Drift guard for the vendored ABIs (davinci-contracts 74debe9, the council
+// branch over 36c0b0a; its ICouncilManager is davinci-dkg-council's,
+// verbatim). Every value below is written out by hand from that commit's
+// contracts; a sync that moves any of them must be a deliberate change here
+// too.
 
 const registry = new Interface(PROCESS_REGISTRY_ABI);
 const adapter = new Interface(DAVINCI_DKG_ADAPTER_ABI);
+const councilAdapter = new Interface(COUNCIL_ADAPTER_ABI);
+const councilManager = new Interface(COUNCIL_MANAGER_ABI);
 
 const REGISTRY_FUNCTIONS: Record<string, string> = {
   'newProcess(uint8,uint256,uint256,uint256,(bool,uint8,uint8,uint8,uint256,uint256,uint256,uint256),(uint8,bytes32,address,string,bool),string,bytes32,(uint256,uint256),(uint8,bytes12,uint256,uint256,uint256,uint256,uint256))':
@@ -44,6 +51,7 @@ const REGISTRY_FUNCTIONS: Record<string, string> = {
   'submitStateTransition(bytes31,bytes,bytes,bytes[],bytes32[],bytes[])': '0x1fdf3449',
   'aidFor(bytes31)': '0x702574b3',
   'dkgAdapter()': '0xe16d5b7c',
+  'councilAdapter()': '0xabaab13a',
   'defaultGrace()': '0xc8f0582f',
   'graceFloor()': '0x5ff5f981',
   'graceCeil()': '0x1542bbe2',
@@ -73,6 +81,28 @@ const ADAPTER_FUNCTIONS: Record<string, string> = {
   'appManager()': '0xebe86c13',
 };
 
+// CouncilAdapter: the registry's seam to a Council manager.
+const COUNCIL_ADAPTER_FUNCTIONS: Record<string, string> = {
+  'register(bytes31,address,(uint8,bytes12,uint256,uint256,uint256,uint256,uint256))': '0xecd8e205',
+  'submit(bytes12,bytes32,uint256[4][])': '0xae977ede',
+  'plaintexts(bytes12,bytes32,uint16,uint16)': '0x088858bc',
+  'reveal(bytes12,bytes32,uint256)': '0x64fe50ac',
+  'bindings(bytes32)': '0x2680c7d8',
+  'registry()': '0x7b103999',
+  'manager()': '0x481c6a75',
+};
+
+// ICouncilManager, all of it: the calls the adapter makes and the views a
+// client follows a request with.
+const COUNCIL_MANAGER_FUNCTIONS: Record<string, string> = {
+  'bindProcess(bytes12,bytes31,address)': '0x58d66923',
+  'submitRequest(bytes12,bytes31,uint256[4][])': '0x548efb71',
+  'getPlaintexts(bytes32)': '0xab095fca',
+  'getRequest(bytes32)': '0xfb1e61ca',
+  'getBinding(address,bytes31)': '0x8833c93c',
+  'getPublicKey(bytes12)': '0x9528479e',
+};
+
 const REMOVED_FUNCTIONS = ['MAX_CENSUS_ORIGIN', 'BLOB_INDEX', 'stVerifier', 'rVerifier', 'blobsDA'];
 
 const REGISTRY_EVENTS: Record<string, string> = {
@@ -98,7 +128,7 @@ const REGISTRY_EVENTS: Record<string, string> = {
     '0xdca6075f07367349a836825d3ee7c35c204d2e727ae81a5b7a48aca95b9c270b',
 };
 
-// All 61 registry errors, by name.
+// All 62 registry errors, by name.
 const REGISTRY_ERRORS: Record<string, string> = {
   BallotModeMaxValueSumTooLarge: '0x271fb805',
   BallotModeMaxValueTooLarge: '0x481eb79f',
@@ -108,6 +138,7 @@ const REGISTRY_ERRORS: Record<string, string> = {
   CannotAcceptResult: '0xf0dabb68',
   CensusNotUpdatable: '0x142ddf1c',
   CircuitFailed: '0x54aabb00',
+  CouncilDisabled: '0xe00ffde9',
   DKGDisabled: '0x0003eb8f',
   EmptyTransition: '0x7f19b8aa',
   GraceOpen: '0xc23ee5e6',
@@ -195,6 +226,37 @@ const FOREIGN_ERRORS: Record<string, [JsonFragment[], Record<string, string>]> =
       DecryptionLimitReached: '0x464e67af',
     },
   ],
+  // InvalidKeyMode and InvalidDKGParams share the registry's selectors on purpose.
+  CouncilAdapter: [
+    COUNCIL_ADAPTER_ABI,
+    {
+      NotRegistry: '0xc85d9d6c',
+      InvalidKeyMode: '0x65b75c39',
+      InvalidDKGParams: '0xe4291a19',
+      UnsupportedKeyMode: '0x32544847',
+      UnknownRequest: '0x6d080297',
+      RequestMismatch: '0xba343de5',
+      InvalidFieldRange: '0x8e4d3c32',
+    },
+  ],
+  // The manager errors that bind, request and read can raise, as CouncilTypes.sol declares them.
+  ICouncilManagerErrors: [
+    COUNCIL_MANAGER_ERRORS_ABI,
+    {
+      UnknownCeremony: '0xe271bee4',
+      WrongPhase: '0xe2586bcc',
+      NotAllowedAdapter: '0x8b55fd0e',
+      NotAuthorizedCreator: '0xd6e14953',
+      AlreadyBound: '0x682a9065',
+      UnknownBinding: '0x0896d1cb',
+      AlreadyRequested: '0x5303ed82',
+      BadFieldCount: '0xc91d26c2',
+      NonCanonical: '0x7ba9e47a',
+      InvalidPoint: '0xb8fedf87',
+      NotInSubgroup: '0x09463a59',
+      UnknownRequest: '0x6d080297',
+    },
+  ],
 };
 
 // `getProcess` returns DAVINCITypes.Process: 25 fields, grace and lastVoteAt
@@ -257,11 +319,14 @@ describe('vendored contract ABIs', () => {
       commit: string;
       files: Record<string, string>;
     };
-    expect(source.commit).toBe('36c0b0aa9f4d5f3c6a777ab1d1db2774e379cb9c');
+    expect(source.commit).toBe('74debe9e479c8529b0b8a736d1ea928d46fa10ec');
     expect(CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual([
+      'CouncilAdapter.json',
       'DavinciDKGAdapter.json',
       'ICensusValidator.json',
+      'ICouncilManager.json',
+      'ICouncilManagerErrors.json',
       'IDKGAppManager.json',
       'IDKGManager.json',
       'ProcessRegistry.json',
@@ -285,6 +350,54 @@ describe('vendored contract ABIs', () => {
     for (const [signature, selector] of Object.entries(ADAPTER_FUNCTIONS)) {
       expect(must(adapter.getFunction(signature), signature).selector, signature).toBe(selector);
     }
+  });
+
+  it('pin the Council adapter and manager selectors', () => {
+    for (const [signature, selector] of Object.entries(COUNCIL_ADAPTER_FUNCTIONS)) {
+      expect(must(councilAdapter.getFunction(signature), signature).selector, signature).toBe(
+        selector
+      );
+    }
+    const managerFunctions: string[] = [];
+    councilManager.forEachFunction(f => managerFunctions.push(f.format('sighash')));
+    expect(managerFunctions.sort()).toEqual(Object.keys(COUNCIL_MANAGER_FUNCTIONS).sort());
+    for (const [signature, selector] of Object.entries(COUNCIL_MANAGER_FUNCTIONS)) {
+      expect(must(councilManager.getFunction(signature), signature).selector, signature).toBe(
+        selector
+      );
+    }
+    // The registry hands the adapter the creator and destructures four values.
+    const register = must(councilAdapter.getFunction('register'), 'register');
+    expect(register.outputs.map(o => `${o.name}:${o.type}`)).toEqual([
+      'cid:bytes12',
+      'requestId:bytes32',
+      'pkX:uint256',
+      'pkY:uint256',
+    ]);
+    const bindings = must(councilAdapter.getFunction('bindings'), 'bindings');
+    expect(bindings.outputs.map(o => `${o.name}:${o.type}`)).toEqual([
+      'ceremonyId:bytes12',
+      'fieldCount:uint8',
+      'processId:bytes31',
+    ]);
+  });
+
+  it('pin the registry constructor: the Council manager after the DKG manager', () => {
+    expect(registry.deploy.inputs.map(i => `${i.name}:${i.type}`)).toEqual([
+      '_chainID:uint32',
+      '_ziskVerifier:address',
+      '_batchProgramVK:bytes32',
+      '_resultsProgramVK:bytes32',
+      '_rootCVadcopFinal:bytes32',
+      '_ballotVKHash:bytes32',
+      '_dkgManager:address',
+      '_councilManager:address',
+      '_defaultGrace:uint32',
+      '_graceFloor:uint32',
+      '_graceCeil:uint32',
+      '_graceMaxTotal:uint32',
+      '_noticeMin:uint32',
+    ]);
   });
 
   it('drop the functions removed since v0.0.49', () => {
