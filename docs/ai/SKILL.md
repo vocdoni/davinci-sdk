@@ -19,7 +19,7 @@ This is the entry point. Find the task in the table below, read the matching `re
 | --- | --- | --- |
 | Install, configure and `init()` the SDK; networks, node URLs, RPCs | `references/setup.md` | `recipes/bootstrap.ts` |
 | Create an election; end, pause, resume, cancel, extend, max voters | `references/process.md` | `recipes/create-process.ts` |
-| Choose who holds the election key (the DKG key network or a Council on Gnosis); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
+| Choose who holds the election key (Automatic or an Election committee on Gnosis); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
 | Close early with notice; the grace window; a live meeting | `references/grace.md` | `recipes/close-early.ts` |
 | Build a census: Merkle file, updatable, on-chain contract, CSP | `references/census.md` | `recipes/onchain-census.ts` |
 | Titles and questions: the metadata document and its hash | `references/metadata.md` | — |
