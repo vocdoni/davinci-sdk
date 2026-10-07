@@ -15,8 +15,9 @@ import type { ResultsStatus } from './results';
  *   settles votes taken before the end).
  * - `invalid`: the vote fails a protocol check: choices outside the ballot
  *   mode (found before proving), or the node's 40002 with its reason.
- * - `duplicate`: this vote id is already queued or settled (the same ballot
- *   secret twice).
+ * - `duplicate`: this vote id is already queued or settled: a ballot of this
+ *   voter with this `k` in this process is in. Only that reuse of `k` is
+ *   refused, and none is safe (see `VoteConfig.k`).
  * - `slot-busy`: the voter's slot already holds as many queued ballots as the
  *   node keeps; retry once one settles.
  * - `max-voters`: the process has as many voters as it allows.

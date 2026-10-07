@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `createProcess` names every key mode: an unknown one is refused instead of being sent as `DKG_AUTOMATIC`, and `ceremonyId` is refused outside `'council'`.
 - `verifyDeployment` also checks that the Council adapter, if any, points back at the registry. A registry without `councilAdapter()` (the Gnosis deployment) reads as having none; any other failure of that read is thrown.
 
+### Fixed
+
+- The documentation of the ballot secret `k` (`VoteConfig.k`, `encryptBallot`, `computeVoteId`, the voting and protocol guides, the README and SECURITY.md) said a reused `k` is refused as a duplicate. Only the same voter's `k` in the same process repeats a vote id; in another process or for another voter nothing refuses it, while the two ballots share their nonces and, under one election key, expose the difference of their choices. The documentation now forbids reusing `k` for any other ballot, revotes included. No behavior change.
+
 ## [2.0.0] - 2026-09-30
 
 The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci-sequencer), the zkVM batch and results provers (davinci-zkvm), the `BallotProof(16)` ballot circuit, and the `ProcessRegistry` with the grace window and the DKG key modes (davinci-contracts). The Gnosis deployment is built in as a network preset. Nothing of the 1.x stack (davinci-node, the census service, the `/info`-based addresses) is supported any more: every integration has to migrate, following the notes at the end of this entry.

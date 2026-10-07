@@ -728,8 +728,8 @@ export class DavinciSDK {
    *
    * @param config - The process, the choices (one value per ballot field),
    *   and optionally the previous ballot's node and the ballot secret `k`
-   *   (random by default; a given one must be a random field element, and
-   *   one below 2^128 is refused)
+   *   (random by default; a given one must be a random field element used
+   *   for no other ballot, revotes included, and one below 2^128 is refused)
    * @returns The vote id, the node that took it, the weight, and the ballot
    *   secret `k` (it opens the ballot: keep it private)
    * @throws VoteError with a `reason`: `not-in-census`, `not-started`,
