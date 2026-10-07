@@ -1,5 +1,71 @@
 # Changelog
 
+## 3.0.0
+### Major Changes
+
+
+
+- [#92](https://github.com/vocdoni/davinci-sdk/pull/92) [`dd38ab6`](https://github.com/vocdoni/davinci-sdk/commit/dd38ab6678d9fdb473e63296f7622c5a6ed3c2da) Thanks [@p4u](https://github.com/p4u)! - **Council decryption gate.** A Council ceremony fixes when its committee may decrypt; until then `getResultsStatus` reports the new state `awaiting-opening` with `decryptionOpening` (`mode` `'scheduled'` or `'manual'`, `opensAt` the scheduled or fallback date, or null), even for a tally of zeros, which the registry now stores only after the opening. New: `ProcessRegistryService.getCouncilDecryptionGate`, the `CouncilDecryptionGate` type, and `COUNCIL_POLICY_ABI` (the manager's `getPolicy`, written out from the Council spec). `finalizeResults` reverts with `DecryptionNotOpen` before the opening, and a `waitForResults` timeout names the opening date.
+  
+  **Breaking:** `ResultsState` has the new member `awaiting-opening`. An exhaustive `switch` or `Record<ResultsState, …>` over it needs a case:
+  
+  ```ts nocheck
+  const label: Record<ResultsState, string> = {
+    voting: 'Voting',
+    grace: 'Grace window',
+    'awaiting-key-holder': 'Waiting for the key holder',
+    'awaiting-request': 'Waiting for the decryption request',
+    locked: 'Locked',
+    'awaiting-opening': 'Opens later', // new
+    decrypting: 'Decrypting',
+    finalizable: 'Ready to publish',
+    results: 'Results',
+    canceled: 'Canceled',
+  };
+  ```
+
+
+- [#92](https://github.com/vocdoni/davinci-sdk/pull/92) [`fd5cfbf`](https://github.com/vocdoni/davinci-sdk/commit/fd5cfbfc09332bfea9dd56c26c521f914ec80410) Thanks [@p4u](https://github.com/p4u)! - **The `gnosis` preset names the production-beta registry.** `network: 'gnosis'` (the default) and `GNOSIS` point at the `ProcessRegistry` `0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21`, deployed at block 48,633,301, whose process ids carry the prefix `0x83f2e36e`. It creates elections in every key mode: a sequencer key, the DKG key network (`'dkg'`, `'dkg-locked'`) and a Council (`'council'`). `init()` checks that both its DKG and Council adapters point back at it. `https://gnosis.drpc.org` joins the preset's public RPCs, as in davinci-sequencer v0.5.0.
+  
+  **Breaking:** the registry of 2.x, `0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D`, is retired. Under the new preset every facade method refuses a process id it created (`was not created by the gnosis registry`), and `networkOfProcessId` no longer knows it. To read or finish such a process, name that registry as a custom network, with nodes that still follow it:
+  
+  ```ts
+  const retired = new DavinciSDK({
+    signer,
+    sequencerUrls: nodeUrls,
+    network: {
+      name: 'gnosis-retired',
+      chainId: 100,
+      processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
+      startBlock: 48_504_090,
+      rpcUrls: GNOSIS.rpcUrls,
+    },
+  });
+  await retired.init();
+  ```
+
+### Minor Changes
+
+
+
+- [#92](https://github.com/vocdoni/davinci-sdk/pull/92) [`38bde53`](https://github.com/vocdoni/davinci-sdk/commit/38bde53151d011003098e861e726cb8f8258c641) Thanks [@p4u](https://github.com/p4u)! - The ballot circuit files download from the DAVINCI CDN first (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<davinci-circom commit>/<file>`), and from raw GitHub at the pinned davinci-circom commit when the CDN cannot serve a copy with the pinned sha256. Every copy is checked against the same sha256 and verification key hash as before. `ArtifactFile.mirrors` lists the fallback URLs of a table entry, tried in order, and a load that fails names every source it tried. An `artifacts` override (`baseUrl`, `dir` or a per-file source) is still the only source of its files.
+  
+  A browser app with a Content-Security-Policy must allow `https://davinci-assets.fra1.cdn.digitaloceanspaces.com` in `connect-src`, next to `https://raw.githubusercontent.com`.
+
+
+- [#92](https://github.com/vocdoni/davinci-sdk/pull/92) [`30c9b08`](https://github.com/vocdoni/davinci-sdk/commit/30c9b0828d91b28a11ccea570c7666ad1c054ec3) Thanks [@p4u](https://github.com/p4u)! - **Council key mode.** `keyMode: 'council'` (`KeyMode.Council`, 3) with a required `ceremonyId` (`bytes12` hex) binds a process to a Live Council ceremony, an invite-only threshold DKG whose organizer allowed the registry's Council adapter and authorized the creating account; its committee decrypts the tally through the same `requestResultsDecryption` / `finalizeResultsFromDKG` path and `getResultsStatus` states as `'dkg'`. New: `councilParams`, `CouncilDisabledError`, `ProcessRegistryService.getCouncilAdapter`, `OnchainDkg.council` (`epochId` is then the ceremony id and `aid` the request id), `DeploymentInfo.councilAdapter`, and the vendored `COUNCIL_ADAPTER_ABI`, `COUNCIL_MANAGER_ABI` (the real manager's adapter surface) and `COUNCIL_MANAGER_ERRORS_ABI`, whose errors `decodeDavinciError` names.
+  
+  - The vendored ABIs come from davinci-contracts `f4abc5d` (the council branch over `36c0b0a`): `ProcessRegistry` gains `councilAdapter()`, `CouncilDisabled` and `DecryptionNotOpen`, and its constructor takes `_councilManager` after `_dkgManager`; `CouncilAdapter` has `isDecryptionOpen`, and `COUNCIL_MANAGER_ABI` is the Council v2 adapter surface (`getRequestMeta` instead of `getRequest`, plus `isDecryptionOpen`). Selectors, events and the `newProcess` and `getProcess` layouts are unchanged.
+  - `getProcess` decodes key mode 3 and still refuses any mode it does not know. **Releases before this one throw `unknown key mode 3` on a Council process: upgrade every reader of a chain before the first one is created there.**
+  - `createProcess` names every key mode: an unknown one is refused instead of being sent as `DKG_AUTOMATIC`, and `ceremonyId` is refused outside `'council'`.
+  - `verifyDeployment` also checks that the Council adapter, if any, points back at the registry. A registry without `councilAdapter()` reads as having none; any other failure of that read is thrown.
+
+### Patch Changes
+
+
+
+- [#92](https://github.com/vocdoni/davinci-sdk/pull/92) [`22d6c7e`](https://github.com/vocdoni/davinci-sdk/commit/22d6c7ebc80bac7d17f6923dda7681257b780599) Thanks [@p4u](https://github.com/p4u)! - The documentation of the ballot secret `k` (`VoteConfig.k`, `encryptBallot`, `computeVoteId`, the voting and protocol guides, the README and SECURITY.md) said a reused `k` is refused as a duplicate. Only the same voter's `k` in the same process repeats a vote id; in another process or for another voter nothing refuses it, while the two ballots share their nonces and, under one election key, expose the difference of their choices. The documentation now forbids reusing `k` for any other ballot, revotes included. No behavior change.
+
 ## [2.0.0] - 2026-10-01
 
 The SDK now targets the zkVM stack of DAVINCI: the Rust sequencer nodes (davinci-sequencer), the zkVM batch and results provers (davinci-zkvm), the `BallotProof(16)` ballot circuit, and the `ProcessRegistry` with the grace window and the DKG key modes (davinci-contracts). The Gnosis deployment is built in as a network preset. Nothing of the 1.x stack (davinci-node, the census service, the `/info`-based addresses) is supported any more: every integration has to migrate, following the notes at the end of this entry.
