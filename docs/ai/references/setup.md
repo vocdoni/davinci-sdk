@@ -122,7 +122,7 @@ const local = new DavinciSDK({
 
 ### The Gnosis deployment
 
-`network: 'gnosis'` (the default, `GNOSIS`) is the DAVINCI production beta on Gnosis Chain. Its registry creates elections in every key mode: a sequencer key, the DKG key network <!-- TODO(prod-beta-names): user-facing name of the DKG key network --> (`'dkg'`, `'dkg-locked'`) and Councils <!-- TODO(prod-beta-names): user-facing name of the Council option --> (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+`network: 'gnosis'` (the default, `GNOSIS`) is the DAVINCI production beta on Gnosis Chain. Its registry creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
 Releases up to 2.x named an earlier Gnosis registry, now retired. Its processes stay readable as a custom network, through nodes that still follow it:
 

@@ -16,10 +16,10 @@ A voter may vote again; the latest ballot counts. A vote goes `pending` → `agg
 
 ### Production beta on Gnosis
 
-The built-in `gnosis` network is the DAVINCI production beta. For elections whose ballots no single party can open, it offers two committees: <!-- TODO(prod-beta-names): user-facing names of both options -->
+The built-in `gnosis` network is the DAVINCI production beta. For elections whose ballots no single party can open, it offers two committees:
 
-- **The DKG key network** (`keyMode: 'dkg'`): a public committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window.
-- **A Council** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
+- **Automatic** (`keyMode: 'dkg'`): a rotating committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window.
+- **Election committee** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
 
 During the beta both committees' circuits come from development trusted setups. [`docs/ai/references/key-modes.md`](docs/ai/references/key-modes.md) explains both options, how to create a process with each and what every results state means.
 
@@ -67,7 +67,7 @@ const { processId } = await organizer.createProcess({
   census,
   electionPreset: { type: 'single_choice' },
   timing: { duration: 24 * 3600 }, // starts in the block that creates it
-  keyMode: 'dkg', // the DKG key network holds the key; or 'council' with a ceremonyId
+  keyMode: 'dkg', // Automatic: a rotating committee holds the key; or 'council' with a ceremonyId
   questions: [
     {
       title: 'Which initiative should we prioritize?',

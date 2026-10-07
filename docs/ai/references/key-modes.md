@@ -13,16 +13,16 @@ In every mode only the final tally is decrypted, after the grace window (`refere
 
 ## On Gnosis (production beta)
 
-The `gnosis` deployment, the default network, offers two committee options for elections whose ballots no single party can open. The names below are working names. <!-- TODO(prod-beta-names): replace "the DKG key network" and "a Council" with the user-facing names -->
+The `gnosis` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
 
 | Option | `keyMode` | What the organizer prepares | When the results come |
 | --- | --- | --- | --- |
-| **The DKG key network**: a public committee of independent node operators | `'dkg'` (`'dkg-locked'` to release the results on the organizer's word) | nothing | 1 to 5 minutes after the grace window |
-| **A Council**: a committee the organizer invites (a board, an assembly) | `'council'` with a `ceremonyId` | a Live Council ceremony that grants the registry's Council adapter and the creating account | once the ceremony opens decryption: on its scheduled date, or when its organizer opens it |
+| **Automatic**: a rotating committee of independent node operators | `'dkg'` (`'dkg-locked'` to release the results on the organizer's word) | nothing | 1 to 5 minutes after the grace window |
+| **Election committee**: a committee the organizer invites (a board, an assembly) | `'council'` with a `ceremonyId` | a Live Council ceremony that grants the registry's Council adapter and the creating account | once the ceremony opens decryption: on its scheduled date, or when its organizer opens it |
 
 Sequencer keys remain for tests and demos. During the beta both committees prove their work with circuits from development trusted setups: one party generated each Groth16 setup, and whoever kept its secret randomness could forge committee proofs until multi-party ceremonies replace them.
 
-### With the DKG key network
+### With Automatic
 
 ```ts
 const { processId } = await sdk.createProcess({ ...config, keyMode: 'dkg' });
@@ -30,7 +30,7 @@ const { processId } = await sdk.createProcess({ ...config, keyMode: 'dkg' });
 
 The registry takes a free key from the network's newest live epoch; nothing else is needed. The process then goes `voting` → `grace` → `awaiting-request` → `decrypting` → `finalizable` → `results`, the last four within minutes of the grace end. Nodes ask for the decryption and store the tally on their own; `waitForResults({ finalize: true })` stores it from the signer if no node has a minute after it is ready.
 
-### With a Council
+### With an Election committee
 
 1. The Council's organizer creates a ceremony in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)), invites the members and waits until they have joined and dealt: the ceremony is then `Live`. Its decryption opening is fixed at creation: a scheduled date (after the vote's end plus the grace window), or manual with an optional fallback date.
 2. The organizer grants the registry's Council adapter and the account that calls `createProcess`. Both grants are permanent for that ceremony.
@@ -46,7 +46,7 @@ The process then goes `voting` → `grace` → `awaiting-opening` until the cere
 
 ### What to show voters and organizers
 
-| `state` | DKG key network | Council |
+| `state` | Automatic | Election committee |
 | --- | --- | --- |
 | `voting`, `grace` | voting, then counting the last votes | the same |
 | `awaiting-request`, `decrypting`, `finalizable` | decrypting the results, minutes | the committee is decrypting; it needs `t` members to show up |

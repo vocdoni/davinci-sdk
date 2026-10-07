@@ -42,7 +42,7 @@ Fixes are recorded in [CHANGELOG.md](CHANGELOG.md) and announced through GitHub 
 
 ## Trust assumptions
 
-- A sequencer key (the default key mode) is held by one node: it can decrypt the ballots published in the settlement blobs and is the only party able to publish the results. The DKG key modes move both to a threshold of a committee.
+- A sequencer key (the default key mode) is held by one node: it can decrypt the ballots published in the settlement blobs and is the only party able to publish the results. The Automatic key mode (DKG committee) moves both to a threshold of an independent operator set; the Election committee key mode moves both to a threshold of the invited committee.
 - The SDK uses the node URLs and RPCs as configured. Use `https` for both in production, and nodes and RPCs you trust to be available.
 - Proofs are generated with `snarkjs` and chain access goes through `ethers`; keep dependencies up to date.
 
