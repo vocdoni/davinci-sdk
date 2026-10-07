@@ -34,6 +34,8 @@ const PINNED = {
 
 const VKEY_BYTES = toUtf8Bytes(PINNED_VKEY_TEXT);
 const VKEY_FILE: ArtifactFile = BALLOT_ARTIFACTS[BALLOT_VK_HASH].vkey;
+// The same file with one source only.
+const SINGLE: ArtifactFile = { url: VKEY_FILE.url, sha256: VKEY_FILE.sha256 };
 const FIXTURES = join(__dirname, '..', '..', 'fixtures', 'zkvm');
 
 // A fetch that serves `files` by URL and records every request.
@@ -51,19 +53,23 @@ function serve(files: Record<string, Uint8Array | number>) {
 }
 
 describe('the ballot artifact table', () => {
-  it('pins the registry key to davinci-circom a39a9f9 on raw GitHub, with its sha256s', () => {
+  it('pins the registry key to davinci-circom a39a9f9 on the CDN, then raw GitHub', () => {
     expect(Object.keys(BALLOT_ARTIFACTS)).toEqual([BALLOT_VK_HASH]);
     const entry = BALLOT_ARTIFACTS[BALLOT_VK_HASH];
     expect(entry.source).toContain(A39A9F9);
     for (const name of ['wasm', 'zkey', 'vkey'] as const) {
       const [file, hash] = PINNED[name];
       expect(entry[name]).toEqual({
-        url: `https://raw.githubusercontent.com/vocdoni/davinci-circom/${A39A9F9}/artifacts/${file}`,
+        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${A39A9F9}/${file}`,
+        mirrors: [
+          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${A39A9F9}/artifacts/${file}`,
+        ],
         sha256: `0x${hash}`,
       });
     }
     expect(Object.isFrozen(BALLOT_ARTIFACTS)).toBe(true);
     expect(Object.isFrozen(entry.zkey)).toBe(true);
+    expect(Object.isFrozen(entry.zkey.mirrors)).toBe(true);
   });
 
   it('keys the entry by the hash of its verification key, the committed copy', () => {
@@ -106,6 +112,17 @@ describe('the ballot artifact table', () => {
         { table: { [BALLOT_VK_HASH]: { source: 'x' } as unknown as BallotArtifactSet } },
         'wasm needs a url',
       ],
+      [
+        {
+          table: {
+            [BALLOT_VK_HASH]: {
+              ...entry,
+              vkey: { ...entry.vkey, mirrors: 'https://x' as unknown as string[] },
+            },
+          },
+        },
+        `artifacts table entry ${BALLOT_VK_HASH}: vkey mirrors must be a list of URLs`,
+      ],
       [{ timeoutMs: -1 }, 'artifacts timeoutMs -1 is not a positive number'],
       [{ timeoutMs: Number.NaN }, 'is not a positive number'],
     ];
@@ -132,22 +149,61 @@ describe('loadArtifactFile', () => {
   it('refuses bytes whose sha256 differs, and failed downloads', async () => {
     const tampered = VKEY_BYTES.slice();
     tampered[10] ^= 1;
-    const bad = serve({ [VKEY_FILE.url]: tampered });
-    const err = (await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl: bad.fetchImpl }).catch(
+    const bad = serve({ [SINGLE.url]: tampered });
+    const err = (await loadArtifactFile('vkey', SINGLE, { fetchImpl: bad.fetchImpl }).catch(
       (e: unknown) => e
     )) as ArtifactError;
     expect(err).toBeInstanceOf(ArtifactError);
     expect(err.file).toBe('vkey');
-    expect(err.message).toContain(`has sha256 ${sha256(tampered)}, want ${VKEY_FILE.sha256}`);
+    expect(err.message).toBe(
+      `vkey: ${SINGLE.url} has sha256 ${sha256(tampered)}, want ${SINGLE.sha256}`
+    );
 
-    const down = serve({ [VKEY_FILE.url]: 503 });
-    await expect(
-      loadArtifactFile('vkey', VKEY_FILE, { fetchImpl: down.fetchImpl })
-    ).rejects.toThrow(`vkey: cannot read ${VKEY_FILE.url}: HTTP 503`);
+    const down = serve({ [SINGLE.url]: 503 });
+    await expect(loadArtifactFile('vkey', SINGLE, { fetchImpl: down.fetchImpl })).rejects.toThrow(
+      `vkey: cannot read ${SINGLE.url}: HTTP 503`
+    );
     const offline = vi.fn(() => Promise.reject(new TypeError('fetch failed')));
     await expect(
-      loadArtifactFile('vkey', VKEY_FILE, { fetchImpl: offline as unknown as typeof fetch })
+      loadArtifactFile('vkey', SINGLE, { fetchImpl: offline as unknown as typeof fetch })
     ).rejects.toThrow('fetch failed');
+  });
+
+  it('falls back to the mirrors in order when the table URL fails or does not hash', async () => {
+    const [mirror] = VKEY_FILE.mirrors ?? [];
+    const tampered = VKEY_BYTES.slice();
+    tampered[10] ^= 1;
+    for (const first of [503, tampered]) {
+      const { seen, fetchImpl } = serve({ [VKEY_FILE.url]: first, [mirror]: VKEY_BYTES });
+      expect(await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl })).toEqual(VKEY_BYTES);
+      expect(seen).toEqual([VKEY_FILE.url, mirror]);
+    }
+
+    const both = serve({ [VKEY_FILE.url]: 503, [mirror]: tampered });
+    const err = (await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl: both.fetchImpl }).catch(
+      (e: unknown) => e
+    )) as ArtifactError;
+    expect(err).toBeInstanceOf(ArtifactError);
+    expect(err.message).toBe(
+      `vkey: cannot read ${VKEY_FILE.url}: HTTP 503; ` +
+        `${mirror} has sha256 ${sha256(tampered)}, want ${VKEY_FILE.sha256}`
+    );
+    expect(both.seen).toEqual([VKEY_FILE.url, mirror]);
+  });
+
+  it('falls back when the table URL is blocked, as a browser rejects a CDN without CORS', async () => {
+    const [mirror] = VKEY_FILE.mirrors ?? [];
+    const seen: string[] = [];
+    // A browser rejects a cross-origin fetch whose answer lacks Access-Control-Allow-Origin
+    // with a bare TypeError, the same as a network failure.
+    const fetchImpl = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+      seen.push(url);
+      if (url === VKEY_FILE.url) return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(new Response(url === mirror ? VKEY_BYTES : null, { status: 200 }));
+    }) as unknown as typeof fetch;
+    expect(await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl })).toEqual(VKEY_BYTES);
+    expect(seen).toEqual([VKEY_FILE.url, mirror]);
   });
 
   it('takes the file from a per-file source, a directory or a mirror, in that order', async () => {
@@ -169,6 +225,15 @@ describe('loadArtifactFile', () => {
       );
       expect(seen).toEqual(want);
     }
+    // An override is the only source: no fallback to the table URL or its mirrors.
+    const down = serve({ [VKEY_FILE.url]: VKEY_BYTES });
+    await expect(
+      loadArtifactFile('vkey', VKEY_FILE, {
+        baseUrl: 'https://down.example',
+        fetchImpl: down.fetchImpl,
+      })
+    ).rejects.toThrow('vkey: cannot read https://down.example/ballot_proof_vkey.json: HTTP 404');
+    expect(down.seen).toEqual(['https://down.example/ballot_proof_vkey.json']);
   });
 
   it('checks overrides against the pinned sha256 too', async () => {
@@ -205,7 +270,7 @@ describe('loadArtifactFile', () => {
 });
 
 describe('artifact download timeout', () => {
-  const url = VKEY_FILE.url;
+  const url = SINGLE.url;
 
   // A response whose body sends `chunks` every `everyMs`, then ends; or never
   // ends when `stall` is set. It honours the abort signal like fetch does,
@@ -247,7 +312,7 @@ describe('artifact download timeout', () => {
   it('fails a download whose body stalls, whether its stream heeds the abort or not', async () => {
     for (const deaf of [false, true]) {
       const fetchImpl = dripping(split(VKEY_BYTES, 3), 5, true, deaf);
-      const err = (await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl, timeoutMs: 60 }).catch(
+      const err = (await loadArtifactFile('vkey', SINGLE, { fetchImpl, timeoutMs: 60 }).catch(
         (e: unknown) => e
       )) as ArtifactError;
       expect(err, `deaf: ${deaf}`).toBeInstanceOf(ArtifactError);
@@ -259,7 +324,7 @@ describe('artifact download timeout', () => {
     const never = vi.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch;
     const started = Date.now();
     await expect(
-      loadArtifactFile('vkey', VKEY_FILE, { fetchImpl: never, timeoutMs: 50 })
+      loadArtifactFile('vkey', SINGLE, { fetchImpl: never, timeoutMs: 50 })
     ).rejects.toThrow('no data for 50 ms');
     expect(Date.now() - started).toBeLessThan(1000);
   });
@@ -268,7 +333,7 @@ describe('artifact download timeout', () => {
     // 6 chunks 25 ms apart: 150 ms in all, never 60 ms without data.
     const fetchImpl = dripping(split(VKEY_BYTES, 6), 25);
     const started = Date.now();
-    expect(await loadArtifactFile('vkey', VKEY_FILE, { fetchImpl, timeoutMs: 60 })).toEqual(
+    expect(await loadArtifactFile('vkey', SINGLE, { fetchImpl, timeoutMs: 60 })).toEqual(
       VKEY_BYTES
     );
     expect(Date.now() - started).toBeGreaterThan(60);

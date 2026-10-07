@@ -155,7 +155,7 @@ const sdk = new DavinciSDK({
 });
 ```
 
-Precedence: a per-file source, then `dir`, then `baseUrl`, then the table URL. `table` adds entries for a ballot VK hash this release does not know (a local deployment); the hash checks apply to them too.
+Precedence: a per-file source, then `dir`, then `baseUrl`, then the table URLs. The table serves each file from the DAVINCI CDN (`davinci-assets.fra1.cdn.digitaloceanspaces.com`) and, when the CDN cannot give a copy with the pinned sha256, from raw GitHub at the pinned davinci-circom commit (`ArtifactFile.mirrors`); a browser app with a Content-Security-Policy allows both hosts in `connect-src`. An override has no fallback: a mirror or directory that fails fails the load. `table` adds entries for a ballot VK hash this release does not know (a local deployment); the hash checks apply to them too.
 
 ## Sanity check after `init()`
 
