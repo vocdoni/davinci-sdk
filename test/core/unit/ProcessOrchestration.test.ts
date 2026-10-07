@@ -64,7 +64,7 @@ const REGISTRY = GNOSIS.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
 const KEY = `0x${'11'.repeat(32)}`;
 const ORGANIZER = new Wallet(KEY).address;
-const PREFIX = '0xf5848002';
+const PREFIX = '0x83f2e36e';
 const pidOf = (nonce: number, creator = ORGANIZER) => computeProcessId(creator, PREFIX, nonce);
 const PID = pidOf(0);
 const KEY_NODE = 'https://key.sequencer.test';

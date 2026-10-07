@@ -22,7 +22,7 @@ import { PROCESS_REGISTRY_ABI } from '../../../src/contracts';
 
 const LOCAL_REGISTRY = '0x015eAc820688DA203a0bd730a8a7A4CDB97E1a02';
 const pidWith = (prefix: string) => `0x${'aa'.repeat(20)}${prefix.slice(2)}${'bb'.repeat(7)}`;
-const GNOSIS_PID = pidWith('0xf5848002');
+const GNOSIS_PID = pidWith('0x83f2e36e');
 
 describe('resolveNetwork', () => {
   it('resolves a known network by name', () => {
@@ -33,7 +33,7 @@ describe('resolveNetwork', () => {
       processRegistry: GNOSIS.processRegistry,
       startBlock: GNOSIS.startBlock,
       rpcUrls: GNOSIS.rpcUrls,
-      processIdPrefix: '0xf5848002',
+      processIdPrefix: '0x83f2e36e',
     });
     expect(() => resolveNetwork('sepolia')).toThrow('unknown network "sepolia"; known: gnosis');
   });
@@ -78,8 +78,8 @@ describe('resolveNetwork', () => {
 
 describe('process id prefixes', () => {
   it('read bytes 20..23 and name the known network', () => {
-    expect(processIdPrefixOf(GNOSIS_PID)).toBe('0xf5848002');
-    expect(processIdPrefixOf(GNOSIS_PID.slice(2).toUpperCase())).toBe('0xf5848002');
+    expect(processIdPrefixOf(GNOSIS_PID)).toBe('0x83f2e36e');
+    expect(processIdPrefixOf(GNOSIS_PID.slice(2).toUpperCase())).toBe('0x83f2e36e');
     expect(networkOfProcessId(GNOSIS_PID)).toBe(GNOSIS);
     expect(networkOfProcessId(pidWith('0xdeadbeef'))).toBeUndefined();
     expect(() => processIdPrefixOf('0x1234')).toThrow(TypeError);

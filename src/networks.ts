@@ -36,19 +36,16 @@ export interface DavinciNetwork {
  * and Council adapters, the verifier and the grace window settings are read
  * from the registry, not pinned here.
  */
-// TODO(prod-beta): switch to the production-beta registry R2 once deployed: its address and
-// deployment block here, test/fixtures/sequencer/networks.rs (and its README checksum) from the
-// davinci-sequencer release carrying R2, the R1 address, start block and prefix 0xf5848002 in
-// the tests and the examples below, and the placeholders of .changeset/gnosis-registry-r2.md.
 export const GNOSIS: DavinciNetwork = Object.freeze({
   name: 'gnosis',
   chainId: 100,
-  processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
-  startBlock: 48_504_090,
+  processRegistry: '0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21',
+  startBlock: 48_633_301,
   rpcUrls: Object.freeze([
     'https://gnosis-rpc.publicnode.com',
     'https://gnosis-rpc.blockreq.com/v1/rpc/public',
     'https://rpc.gnosischain.com',
+    'https://gnosis.drpc.org',
   ]),
   beaconUrls: Object.freeze(['https://rpc-gbc.gnosischain.com']),
   confirmations: 3,
@@ -79,7 +76,7 @@ export function getNetwork(name: string): DavinciNetwork | undefined {
  *
  * @example
  * ```typescript
- * processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry); // '0xf5848002'
+ * processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry); // '0x83f2e36e'
  * ```
  */
 export function processIdPrefix(chainId: number | bigint, registry: string): string {
@@ -128,7 +125,7 @@ export interface ResolvedNetwork {
  *
  * @example
  * ```typescript
- * resolveNetwork('gnosis').processIdPrefix; // '0xf5848002'
+ * resolveNetwork('gnosis').processIdPrefix; // '0x83f2e36e'
  * resolveNetwork({ chainId: 31337, processRegistry: '0x…', rpcUrls: ['http://127.0.0.1:8545'] });
  * ```
  */

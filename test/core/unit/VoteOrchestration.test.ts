@@ -58,7 +58,7 @@ import { REAL_PROOF } from '../../helpers/realProof';
 
 const REGISTRY = GNOSIS.processRegistry;
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
-const PID = computeProcessId(ORGANIZER, '0xf5848002', 1);
+const PID = computeProcessId(ORGANIZER, '0x83f2e36e', 1);
 const NOW = 1_700_000_000;
 const URLS = ['https://a.sequencer.test', 'https://b.sequencer.test', 'https://c.sequencer.test'];
 const KEY_POINT = bjjMulBase(12345n);

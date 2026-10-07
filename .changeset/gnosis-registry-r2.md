@@ -2,7 +2,7 @@
 '@vocdoni/davinci-sdk': major
 ---
 
-**The `gnosis` preset names the production-beta registry.** `network: 'gnosis'` (the default) and `GNOSIS` point at the `ProcessRegistry` `TODO(prod-beta): R2 address`, deployed at block `TODO(prod-beta): R2 start block`, whose process ids carry the prefix `TODO(prod-beta): R2 prefix`. It creates elections in every key mode: a sequencer key, the DKG key network (`'dkg'`, `'dkg-locked'`) and a Council (`'council'`). `init()` checks that both its DKG and Council adapters point back at it.
+**The `gnosis` preset names the production-beta registry.** `network: 'gnosis'` (the default) and `GNOSIS` point at the `ProcessRegistry` `0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21`, deployed at block 48,633,301, whose process ids carry the prefix `0x83f2e36e`. It creates elections in every key mode: a sequencer key, the DKG key network (`'dkg'`, `'dkg-locked'`) and a Council (`'council'`). `init()` checks that both its DKG and Council adapters point back at it. `https://gnosis.drpc.org` joins the preset's public RPCs, as in davinci-sequencer v0.5.0.
 
 **Breaking:** the registry of 2.x, `0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D`, is retired. Under the new preset every facade method refuses a process id it created (`was not created by the gnosis registry`), and `networkOfProcessId` no longer knows it. To read or finish such a process, name that registry as a custom network, with nodes that still follow it:
 

@@ -137,9 +137,9 @@ describe('networks', () => {
   });
 
   it('compute the process id prefix of a registry', () => {
-    expect(processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry)).toBe('0xf5848002');
-    expect(processIdPrefix(100n, GNOSIS.processRegistry.toLowerCase())).toBe('0xf5848002');
-    expect(processIdPrefix(1, GNOSIS.processRegistry)).not.toBe('0xf5848002');
+    expect(processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry)).toBe('0x83f2e36e');
+    expect(processIdPrefix(100n, GNOSIS.processRegistry.toLowerCase())).toBe('0x83f2e36e');
+    expect(processIdPrefix(1, GNOSIS.processRegistry)).not.toBe('0x83f2e36e');
     expect(() => processIdPrefix(1n << 32n, GNOSIS.processRegistry)).toThrow('uint32');
   });
 });
