@@ -8,11 +8,20 @@ TypeScript SDK for [DAVINCI](https://davinci.vote), the Vocdoni protocol for pri
 
 ## Overview
 
-An election lives in a `ProcessRegistry` contract; the Gnosis deployment is built in. A voter encrypts its ballot, proves it valid with a zk-SNARK computed on its own device, signs it and sends it to a sequencer node. The nodes, run by independent operators, batch ballots, re-encrypt them and prove each batch in a zkVM. The registry verifies the proof and records the new state, and the batch data is published in EIP-4844 blobs. After the end and a short grace window, whoever holds the election key (a node, or a DKG committee) decrypts only the final tally and proves it on-chain.
+An election lives in a `ProcessRegistry` contract; the Gnosis deployment is built in. A voter encrypts its ballot, proves it valid with a zk-SNARK computed on its own device, signs it and sends it to a sequencer node. The nodes, run by independent operators, batch ballots, re-encrypt them and prove each batch in a zkVM. The registry verifies the proof and records the new state, and the batch data is published in EIP-4844 blobs. After the end and a short grace window, whoever holds the election key (a node, or a committee) decrypts only the final tally and proves it on-chain.
 
 `DavinciSDK` covers that whole flow. It takes election parameters from the registry, never from a node, checks at `init()` that the registry pins the zkVM programs and the ballot circuit this release was built for, and verifies the circuit files it downloads. The layers underneath (registry service, node client, census classes, protocol primitives, prover) are exported too.
 
 A voter may vote again; the latest ballot counts. A vote goes `pending` → `aggregated` → `processed` → `settled` as nodes batch it, which takes minutes (up to a quarter of an hour with default node settings). After the end, batches of votes cast before it keep landing until the grace window closes; every landing pushes the window out, up to a cap. The key holder then publishes the tally, seconds to a few minutes later.
+
+### Production beta on Gnosis
+
+The built-in `gnosis` network is the DAVINCI production beta. For elections whose ballots no single party can open, it offers two committees: <!-- TODO(prod-beta-names): user-facing names of both options -->
+
+- **The DKG key network** (`keyMode: 'dkg'`): a public committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window.
+- **A Council** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
+
+During the beta both committees' circuits come from development trusted setups. [`docs/ai/references/key-modes.md`](docs/ai/references/key-modes.md) explains both options, how to create a process with each and what every results state means.
 
 The rest of the stack: [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) (the node), [davinci-contracts](https://github.com/vocdoni/davinci-contracts) (the registry), [davinci-zkvm](https://github.com/vocdoni/davinci-zkvm) (batch and results proofs), [davinci-dkg](https://github.com/vocdoni/davinci-dkg) (committee keys) and [davinci-circom](https://github.com/vocdoni/davinci-circom) (the ballot circuit). The protocol is described in the [whitepaper](https://whitepaper.vocdoni.io).
 
@@ -58,6 +67,7 @@ const { processId } = await organizer.createProcess({
   census,
   electionPreset: { type: 'single_choice' },
   timing: { duration: 24 * 3600 }, // starts in the block that creates it
+  keyMode: 'dkg', // the DKG key network holds the key; or 'council' with a ceremonyId
   questions: [
     {
       title: 'Which initiative should we prioritize?',
@@ -138,6 +148,7 @@ const { processId, organizerSecret } = await sdk.createProcess({
 | `'sequencer'` (default) | the key node | published by that node |
 | `'dkg'` | a davinci-dkg committee, as threshold shares | decrypted by the committee |
 | `'dkg-locked'` | the committee plus the organizer | decrypted once the organizer reveals the secret returned at creation |
+| `'council'` | a Council committee the organizer invited (`ceremonyId`) | decrypted by the committee once its ceremony opens decryption |
 
 ### Managing an election
 
@@ -185,7 +196,7 @@ const receipt = await voter.getVoteReceipt(processId, vote.voteId); // once sett
 ### Results
 
 ```typescript
-const status = await sdk.getResultsStatus(processId); // voting, grace, awaiting-key-holder, locked, decrypting, results, ...
+const status = await sdk.getResultsStatus(processId); // voting, grace, awaiting-opening, decrypting, results, ...
 const results = await sdk.waitForResults(processId);
 console.log(results.kind, results.voters);
 for (const q of results.questions) {
@@ -193,7 +204,7 @@ for (const q of results.questions) {
 }
 ```
 
-Results unlock when the grace window closes. A sequencer key's node publishes them within a couple of minutes, a DKG committee takes a few more, and a `dkg-locked` key first needs `revealProcessKey`. The tally is additive: each field's total is the sum over every voter's latest ballot. Census weights are not multiplied in; a weight is a voter's budget when the ballot mode's `maxValueSum` is 0.
+Results unlock when the grace window closes. A sequencer key's node publishes them within a couple of minutes, a DKG committee takes a few more, and a `dkg-locked` key first needs `revealProcessKey`. A Council process reports `awaiting-opening` (with `status.decryptionOpening`) until its ceremony opens decryption, then its committee decrypts. The tally is additive: each field's total is the sum over every voter's latest ballot. Census weights are not multiplied in; a weight is a voter's budget when the ballot mode's `maxValueSum` is 0.
 
 ### Errors
 
@@ -221,7 +232,7 @@ try {
 
 - A `dkg-locked` election's `organizerSecret` is returned once and never stored or logged by the SDK. Losing it loses the results.
 - The ballot secret `k` returned by `submitVote` opens the ballot with the election key: keep it private, and never pass it to another vote. Every ballot, revotes included, needs a fresh `k`, which `submitVote` draws when `k` is left out: two ballots under one `k` expose the difference of their choices, and no node refuses them.
-- A sequencer key trusts its node with ballot secrecy and with publishing the results; the DKG key modes move both to a committee threshold.
+- A sequencer key trusts its node with ballot secrecy and with publishing the results; the DKG and Council key modes move both to a committee threshold.
 
 ## Documentation
 

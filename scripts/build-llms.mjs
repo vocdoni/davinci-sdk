@@ -37,7 +37,7 @@ const REFERENCES = [
   [
     'key-modes',
     'Key modes',
-    'sequencer, `dkg` and `dkg-locked` election keys, the organizer secret and `revealProcessKey`.',
+    'sequencer, `dkg`, `dkg-locked` and `council` election keys, the two committee options on Gnosis, the organizer secret and `revealProcessKey`.',
   ],
   [
     'grace',

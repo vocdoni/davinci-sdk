@@ -14,7 +14,7 @@ modes, the grace window, results, receipts and the node and contract layers.
 
 - [setup.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/setup.md) — install, configuration, networks and node URLs, `init()`, the read provider, the uploader and the circuit files.
 - [process.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/process.md) — `createProcess` and its config, timing, `maxVoters`, the organizer controls and their windows, `getProcess`.
-- [key-modes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/key-modes.md) — sequencer, `dkg` and `dkg-locked` election keys, the organizer secret and `revealProcessKey`.
+- [key-modes.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/key-modes.md) — sequencer, `dkg`, `dkg-locked` and `council` election keys, the two committee options on Gnosis, the organizer secret and `revealProcessKey`.
 - [grace.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/grace.md) — the grace window after the end, the phases, `closeProcessIn`, the grace floor and running a live meeting.
 - [census.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/census.md) — the four census origins: local Merkle censuses and publishing them, updates, the on-chain census contract, CSP attestations.
 - [metadata.md](https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/docs/ai/references/metadata.md) — the metadata document, its exact bytes and on-chain hash, publishing, verification on read, updates.
