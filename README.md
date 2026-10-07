@@ -16,9 +16,9 @@ A voter may vote again; the latest ballot counts. A vote goes `pending` → `agg
 
 ### Production beta on Gnosis
 
-The built-in `gnosis` network is the DAVINCI production beta. For elections whose ballots no single party can open, it offers two committees:
+The built-in `gnosis` network is the DAVINCI production beta. The production sequencer is `https://sequencer2.davinci.vote`. For elections whose ballots no single party can open, it offers two committees:
 
-- **Automatic** (`keyMode: 'dkg'`): a rotating committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window.
+- **Automatic** (`keyMode: 'dkg'`): a rotating committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window. **Recommended for most elections.**
 - **Election committee** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
 
 During the beta both committees' circuits come from development trusted setups. [`docs/ai/references/key-modes.md`](docs/ai/references/key-modes.md) explains both options, how to create a process with each and what every results state means.
@@ -33,20 +33,27 @@ Requires Node.js 18 or newer, or a current browser through a bundler. The packag
 npm install @vocdoni/davinci-sdk ethers   # or: yarn add / pnpm add
 ```
 
+Save as `election.ts` and run with `npx tsx election.ts`:
+
 ```typescript
-import { BallotProver, DavinciSDK, OffchainCensus, type Uploader } from '@vocdoni/davinci-sdk';
+import { BallotProver, DavinciSDK, OffchainCensus, VoteError, type Uploader } from '@vocdoni/davinci-sdk';
 import { JsonRpcProvider, Wallet } from 'ethers';
 
-// The deployment's sequencer nodes: ask its operators, the SDK embeds none.
-const sequencerUrls = ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'];
+// Production sequencer on Gnosis (see docs/deployments.md in davinci-sequencer for others).
+const sequencerUrls = ['https://sequencer2.davinci.vote'];
 
-// Your hosting for the census file and the metadata document (here an object
-// store client, `bucket`). They must be served unchanged over public https.
+// Census files and metadata must be served unchanged over public HTTPS (no redirects).
+// Replace with your own store: S3, R2, DO Spaces, IPFS, any static host work.
+// UPLOAD_URL: a pre-signed base URL accepting PUT; PUBLIC_URL: the public read base URL.
+const { UPLOAD_URL, PUBLIC_URL } = process.env as Record<string, string>;
 const uploader: Uploader = {
   async upload({ data, contentType, sha256 }) {
-    const key = `davinci/${sha256.slice(2)}.json`;
-    await bucket.put(key, data, { contentType });
-    return `https://files.example.org/${key}`;
+    const name = `${sha256.slice(2)}.json`;
+    const res = await fetch(`${UPLOAD_URL}/${name}`, {
+      method: 'PUT', body: new Uint8Array(data), headers: { 'content-type': contentType },
+    });
+    if (!res.ok) throw new Error(`upload failed: HTTP ${res.status}`);
+    return `${PUBLIC_URL}/${name}`;
   },
 };
 
@@ -66,8 +73,10 @@ const { processId } = await organizer.createProcess({
   title: 'Community decision',
   census,
   electionPreset: { type: 'single_choice' },
-  timing: { duration: 24 * 3600 }, // starts in the block that creates it
-  keyMode: 'dkg', // Automatic: a rotating committee holds the key; or 'council' with a ceremonyId
+  timing: { duration: 24 * 3600 }, // starts in the block that creates it; use closeProcessIn to end early
+  keyMode: 'dkg', // Automatic: the recommended option, a rotating committee holds the key
+                  // 'council' with a ceremonyId: an Election committee the organizer invites
+                  // 'sequencer': sequencer key, lower trust, kept for compatibility
   questions: [
     {
       title: 'Which initiative should we prioritize?',
@@ -83,12 +92,27 @@ const { processId } = await organizer.createProcess({
 // Voter: a bare wallet is enough; the SDK reads the chain through public RPCs.
 const voter = new DavinciSDK({ signer: voterWallet, sequencerUrls });
 await voter.init();
-const vote = await voter.submitVote({ processId, choices: [0, 1, 0] });
+
+// The sequencer indexes the process a few seconds after the transaction mines.
+// Retry submitVote up to ~30 s if it comes back unavailable (unknown process).
+let vote;
+for (let attempt = 0; ; attempt++) {
+  try {
+    vote = await voter.submitVote({ processId, choices: [0, 1, 0] });
+    break;
+  } catch (err) {
+    if (err instanceof VoteError && err.reason === 'unavailable' && attempt < 10) {
+      await new Promise(r => setTimeout(r, 3000));
+    } else throw err;
+  }
+}
 const status = await voter.waitForVoteStatus(processId, vote.voteId); // settled, or error with a reason
 
 // Once the election has ended and its grace window has closed:
+// (to end early use organizer.closeProcessIn(processId, seconds) — see docs/ai/recipes/close-early.ts)
 const results = await voter.waitForResults(processId);
-for (const c of results.questions[0].choices) console.log(c.title, c.total);
+// results.questions[0].choices[i].total is a bigint
+for (const c of results.questions[0].choices) console.log(c.title, c.total.toString());
 
 await BallotProver.terminate(); // in Node: stop snarkjs's worker threads so the process exits
 ```
