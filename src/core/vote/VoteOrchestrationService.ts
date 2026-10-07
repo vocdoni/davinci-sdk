@@ -103,11 +103,19 @@ export interface VoteConfig {
   /**
    * The ballot secret: it encrypts the ballot and derives the vote id, so
    * whoever knows it can open the ballot with the election key and tie the
-   * vote id to the voter. Default a fresh random one (`randomBallotSecret`),
-   * returned in {@link VoteResult.k}. A given one must be as secret and as
-   * random, a full-width field element: one below 2^128 is refused, and one
-   * derived from anything guessable is as weak. The same secret twice gives
-   * the same vote id, which nodes refuse as a duplicate.
+   * vote id to the voter. Default, and recommended: a fresh random one
+   * (`randomBallotSecret`), returned in {@link VoteResult.k}. A given one must
+   * be as secret and as random, a full-width field element: one below 2^128
+   * is refused, and one derived from anything guessable is as weak.
+   *
+   * Never use a `k` for two ballots: not for another voter, not in another
+   * process, not for a revote (a revote needs a fresh `k`). The field nonces
+   * are a Poseidon chain of `k` alone, so two ballots with one `k` share
+   * every `C1`, and under one election key (two voters, or two processes on
+   * one DKG key or Council ceremony) `C2 - C2' = (m - m')·G` shows anyone the
+   * difference of the choices. Their vote ids differ, so no node refuses the
+   * second: only the same voter's `k` in the same process repeats a vote id,
+   * and that refusal is no protection to rely on either.
    */
   k?: bigint;
 

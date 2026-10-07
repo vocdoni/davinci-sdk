@@ -33,6 +33,8 @@ export function elgamalEncrypt(pk: BjjPoint, m: bigint, k: bigint): ElGamalCiphe
 /**
  * A fresh ballot secret `k`: 64 random bytes read little-endian and reduced
  * mod p, like davinci-sequencer `voter::random_k` (uniform up to 2^-250).
+ * Draw one for every ballot, revotes included: a `k` must never encrypt two
+ * ballots (see `encryptBallot`).
  */
 export function randomBallotSecret(): bigint {
   return bytesToBigInt(randomBytes(64).reverse()) % BN254_FR;

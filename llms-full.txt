@@ -1138,7 +1138,7 @@ What happens:
 | `processId` | the process |
 | `choices` | one integer (number or bigint) per ballot field, in field order; at most `numFields`, missing ones are 0 |
 | `node?` | the node that took the voter's previous ballot, so a revote queues behind it |
-| `k?` | the ballot secret; random by default. A given one must be a random field element (one below 2^128 is refused) |
+| `k?` | the ballot secret; random by default, the recommended way. A given one must be a random field element (one below 2^128 is refused) used for no other ballot (see below) |
 
 | `VoteResult` | |
 | --- | --- |
@@ -1147,6 +1147,10 @@ What happens:
 | `weight` | the census weight the vote carries |
 | `k` | the ballot secret. With the election key it opens the ballot and links the vote id to the voter: keep it private |
 | `status` | `pending` |
+
+### The ballot secret `k`
+
+Never use a `k` for two ballots: not for another voter, not in another process, not for a revote. Leave `k` out and every `submitVote` draws a fresh one (`randomBallotSecret`). The nonces that encrypt the 16 fields are a Poseidon chain of `k` alone, so two ballots with one `k` share every `C1`, and under one election key (two voters, or two processes on one DKG key or Council ceremony) `C2 − C2' = (m − m')·G` shows anyone the difference of the choices. Their vote ids differ, so no node refuses the second ballot: only the same voter's `k` in the same process repeats a vote id (`duplicate`), and that is no protection to rely on.
 
 ### The `choices` model
 
@@ -1203,7 +1207,7 @@ const node = localStorage.getItem(`davinci-node:${processId}`) ?? undefined;
 await voter.submitVote({ processId, choices: [0, 0, 1], node });
 ```
 
-A revote while earlier ballots are still queued may fail with `VoteError('slot-busy')`: try again once they settle.
+A revote is a new ballot with a fresh `k`: leave `k` out, never pass the earlier one. A revote while earlier ballots are still queued may fail with `VoteError('slot-busy')`: try again once they settle.
 
 ## Errors
 
@@ -1215,7 +1219,7 @@ A revote while earlier ballots are still queued may fail with `VoteError('slot-b
 | `not-started` | before the start | wait for `startDate` |
 | `closed` | ended, canceled, or past the end | nothing |
 | `invalid` | choices outside the ballot mode, or a protocol check at the node | fix the ballot |
-| `duplicate` | this vote id is already queued or settled (the same `k` twice) | nothing: it is in |
+| `duplicate` | this vote id is already queued or settled: a ballot of this voter with this `k` in this process is in | nothing: that ballot is in. A revote needs a fresh `k` |
 | `slot-busy` | the voter's earlier ballots fill the node's queue | retry later, on the same node |
 | `max-voters` | the process has as many voters as it allows | nothing |
 | `busy` | the node is at capacity or loading a census | retry shortly, on the same node |
@@ -2178,7 +2182,8 @@ An election is a process in the `ProcessRegistry` contract, which is the source 
 
 - **16 fields**, always. A ballot is 16 ElGamal ciphertexts on BabyJubJub (circomlib twisted Edwards form, the election key's curve). Fields past the ballot mode's `numFields` hold the identity ciphertext, which the guest checks before skipping them.
 - **Ballot proof.** A Groth16 proof (BN254) of the `BallotProof(16)` circuit shows the plaintexts follow the ballot mode and the voter's weight, and that the ciphertexts and the vote id were derived from the voter's secret `k`. Its public signals are the voter's address, the vote id and an inputs hash: a MultiPoseidon of the process id, the packed ballot mode, the election key, the address, the vote id, the 64 ballot coordinates and the weight.
-- **Vote id.** `2^63 + (Poseidon(processId, address, k) mod 2^63)`. The voter signs it (secp256k1, personal-sign); the guest checks the signature against the address. The same `k` twice gives the same vote id, which nodes refuse as a duplicate.
+- **Field nonces.** Field `i` (from 0) is encrypted under `k_{i+1}`, with `k_1 = Poseidon(k)` and `k_{i+1} = Poseidon(k_i)`: the chain depends on `k` alone, not on the process, the voter or the key. Two ballots with one `k` share every `C1 = k_{i+1}·G`, and under one election key `C2 − C2' = (m − m')·G`, a small discrete log that gives anyone the difference of the choices. A `k` is therefore used for one ballot only: never for another voter, another process or a revote.
+- **Vote id.** `2^63 + (Poseidon(processId, address, k) mod 2^63)`. The voter signs it (secp256k1, personal-sign); the guest checks the signature against the address. It is no guard against reusing `k`: the same `k` in another process or for another voter gives another vote id, which nothing refuses. Only the same voter's `k` in the same process repeats a vote id, which nodes refuse as a duplicate.
 - **Circuit files.** The wasm, the proving key and the verification key are keyed by the ballot VK hash the registry pins. The SDK checks each file's sha256 and that both verification keys (the file and the one inside the proving key) hash to the registry's value; the guest checks the same hash against the state tree.
 
 ## Censuses and slots

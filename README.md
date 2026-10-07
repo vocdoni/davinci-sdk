@@ -220,7 +220,7 @@ try {
 ### Secrets and trust
 
 - A `dkg-locked` election's `organizerSecret` is returned once and never stored or logged by the SDK. Losing it loses the results.
-- The ballot secret `k` returned by `submitVote` opens the ballot with the election key: keep it private.
+- The ballot secret `k` returned by `submitVote` opens the ballot with the election key: keep it private, and never pass it to another vote. Every ballot, revotes included, needs a fresh `k`, which `submitVote` draws when `k` is left out: two ballots under one `k` expose the difference of their choices, and no node refuses them.
 - A sequencer key trusts its node with ballot secrecy and with publishing the results; the DKG key modes move both to a committee threshold.
 
 ## Documentation

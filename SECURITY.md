@@ -75,7 +75,7 @@ const { processId: id, organizerSecret } = await sdk.createProcess({ ...config, 
 const { k } = await sdk.submitVote({ processId: id, choices: [1, 0] });
 ```
 
-Ballot secrets and organizer secrets are drawn from the platform's secure random source; a ballot secret given by hand below 2^128 is refused. In a browser, keys live in memory: prefer a wallet extension or a hardware wallet for organizer accounts, and protect the page against XSS.
+Ballot secrets and organizer secrets are drawn from the platform's secure random source; a ballot secret given by hand below 2^128 is refused. Never give one ballot secret to two ballots, whether of two voters, in two processes or for a revote: the field nonces derive from `k` alone, so the two ballots share their `C1`s and, under one election key, `C2 − C2'` reveals the difference of the choices. Their vote ids differ, so no node refuses them; leave `k` out and the SDK draws a fresh one for every ballot. In a browser, keys live in memory: prefer a wallet extension or a hardware wallet for organizer accounts, and protect the page against XSS.
 
 ## Contact
 
