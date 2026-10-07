@@ -95,17 +95,16 @@ await voter.init();
 
 // The sequencer indexes the process a few seconds after the transaction mines.
 // Retry submitVote up to ~30 s if it comes back unavailable (unknown process).
-let vote;
-for (let attempt = 0; ; attempt++) {
-  try {
-    vote = await voter.submitVote({ processId, choices: [0, 1, 0] });
-    break;
-  } catch (err) {
-    if (err instanceof VoteError && err.reason === 'unavailable' && attempt < 10) {
-      await new Promise(r => setTimeout(r, 3000));
-    } else throw err;
+const vote = await (async () => {
+  for (let attempt = 0; ; attempt++) {
+    try { return await voter.submitVote({ processId, choices: [0, 1, 0] }); }
+    catch (err) {
+      if (err instanceof VoteError && err.reason === 'unavailable' && attempt < 10)
+        await new Promise(r => setTimeout(r, 3000));
+      else throw err;
+    }
   }
-}
+})();
 const status = await voter.waitForVoteStatus(processId, vote.voteId); // settled, or error with a reason
 
 // Once the election has ended and its grace window has closed:
