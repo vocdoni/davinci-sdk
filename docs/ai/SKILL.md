@@ -1,6 +1,6 @@
 # Davinci SDK (`@vocdoni/davinci-sdk`)
 
-The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the Gnosis deployment is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a DKG committee) and stored on-chain.
+The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the Gnosis production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
 
 One facade, **`DavinciSDK`**, does all of it. The layers below it (`ProcessRegistryService`, the node clients, the census classes, the crypto primitives, the prover) are exported too, for the cases the facade does not cover.
 
@@ -19,7 +19,7 @@ This is the entry point. Find the task in the table below, read the matching `re
 | --- | --- | --- |
 | Install, configure and `init()` the SDK; networks, node URLs, RPCs | `references/setup.md` | `recipes/bootstrap.ts` |
 | Create an election; end, pause, resume, cancel, extend, max voters | `references/process.md` | `recipes/create-process.ts` |
-| Choose who holds the election key; the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
+| Choose who holds the election key (the DKG key network or a Council on Gnosis); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
 | Close early with notice; the grace window; a live meeting | `references/grace.md` | `recipes/close-early.ts` |
 | Build a census: Merkle file, updatable, on-chain contract, CSP | `references/census.md` | `recipes/onchain-census.ts` |
 | Titles and questions: the metadata document and its hash | `references/metadata.md` | — |
@@ -43,7 +43,7 @@ import {
   DavinciSDK, // the facade
   OffchainCensus, // + OffchainDynamicCensus, OnchainCensus, CspCensus, PublishedCensus, CspSigner
   CensusOrigin, // OffchainStatic=1, OffchainDynamic=2, Onchain=3, CSP=4
-  KeyMode, // Sequencer=0, DkgAutomatic=1, DkgLocked=2
+  KeyMode, // Sequencer=0, DkgAutomatic=1, DkgLocked=2, Council=3
   VoteStatus, // pending | aggregated | processed | settled | error
   TxStatus, // pending | completed | reverted | failed
   VoteError, // a refused vote, with a `reason`
@@ -61,7 +61,7 @@ It builds on **ethers v6**, `snarkjs` and `circomlibjs`, and runs in Node 18 or 
 - **The SDK acts as its signer.** An organizer's signer needs a provider on the network's chain. A voter's can be a bare `Wallet`: the SDK reads the chain through `rpcUrls` or the network's public RPCs. To act as someone else, build another `DavinciSDK`.
 - **Voters trust the registry, not the nodes.** The election key, ballot mode and census root come from the contract; a node's view is only cross-checked. The circuit files are checked against the ballot VK hash the registry pins.
 - **A vote is asynchronous.** `submitVote` returns once a node queued the ballot (`pending`). Nodes batch votes, so `settled` can take minutes to a quarter of an hour on default nodes; the end flushes everything. A voter may vote again: the latest ballot counts.
-- **Results come after the grace window.** From the end, batches of votes cast before it keep landing until the grace window closes (`graceEnd`); only then can the tally be decrypted: by the key node (sequencer key) or the committee (DKG). `waitForResults` follows it.
+- **Results come after the grace window.** From the end, batches of votes cast before it keep landing until the grace window closes (`graceEnd`); only then can the tally be decrypted: by the key node (sequencer key) or the committee (DKG or Council, the latter once its ceremony opens decryption). `waitForResults` follows it.
 - **Two status enums.** Transactions report `TxStatus`; votes report `VoteStatus`. Organizer methods come as a stream (`…Stream`, yields `TxStatusEvent`s) and as a plain promise that throws the typed error.
 - **Numbers.** `choices` are numbers or bigints, one per ballot field; ballot bounds are decimal strings; weights, results, `k` and the organizer secret are `bigint`.
 
