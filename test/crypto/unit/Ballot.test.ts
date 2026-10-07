@@ -1,4 +1,5 @@
 import {
+  BJJ_IDENTITY,
   BN254_FR,
   Ballot,
   BallotModeValues,
@@ -7,7 +8,9 @@ import {
   addressToField,
   ballotCoords,
   ballotInputsHashPreimage,
+  bjjAdd,
   bjjMulBase,
+  bjjNeg,
   buildBallot,
   computeBallotInputsHash,
   computeVoteId,
@@ -15,6 +18,7 @@ import {
   isBallotPaddingValid,
   multiPoseidon,
   packBallotMode,
+  poseidon,
   processIdToField,
   unpackBallotMode,
 } from '../../../src/crypto';
@@ -278,6 +282,65 @@ describe('vote id, inputs hash and circuit inputs', () => {
     await expect(buildBallot({ ...base, processId: '0x1234' })).rejects.toThrow('31 bytes');
     await expect(buildBallot({ ...base, k: -1n })).rejects.toThrow('below p');
     expect(isBallotPaddingValid(await encryptBallot(bjjMulBase(5n), [1n], 3n, 1), 1)).toBe(true);
+  });
+});
+
+// Why a ballot secret must never be reused, by anyone or anywhere: the vote id
+// hashes the process and the voter, the field nonces k_1 = Poseidon(k),
+// k_{i+1} = Poseidon(k_i) do not.
+describe('ballot secret reuse (why k must never be reused)', () => {
+  const v = loadFixture<ElGamalBallots>('zkvm/elgamal.json');
+  const pk = pt(v.pk);
+  const nf = 3;
+  // A full-width field element, as strong as a ballot secret gets.
+  const k = 0x1f2e3d4c5b6a79880f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778n;
+  const first = {
+    processId: processIdToField(`0x${'a1'.repeat(31)}`),
+    address: addressToField('0x1111111111111111111111111111111111111111'),
+    fields: [3n, 0n, 7n],
+  };
+  const second = {
+    processId: processIdToField(`0x${'b2'.repeat(31)}`),
+    address: addressToField('0x2222222222222222222222222222222222222222'),
+    fields: [1n, 2n, 7n],
+  };
+  // d·G for a signed d.
+  const mulG = (d: bigint) => (d < 0n ? bjjNeg(bjjMulBase(-d)) : bjjMulBase(d));
+
+  it("gives two voters in two processes distinct vote ids but equal C1s and C2 - C2' = (m - m')·G", async () => {
+    expect(k >= 1n << 128n && k < BN254_FR).toBe(true);
+
+    // Distinct vote ids: no node refuses the second ballot as a duplicate.
+    const id1 = await computeVoteId(first.processId, first.address, k);
+    const id2 = await computeVoteId(second.processId, second.address, k);
+    expect(id1).not.toBe(id2);
+
+    const b1 = await encryptBallot(pk, first.fields, k, nf);
+    const b2 = await encryptBallot(pk, second.fields, k, nf);
+
+    // The nonces depend on k alone: every C1 is equal, k_{i+1}·G.
+    let ki = k;
+    for (let i = 0; i < 16; i++) {
+      ki = await poseidon([ki]);
+      expect(b1[i].c1, `field ${i}`).toEqual(b2[i].c1);
+      if (i < nf) expect(b1[i].c1, `field ${i}`).toEqual(bjjMulBase(ki));
+    }
+
+    // Under one election key C2 - C2' = (m - m')·G: 2·G, -2·G, and the
+    // identity for the field with equal values, whose C2s are equal.
+    const diffs = b1.slice(0, nf).map((c, i) => bjjAdd(c.c2, bjjNeg(b2[i].c2)));
+    expect(diffs).toEqual([mulG(2n), mulG(-2n), BJJ_IDENTITY]);
+    expect(b1[2].c2).toEqual(b2[2].c2);
+
+    // A small discrete log, no key needed, gives anyone the difference of the choices.
+    const dlog = (p: BjjPoint) => {
+      for (let d = -16n; d <= 16n; d++) {
+        const q = mulG(d);
+        if (q.x === p.x && q.y === p.y) return d;
+      }
+      return undefined;
+    };
+    expect(diffs.map(dlog)).toEqual(first.fields.map((m, i) => m - second.fields[i]));
   });
 });
 
