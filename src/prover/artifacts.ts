@@ -20,7 +20,13 @@ const NAMES: readonly ArtifactName[] = ['wasm', 'zkey', 'vkey'];
 
 /** A circuit file: where it is published and its sha256 (`0x` hex). */
 export interface ArtifactFile {
+  /** Where the file is fetched first. */
   url: string;
+  /**
+   * Other copies of the same file, tried in order when the previous one
+   * cannot be read or does not hash to `sha256`.
+   */
+  mirrors?: readonly string[];
   sha256: string;
 }
 
@@ -36,34 +42,43 @@ export interface BallotArtifactSet {
   vkey: ArtifactFile;
 }
 
-const CIRCOM_A39A9F9 =
-  'https://raw.githubusercontent.com/vocdoni/davinci-circom/a39a9f9867bb70726ad2137ed536d75670e042b9/artifacts';
+const A39A9F9 = 'a39a9f9867bb70726ad2137ed536d75670e042b9';
+const CDN_A39A9F9 = `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${A39A9F9}`;
+const GITHUB_A39A9F9 = `https://raw.githubusercontent.com/vocdoni/davinci-circom/${A39A9F9}/artifacts`;
+
+// A file of the a39a9f9 set: the CDN first, raw GitHub at the commit after it.
+const a39a9f9 = (file: string, sha: string): ArtifactFile =>
+  Object.freeze({
+    url: `${CDN_A39A9F9}/${file}`,
+    mirrors: Object.freeze([`${GITHUB_A39A9F9}/${file}`]),
+    sha256: sha,
+  });
 
 /**
  * The circuit files this release knows, by the ballot VK hash they prove
  * under.
  *
  * `0xbf1e…bb0e`, the key of the Gnosis registry, is davinci-circom commit
- * `a39a9f9` (`BallotProof(16)`, 64,816 constraints), served from raw GitHub
- * at that commit until davinci-circom publishes a release for it. Keys added
- * later point at davinci-circom GitHub release assets
- * (`https://github.com/vocdoni/davinci-circom/releases/download/<tag>/<file>`).
+ * `a39a9f9` (`BallotProof(16)`, 64,816 constraints). Its files come from the
+ * DAVINCI CDN (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<commit>/<file>`)
+ * and, when that fails, from raw GitHub at the commit; both copies are checked
+ * against the same sha256.
  */
 export const BALLOT_ARTIFACTS: Readonly<Record<string, BallotArtifactSet>> = Object.freeze({
   '0xbf1e6590bb1ba883d601c4d7d1c6fa2722a78590716874019db6d68fc776bb0e': Object.freeze({
-    source: 'davinci-circom a39a9f9867bb70726ad2137ed536d75670e042b9',
-    wasm: Object.freeze({
-      url: `${CIRCOM_A39A9F9}/ballot_proof.wasm`,
-      sha256: '0x07ecaef89f730cd4a3ee0355821a1fee4eb235fe8934f3c4bf24744bf1c7e4d5',
-    }),
-    zkey: Object.freeze({
-      url: `${CIRCOM_A39A9F9}/ballot_proof_pkey.zkey`,
-      sha256: '0x4fa825ca364142b066f4a905564f54ed9ff330e6b748c517d08708f866eedf1e',
-    }),
-    vkey: Object.freeze({
-      url: `${CIRCOM_A39A9F9}/ballot_proof_vkey.json`,
-      sha256: '0x498fa6f25d2b4adebe880eb2aa368712fba2821dda5a94efaea4d62725fa9ad7',
-    }),
+    source: `davinci-circom ${A39A9F9}`,
+    wasm: a39a9f9(
+      'ballot_proof.wasm',
+      '0x07ecaef89f730cd4a3ee0355821a1fee4eb235fe8934f3c4bf24744bf1c7e4d5'
+    ),
+    zkey: a39a9f9(
+      'ballot_proof_pkey.zkey',
+      '0x4fa825ca364142b066f4a905564f54ed9ff330e6b748c517d08708f866eedf1e'
+    ),
+    vkey: a39a9f9(
+      'ballot_proof_vkey.json',
+      '0x498fa6f25d2b4adebe880eb2aa368712fba2821dda5a94efaea4d62725fa9ad7'
+    ),
   }),
 });
 
@@ -181,6 +196,16 @@ export function checkArtifactsConfig(config: ArtifactsConfig = {}): void {
           name
         );
       }
+      const { mirrors } = file;
+      if (
+        mirrors !== undefined &&
+        !(Array.isArray(mirrors) && mirrors.every(m => typeof m === 'string'))
+      ) {
+        throw new ArtifactError(
+          `artifacts table entry ${k}: ${name} mirrors must be a list of URLs`,
+          name
+        );
+      }
     }
   }
 }
@@ -215,16 +240,17 @@ function describe(src: Source): string {
   return 'the bytes given';
 }
 
-// A per-file source, else `<dir>/<name>`, else `<baseUrl>/<name>`, else the table URL.
-function sourceOf(name: ArtifactName, file: ArtifactFile, config: ArtifactsConfig): Source {
+// A per-file source, else `<dir>/<name>`, else `<baseUrl>/<name>`, else the
+// table URL and its mirrors, in order.
+function sourcesOf(name: ArtifactName, file: ArtifactFile, config: ArtifactsConfig): Source[] {
   const own = config[name];
-  if (own !== undefined) return typeof own === 'string' ? { url: own } : own;
+  if (own !== undefined) return [typeof own === 'string' ? { url: own } : own];
   const fileName = file.url.split(/[?#]/)[0].split('/').pop() ?? '';
-  if (config.dir !== undefined) return { path: `${config.dir.replace(/\/+$/, '')}/${fileName}` };
+  if (config.dir !== undefined) return [{ path: `${config.dir.replace(/\/+$/, '')}/${fileName}` }];
   if (config.baseUrl !== undefined) {
-    return { url: `${config.baseUrl.replace(/\/+$/, '')}/${fileName}` };
+    return [{ url: `${config.baseUrl.replace(/\/+$/, '')}/${fileName}` }];
   }
-  return { url: file.url };
+  return [file.url, ...(file.mirrors ?? [])].map(url => ({ url }));
 }
 
 // Node's fs, loaded only for a local path; the specifier is a variable so
@@ -253,8 +279,11 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /**
  * One circuit file, from the cache or its source, checked against its sha256.
+ * Without an override, the table URL is tried first and then each of its
+ * mirrors, until one copy reads and hashes right.
  *
- * @throws ArtifactError when it cannot be read or its sha256 differs
+ * @throws ArtifactError when no source can be read with the right sha256; the
+ * message names what went wrong with each
  */
 export async function loadArtifactFile(
   name: ArtifactName,
@@ -265,19 +294,26 @@ export async function loadArtifactFile(
   const cached = await config.cache?.get(want);
   if (cached && sha256(cached) === want) return cached;
 
-  const src = sourceOf(name, file, config);
-  let data: Uint8Array;
-  try {
-    data = await read(src, config);
-  } catch (err) {
-    throw new ArtifactError(`${name}: cannot read ${describe(src)}: ${message(err)}`, name, err);
+  const failures: string[] = [];
+  let cause: unknown;
+  for (const src of sourcesOf(name, file, config)) {
+    let data: Uint8Array;
+    try {
+      data = await read(src, config);
+    } catch (err) {
+      failures.push(`cannot read ${describe(src)}: ${message(err)}`);
+      cause ??= err;
+      continue;
+    }
+    const got = sha256(data);
+    if (got !== want) {
+      failures.push(`${describe(src)} has sha256 ${got}, want ${want}`);
+      continue;
+    }
+    await config.cache?.set(want, data);
+    return data;
   }
-  const got = sha256(data);
-  if (got !== want) {
-    throw new ArtifactError(`${name}: ${describe(src)} has sha256 ${got}, want ${want}`, name);
-  }
-  await config.cache?.set(want, data);
-  return data;
+  throw new ArtifactError(`${name}: ${failures.join('; ')}`, name, cause);
 }
 
 /**

@@ -99,7 +99,7 @@ Nodes refuse census files on private hosts or behind redirects, and ignore a pro
 | `keySequencerUrl` | first usable node | The node that issues sequencer election keys and publishes their results. |
 | `censusProviders` | none | `csp`: where voters get their attestation in a CSP census. |
 | `documents` | `{ verify: true }` | How documents are downloaded and read back; `allowPrivateHosts` for local development. |
-| `artifacts` | pinned URLs | A mirror, local directory or cache for the ballot circuit files, still checked against their pins. |
+| `artifacts` | pinned URLs (CDN, then GitHub) | A mirror, local directory or cache for the ballot circuit files, still checked against their pins. |
 | `verifyDeployment` | `true` | Check the registry pins at `init()`; `{ pins }` for a deployment you control. |
 | `verifyProof` | `true` | Verify each ballot proof locally before it is sent. |
 
