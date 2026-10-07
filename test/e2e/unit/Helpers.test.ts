@@ -261,7 +261,7 @@ describe('the settings', () => {
       'https://rpc.example.org',
       GNOSIS.rpcUrls[1],
       GNOSIS.rpcUrls[0],
-      GNOSIS.rpcUrls[2],
+      ...GNOSIS.rpcUrls.slice(2),
     ]);
   });
 

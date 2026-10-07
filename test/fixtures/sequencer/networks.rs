@@ -30,16 +30,18 @@ impl Network {
     }
 }
 
-/// Gnosis Chain.
+/// Gnosis Chain, registry R2 (the production beta): DKG and Council key
+/// modes.
 pub const GNOSIS: Network = Network {
     name: "gnosis",
     chain_id: 100,
-    registry: address!("6702e0141B6b72bCF8C1bdff20A82A35C5502E7D"),
-    start_block: 48_504_090,
+    registry: address!("20b96e465CA7C3536B9C733571ec1eCf42b2eA21"),
+    start_block: 48_633_301,
     rpc_urls: &[
         "https://gnosis-rpc.publicnode.com",
         "https://gnosis-rpc.blockreq.com/v1/rpc/public",
         "https://rpc.gnosischain.com",
+        "https://gnosis.drpc.org",
     ],
     blob_source: "beacon:https://rpc-gbc.gnosischain.com",
     confirmations: 3,
@@ -70,6 +72,12 @@ mod tests {
             GNOSIS.beacon_urls(),
             ["https://rpc-gbc.gnosischain.com"].to_vec()
         );
+    }
+
+    #[test]
+    fn gnosis_preset_is_deployed() {
+        assert_ne!(GNOSIS.registry, Address::ZERO, "gnosis registry unset");
+        assert_ne!(GNOSIS.start_block, 0, "gnosis start block unset");
     }
 
     #[test]

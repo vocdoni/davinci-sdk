@@ -8,7 +8,7 @@ import {
 
 const EXPECTED: NodeExpectation = {
   chainId: 100,
-  processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
+  processRegistry: '0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21',
   ballotVkHash: `0x${'bf'.repeat(32)}`,
   batchProgramVk: `0x${'6c'.repeat(32)}`,
   resultsProgramVk: `0x${'7b'.repeat(32)}`,

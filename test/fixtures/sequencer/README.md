@@ -3,7 +3,8 @@
 From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) at commit
 `cb2d39c91d9b3ed92216dedef7a4ba55b18859a5`.
 
-- `networks.rs`: verbatim copy of `client/src/networks.rs`, the known deployments.
+- `networks.rs`: verbatim copy of `client/src/networks.rs`, the known deployments,
+  from release v0.5.0 (commit `4dcc9c8`, the Gnosis registry R2).
   `test/protocol/unit/Protocol.test.ts` checks `src/networks.ts` against it.
 - `tracker.json`: tracker proofs (arbo inclusion proofs of vote-id leaves in a
   SHA-256, 64-level state tree that also holds config and ballot leaves), as
@@ -48,7 +49,7 @@ From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) at commit
   census files.
 
 ```
-5ff61788141064f5624ad35141009f64f7ab00baa1675bd03ab49ac4cf1da531  networks.rs
+ad10452cbb66f650c4295d8221d975ff9239c197a7dc89bc32773d288c65d8d7  networks.rs
 6a6d1f8cb0400f01fb53019a7327661ecee8c228134e9fc45dbba3cc682633e0  tracker.json
 4181ed7560b4b581d5ae471a84616f7ce09b717bd72e1fabfc0a27cf4773a9da  wire.json
 db6c536842e6f70bee847d697ca7eb9b5b73eb25134e5cde0f648bebe99a235f  census-files.json
