@@ -40,7 +40,7 @@ What happens:
 | `processId` | the process |
 | `choices` | one integer (number or bigint) per ballot field, in field order; at most `numFields`, missing ones are 0 |
 | `node?` | the node that took the voter's previous ballot, so a revote queues behind it |
-| `k?` | the ballot secret; random by default. A given one must be a random field element (one below 2^128 is refused) |
+| `k?` | the ballot secret; random by default, the recommended way. A given one must be a random field element (one below 2^128 is refused) used for no other ballot (see below) |
 
 | `VoteResult` | |
 | --- | --- |
@@ -49,6 +49,10 @@ What happens:
 | `weight` | the census weight the vote carries |
 | `k` | the ballot secret. With the election key it opens the ballot and links the vote id to the voter: keep it private |
 | `status` | `pending` |
+
+### The ballot secret `k`
+
+Never use a `k` for two ballots: not for another voter, not in another process, not for a revote. Leave `k` out and every `submitVote` draws a fresh one (`randomBallotSecret`). The nonces that encrypt the 16 fields are a Poseidon chain of `k` alone, so two ballots with one `k` share every `C1`, and under one election key (two voters, or two processes on one DKG key or Council ceremony) `C2 − C2' = (m − m')·G` shows anyone the difference of the choices. Their vote ids differ, so no node refuses the second ballot: only the same voter's `k` in the same process repeats a vote id (`duplicate`), and that is no protection to rely on.
 
 ### The `choices` model
 
@@ -105,7 +109,7 @@ const node = localStorage.getItem(`davinci-node:${processId}`) ?? undefined;
 await voter.submitVote({ processId, choices: [0, 0, 1], node });
 ```
 
-A revote while earlier ballots are still queued may fail with `VoteError('slot-busy')`: try again once they settle.
+A revote is a new ballot with a fresh `k`: leave `k` out, never pass the earlier one. A revote while earlier ballots are still queued may fail with `VoteError('slot-busy')`: try again once they settle.
 
 ## Errors
 
@@ -117,7 +121,7 @@ A revote while earlier ballots are still queued may fail with `VoteError('slot-b
 | `not-started` | before the start | wait for `startDate` |
 | `closed` | ended, canceled, or past the end | nothing |
 | `invalid` | choices outside the ballot mode, or a protocol check at the node | fix the ballot |
-| `duplicate` | this vote id is already queued or settled (the same `k` twice) | nothing: it is in |
+| `duplicate` | this vote id is already queued or settled: a ballot of this voter with this `k` in this process is in | nothing: that ballot is in. A revote needs a fresh `k` |
 | `slot-busy` | the voter's earlier ballots fill the node's queue | retry later, on the same node |
 | `max-voters` | the process has as many voters as it allows | nothing |
 | `busy` | the node is at capacity or loading a census | retry shortly, on the same node |

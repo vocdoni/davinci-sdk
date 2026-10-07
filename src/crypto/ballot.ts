@@ -144,6 +144,7 @@ function encryptWith(
 ): Ballot {
   const pad = numFields > 0 && numFields < NUM_FIELDS;
   const out: Ballot = [];
+  // The nonce chain depends on k alone: one k must never encrypt two ballots.
   let ki = assertFieldElement(k, 'k');
   for (let i = 0; i < NUM_FIELDS; i++) {
     ki = h.hash([ki]);
@@ -170,9 +171,16 @@ function assertFieldCount(numFields: number, values: number): void {
  * advances for them); missing values are zero. More values than `numFields`
  * throw rather than being dropped.
  *
+ * The nonces depend on `k` alone, not on the process, the voter or the key,
+ * so a `k` must encrypt one ballot only: draw a fresh one for every ballot,
+ * revotes included (`randomBallotSecret`). Two ballots under one `k` have
+ * equal `C1`s, and under one key `C2 - C2' = (m - m')·G` for every field, a
+ * small discrete log that gives anyone the difference of the plaintexts.
+ * Their vote ids differ (see {@link computeVoteId}), so nothing refuses them.
+ *
  * @param pk - Election key in TE form
  * @param fields - At most `numFields` values
- * @param k - Ballot secret, a field element
+ * @param k - Ballot secret, a field element used for no other ballot
  * @param numFields - The election's `numFields`, 1..16
  */
 export async function encryptBallot(
@@ -205,6 +213,12 @@ function voteIdWith(h: PoseidonHasher, processId: bigint, address: bigint, k: bi
 
 /**
  * Vote id: `2^63 + (Poseidon(processId, address, k) mod 2^63)`.
+ *
+ * It does not guard against reusing `k`: the same `k` in another process or
+ * for another voter gives another vote id, which no node refuses, while the
+ * ballots share their nonces (see {@link encryptBallot}). Only the same
+ * voter's `k` in the same process repeats a vote id, which nodes refuse as a
+ * duplicate; a revote needs a fresh `k` all the same.
  *
  * @param processId - Process id as a field element (see `processIdToField`)
  * @param address - Voter address as a field element (see `addressToField`)
@@ -267,7 +281,7 @@ export interface BuildBallotParams {
   fields: readonly (bigint | number)[];
   /** Census weight, below 2^88. */
   weight: bigint;
-  /** Ballot secret; see `randomBallotSecret`. */
+  /** Ballot secret, fresh for this ballot; see `randomBallotSecret` and `encryptBallot`. */
   k: bigint;
 }
 
