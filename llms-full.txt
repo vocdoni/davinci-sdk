@@ -216,7 +216,7 @@ Deprecated and still accepted: `sequencerUrl` (added to `sequencerUrls`), `addre
 
 1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads Gnosis through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
 2. **Registry.** Its `chainID()` must be the network's (`DeploymentPinError('chainID')`).
-3. **Pins** (unless `verifyDeployment: false`): the batch and results program vks, the vadcop root and the ballot VK hash must be the ones this release carries, the verifier's code must hash to the pinned code hash, and the DKG adapter must point back at the registry. A mismatch throws `DeploymentPinError` naming the field.
+3. **Pins** (unless `verifyDeployment: false`): the batch and results program vks, the vadcop root and the ballot VK hash must be the ones this release carries, the verifier's code must hash to the pinned code hash, and the DKG and Council adapters, when the registry has them, must point back at it. A mismatch throws `DeploymentPinError` naming the field.
 4. **Nodes.** Every node's `/info` must report the network's chain, registry, ballot VK hash and program vks, or `init()` throws `NodeMismatchError`. A URL that answers but is not a sequencer fails too. Observers and nodes that do not answer are recorded in `sdk.nodeChecks` and left out for the session; a call that needs a node then fails with `SequencerUnavailableError` naming them.
 
 Concurrent `init()` calls share one run, and a failed `init()` can be retried.
@@ -246,7 +246,7 @@ getNetwork('gnosis')?.processRegistry;
 resolveNetwork('gnosis').processIdPrefix; // bytes 20..23 of every process id the registry assigns
 ```
 
-A preset carries the chain id, the registry address, its deployment block and public RPCs; the grace settings, the verifier and the DKG adapter are read from the registry. A process id names its registry (bytes 20..23), so the facade refuses an id of another deployment before any request.
+A preset carries the chain id, the registry address, its deployment block and public RPCs; the grace settings, the verifier and the DKG and Council adapters are read from the registry. A process id names its registry (bytes 20..23), so the facade refuses an id of another deployment before any request.
 
 Another deployment, such as a local chain:
 
@@ -264,6 +264,27 @@ const local = new DavinciSDK({
   verifyDeployment: false, // or { pins } for a deployment that pins other values
   documents: { allowPrivateHosts: true },
 });
+```
+
+### The Gnosis deployment
+
+`network: 'gnosis'` (the default, `GNOSIS`) is the DAVINCI production beta on Gnosis Chain. Its registry creates elections in every key mode: a sequencer key, the DKG key network <!-- TODO(prod-beta-names): user-facing name of the DKG key network --> (`'dkg'`, `'dkg-locked'`) and Councils <!-- TODO(prod-beta-names): user-facing name of the Council option --> (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+
+Releases up to 2.x named an earlier Gnosis registry, now retired. Its processes stay readable as a custom network, through nodes that still follow it:
+
+```ts
+const retired = new DavinciSDK({
+  signer,
+  sequencerUrls: nodeUrls,
+  network: {
+    name: 'gnosis-retired',
+    chainId: 100,
+    processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
+    startBlock: 48_504_090,
+    rpcUrls: GNOSIS.rpcUrls,
+  },
+});
+await retired.init();
 ```
 
 ## The uploader

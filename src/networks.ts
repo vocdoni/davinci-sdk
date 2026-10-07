@@ -33,9 +33,13 @@ export interface DavinciNetwork {
 
 /**
  * Gnosis Chain, as in davinci-sequencer `client/src/networks.rs`. The DKG
- * adapter, the verifier and the grace window settings are read from the
- * registry, not pinned here.
+ * and Council adapters, the verifier and the grace window settings are read
+ * from the registry, not pinned here.
  */
+// TODO(prod-beta): switch to the production-beta registry R2 once deployed: its address and
+// deployment block here, test/fixtures/sequencer/networks.rs (and its README checksum) from the
+// davinci-sequencer release carrying R2, the R1 address, start block and prefix 0xf5848002 in
+// the tests and the examples below, and the placeholders of .changeset/gnosis-registry-r2.md.
 export const GNOSIS: DavinciNetwork = Object.freeze({
   name: 'gnosis',
   chainId: 100,
