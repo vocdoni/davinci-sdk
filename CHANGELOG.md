@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.1
+### Patch Changes
+
+
+
+- [#95](https://github.com/vocdoni/davinci-sdk/pull/95) [`ad59a09`](https://github.com/vocdoni/davinci-sdk/commit/ad59a0976ae5ae3b50550f490fe26fa761ed22aa) Thanks [@p4u](https://github.com/p4u)! - docs: use final user-facing names Automatic and Election committee; remove working-name TODOs
+
 ## 3.0.0
 ### Major Changes
 
