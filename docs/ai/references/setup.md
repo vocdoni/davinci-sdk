@@ -124,7 +124,7 @@ const local = new DavinciSDK({
 
 `network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. The preset's registry is a placeholder until the OP registry with the DKG and Council adapters is deployed; that one creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
-Gnosis is retired: releases up to 3.x defaulted to a Gnosis registry (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
+Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
 ```ts
 const retired = new DavinciSDK({
@@ -133,8 +133,8 @@ const retired = new DavinciSDK({
   network: {
     name: 'gnosis-retired',
     chainId: 100,
-    processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
-    startBlock: 48_504_090,
+    processRegistry: '0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21',
+    startBlock: 48_633_301,
     rpcUrls: ['https://gnosis-rpc.publicnode.com'],
   },
   verifyDeployment: false,

@@ -270,7 +270,7 @@ const local = new DavinciSDK({
 
 `network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. The preset's registry is a placeholder until the OP registry with the DKG and Council adapters is deployed; that one creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
-Gnosis is retired: releases up to 3.x defaulted to a Gnosis registry (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
+Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
 ```ts
 const retired = new DavinciSDK({
@@ -279,8 +279,8 @@ const retired = new DavinciSDK({
   network: {
     name: 'gnosis-retired',
     chainId: 100,
-    processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
-    startBlock: 48_504_090,
+    processRegistry: '0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21',
+    startBlock: 48_633_301,
     rpcUrls: ['https://gnosis-rpc.publicnode.com'],
   },
   verifyDeployment: false,
@@ -452,7 +452,7 @@ const { processId } = await sdk.createProcess({
 ```ts
 import { TxStatus } from '@vocdoni/davinci-sdk';
 
-for await (const event of sdk.createProcessStream({ ...config, grace: 150 })) {
+for await (const event of sdk.createProcessStream({ ...config, grace: 240 })) {
   switch (event.status) {
     case TxStatus.Pending:
       // event.step is 'setProcessGrace' for the follow-up transaction
@@ -724,7 +724,7 @@ The five parameters are immutables of the registry:
 
 ```ts
 const { defaultGrace, graceFloor, graceCeil, graceMaxTotal, noticeMin } = await sdk.getGraceParams();
-// OP registry: 180, 150, 600, 1800 and 60 seconds
+// OP registry: 300, 240, 600, 1800 and 60 seconds
 ```
 
 ```ts
@@ -755,10 +755,10 @@ A process still paused at its end settles through the grace window like an ended
 ```ts
 // At creation: checked against graceFloor..graceCeil before anything is sent,
 // then sent as its own transaction right after the creation.
-const { processId, grace, graceError } = await sdk.createProcess({ ...config, grace: 150 });
+const { processId, grace, graceError } = await sdk.createProcess({ ...config, grace: 240 });
 
 // Or later, before the end:
-await sdk.setProcessGrace(processId, 150);
+await sdk.setProcessGrace(processId, 240);
 ```
 
 A value outside `graceFloor..graceCeil`, or a change from the end on, is refused as `ProcessGraceError` (`revertName` `InvalidGrace` or `InvalidTimeBounds`).
@@ -786,7 +786,7 @@ A meeting wants results a few minutes after the vote closes:
 2. **Close with notice**: announce "voting closes in one minute" and call `closeProcessIn(processId, noticeMin)`.
 3. **Wait for the results**: `waitForResults(processId, { onStatus })`.
 
-On the OP registry, with a sequencer key and nodes that settle while voting runs, results land about four and a half minutes after the announcement: the notice and its slack, the last batch, the 150 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
+On the OP registry, with a sequencer key and nodes that settle while voting runs, results land about six minutes after the announcement: the notice and its slack, the last batch, the 240 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
 
 ```ts
 const { graceFloor, noticeMin } = await sdk.getGraceParams();
