@@ -148,7 +148,7 @@ const { processId, organizerSecret } = await sdk.createProcess({
   timing: { startDate: '2026-12-07T09:00:00Z', endDate: '2026-12-08T18:00:00Z' },
   questions,
   keyMode: 'dkg-locked', // returns organizerSecret: store it, the results never unlock without it
-  grace: 150, // seconds, within the registry's graceFloor..graceCeil
+  grace: 240, // seconds, within the registry's graceFloor..graceCeil
 });
 ```
 

@@ -101,7 +101,7 @@ const { processId } = await sdk.createProcess({
 ```ts
 import { TxStatus } from '@vocdoni/davinci-sdk';
 
-for await (const event of sdk.createProcessStream({ ...config, grace: 150 })) {
+for await (const event of sdk.createProcessStream({ ...config, grace: 240 })) {
   switch (event.status) {
     case TxStatus.Pending:
       // event.step is 'setProcessGrace' for the follow-up transaction

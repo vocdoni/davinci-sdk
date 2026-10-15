@@ -17,7 +17,7 @@ The five parameters are immutables of the registry:
 
 ```ts
 const { defaultGrace, graceFloor, graceCeil, graceMaxTotal, noticeMin } = await sdk.getGraceParams();
-// OP registry: 180, 150, 600, 1800 and 60 seconds
+// OP registry: 300, 240, 600, 1800 and 60 seconds
 ```
 
 ```ts
@@ -48,10 +48,10 @@ A process still paused at its end settles through the grace window like an ended
 ```ts
 // At creation: checked against graceFloor..graceCeil before anything is sent,
 // then sent as its own transaction right after the creation.
-const { processId, grace, graceError } = await sdk.createProcess({ ...config, grace: 150 });
+const { processId, grace, graceError } = await sdk.createProcess({ ...config, grace: 240 });
 
 // Or later, before the end:
-await sdk.setProcessGrace(processId, 150);
+await sdk.setProcessGrace(processId, 240);
 ```
 
 A value outside `graceFloor..graceCeil`, or a change from the end on, is refused as `ProcessGraceError` (`revertName` `InvalidGrace` or `InvalidTimeBounds`).
@@ -79,7 +79,7 @@ A meeting wants results a few minutes after the vote closes:
 2. **Close with notice**: announce "voting closes in one minute" and call `closeProcessIn(processId, noticeMin)`.
 3. **Wait for the results**: `waitForResults(processId, { onStatus })`.
 
-On the OP registry, with a sequencer key and nodes that settle while voting runs, results land about four and a half minutes after the announcement: the notice and its slack, the last batch, the 150 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
+On the OP registry, with a sequencer key and nodes that settle while voting runs, results land about six minutes after the announcement: the notice and its slack, the last batch, the 240 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
 
 ```ts
 const { graceFloor, noticeMin } = await sdk.getGraceParams();
