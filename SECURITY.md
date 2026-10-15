@@ -53,7 +53,7 @@ Keep the deployment and proof checks on (they are the defaults), and keep privat
 ```typescript
 const sdk = new DavinciSDK({
   signer: new Wallet(process.env.PRIVATE_KEY!),
-  network: 'gnosis',
+  network: 'optimism',
   sequencerUrls: ['https://sequencer-1.example.org'],
   rpcUrls: ['https://rpc.example.org'],
   verifyDeployment: true, // the registry must pin this release

@@ -1,6 +1,6 @@
 # Davinci SDK (`@vocdoni/davinci-sdk`)
 
-The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the Gnosis production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
+The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
 
 One facade, **`DavinciSDK`**, does all of it. The layers below it (`ProcessRegistryService`, the node clients, the census classes, the crypto primitives, the prover) are exported too, for the cases the facade does not cover.
 
@@ -19,7 +19,7 @@ This is the entry point. Find the task in the table below, read the matching `re
 | --- | --- | --- |
 | Install, configure and `init()` the SDK; networks, node URLs, RPCs | `references/setup.md` | `recipes/bootstrap.ts` |
 | Create an election; end, pause, resume, cancel, extend, max voters | `references/process.md` | `recipes/create-process.ts` |
-| Choose who holds the election key (Automatic or an Election committee on Gnosis); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
+| Choose who holds the election key (Automatic or an Election committee on OP Mainnet); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
 | Close early with notice; the grace window; a live meeting | `references/grace.md` | `recipes/close-early.ts` |
 | Build a census: Merkle file, updatable, on-chain contract, CSP | `references/census.md` | `recipes/onchain-census.ts` |
 | Titles and questions: the metadata document and its hash | `references/metadata.md` | — |
@@ -56,7 +56,7 @@ It builds on **ethers v6**, `snarkjs` and `circomlibjs`, and runs in Node 18 or 
 
 ## Mental model
 
-- **One deployment per SDK instance.** A `DavinciSDK` works with one network (default `'gnosis'`: chain 100 and its registry) and the sequencer nodes you configure. The SDK embeds no node URL and no hosting; you pass `sequencerUrls` and, to create elections, an `uploader`.
+- **One deployment per SDK instance.** A `DavinciSDK` works with one network (default `'optimism'`: chain 10 and its registry) and the sequencer nodes you configure. The SDK embeds no node URL and no hosting; you pass `sequencerUrls` and, to create elections, an `uploader`.
 - **`init()` is mandatory.** It picks the read RPC, checks that the registry pins what this release proves and verifies, and checks every node's `/info` against the registry. Nodes that are down or observers are left out for the session (`sdk.nodeChecks`).
 - **The SDK acts as its signer.** An organizer's signer needs a provider on the network's chain. A voter's can be a bare `Wallet`: the SDK reads the chain through `rpcUrls` or the network's public RPCs. To act as someone else, build another `DavinciSDK`.
 - **Voters trust the registry, not the nodes.** The election key, ballot mode and census root come from the contract; a node's view is only cross-checked. The circuit files are checked against the ballot VK hash the registry pins.
@@ -82,7 +82,7 @@ const uploader: Uploader = {
   },
 };
 
-// 1. The organizer: a signer with a provider on Gnosis.
+// 1. The organizer: a signer with a provider on OP Mainnet.
 const organizerWallet = new Wallet(process.env.ORGANIZER_KEY!, new JsonRpcProvider(rpcUrl));
 const sdk = new DavinciSDK({ signer: organizerWallet, sequencerUrls, uploader });
 await sdk.init();

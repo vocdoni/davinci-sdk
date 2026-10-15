@@ -24,7 +24,7 @@ Companion to the [[davinci-sdk]] skill. Failures grouped by where they happen. E
 | `SequencerUnavailableError` (`nodes`) | every node of a role is down or an observer; `sdk.nodeChecks` says why |
 | `ArtifactError` | a malformed `artifacts` config; later, circuit files that cannot be read or are not the pinned ones |
 | "Provider required for blockchain operations" | an organizer call from a signer without a provider |
-| "The signer is on chain X; the gnosis registry is on chain 100." | an organizer call from a signer on another chain |
+| "The signer is on chain X; the optimism registry is on chain 10." | an organizer call from a signer on another chain |
 | "Process … belongs to …" / "was not created by the … registry" | a process id of another deployment |
 
 ## Creating a process

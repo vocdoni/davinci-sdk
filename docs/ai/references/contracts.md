@@ -12,10 +12,10 @@ const writer = sdk.processes; // with the signer: writes (its provider must be o
 By hand, with any ethers runner:
 
 ```ts
-import { GNOSIS, ProcessRegistryService } from '@vocdoni/davinci-sdk';
+import { OPTIMISM, ProcessRegistryService } from '@vocdoni/davinci-sdk';
 import { JsonRpcProvider } from 'ethers';
 
-const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcProvider(rpcUrl), {
+const registry = new ProcessRegistryService(OPTIMISM.processRegistry, new JsonRpcProvider(rpcUrl), {
   receiptTimeoutMs: 180_000, // the default
 });
 ```
@@ -101,7 +101,7 @@ for await (const window of reader.eventWindows({ processId })) {
 }
 ```
 
-`RegistryEvent` is a union over the ten events (`ProcessCreated`, `ProcessStatusChanged`, `CensusUpdated`, `ProcessMetadataUpdated`, `ProcessDurationChanged`, `ProcessMaxVotersChanged`, `ProcessGraceChanged`, `ProcessStateTransitioned`, `ProcessResultsSet`, `ResultsDecryptionRequested`), each with `blockNumber`, `transactionHash` and `logIndex`. `fromBlock` defaults to the registry's deployment block for a known network and is required otherwise. `parseRegistryLogs(receipt.logs, registry.address)` decodes a receipt's logs.
+`RegistryEvent` is a union over the eleven events (`ProcessCreated`, `ProcessStatusChanged`, `CensusUpdated`, `ProcessMetadataUpdated`, `ProcessDurationChanged`, `ProcessMaxVotersChanged`, `ProcessGraceChanged`, `ProcessStateTransitioned`, `ProcessStateTransitionedL1` (L1-blob mode, emitted next to `ProcessStateTransitioned`), `ProcessResultsSet`, `ResultsDecryptionRequested`), each with `blockNumber`, `transactionHash` and `logIndex`. `fromBlock` defaults to the registry's deployment block for a known network and is required otherwise. `parseRegistryLogs(receipt.logs, registry.address)` decodes a receipt's logs.
 
 Listeners call back with exactly the event's arguments:
 

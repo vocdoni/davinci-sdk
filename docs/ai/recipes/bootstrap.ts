@@ -3,7 +3,7 @@
  *
  * Configure the SDK for a deployment, initialize it and report what it found:
  *
- *   - the network (Gnosis by default) and the registry it points at
+ *   - the network (OP Mainnet by default) and the registry it points at
  *   - the registry pins, checked by init() against this SDK release
  *   - every sequencer node's /info, checked against the registry
  *   - the grace window parameters

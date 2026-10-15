@@ -8,15 +8,15 @@ TypeScript SDK for [DAVINCI](https://davinci.vote), the Vocdoni protocol for pri
 
 ## Overview
 
-An election lives in a `ProcessRegistry` contract; the Gnosis deployment is built in. A voter encrypts its ballot, proves it valid with a zk-SNARK computed on its own device, signs it and sends it to a sequencer node. The nodes, run by independent operators, batch ballots, re-encrypt them and prove each batch in a zkVM. The registry verifies the proof and records the new state, and the batch data is published in EIP-4844 blobs. After the end and a short grace window, whoever holds the election key (a node, or a committee) decrypts only the final tally and proves it on-chain.
+An election lives in a `ProcessRegistry` contract; the OP Mainnet deployment is built in. A voter encrypts its ballot, proves it valid with a zk-SNARK computed on its own device, signs it and sends it to a sequencer node. The nodes, run by independent operators, batch ballots, re-encrypt them and prove each batch in a zkVM. The registry verifies the proof and records the new state, and the batch data is published in EIP-4844 blobs. After the end and a short grace window, whoever holds the election key (a node, or a committee) decrypts only the final tally and proves it on-chain.
 
 `DavinciSDK` covers that whole flow. It takes election parameters from the registry, never from a node, checks at `init()` that the registry pins the zkVM programs and the ballot circuit this release was built for, and verifies the circuit files it downloads. The layers underneath (registry service, node client, census classes, protocol primitives, prover) are exported too.
 
 A voter may vote again; the latest ballot counts. A vote goes `pending` → `aggregated` → `processed` → `settled` as nodes batch it, which takes minutes (up to a quarter of an hour with default node settings). After the end, batches of votes cast before it keep landing until the grace window closes; every landing pushes the window out, up to a cap. The key holder then publishes the tally, seconds to a few minutes later.
 
-### Production beta on Gnosis
+### Production beta on OP Mainnet
 
-The built-in `gnosis` network is the DAVINCI production beta. The production sequencer is `https://sequencer2.davinci.vote`. For elections whose ballots no single party can open, it offers two committees:
+The built-in `optimism` network (OP Mainnet, chain 10) is the DAVINCI production beta, and the default. Transitions settle on OP and their blobs live on Ethereum (L1-blob mode). Gnosis is retired. The production sequencer is `https://sequencer2.davinci.vote`. For elections whose ballots no single party can open, it offers two committees:
 
 - **Automatic** (`keyMode: 'dkg'`): a rotating committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window. **Recommended for most elections.**
 - **Election committee** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
@@ -39,7 +39,7 @@ Save as `election.ts` and run with `npx tsx election.ts`:
 import { BallotProver, DavinciSDK, OffchainCensus, VoteError, type Uploader } from '@vocdoni/davinci-sdk';
 import { JsonRpcProvider, Wallet } from 'ethers';
 
-// Production sequencer on Gnosis (see docs/deployments.md in davinci-sequencer for others).
+// Production sequencer on OP Mainnet (see docs/deployments.md in davinci-sequencer for others).
 const sequencerUrls = ['https://sequencer2.davinci.vote'];
 
 // Census files and metadata must be served unchanged over public HTTPS (no redirects).
@@ -57,9 +57,9 @@ const uploader: Uploader = {
   },
 };
 
-// Organizer: a signer with a provider on Gnosis, the default network.
+// Organizer: a signer with a provider on OP Mainnet, the default network.
 const organizer = new DavinciSDK({
-  signer: new Wallet(process.env.ORGANIZER_KEY!, new JsonRpcProvider(process.env.GNOSIS_RPC)),
+  signer: new Wallet(process.env.ORGANIZER_KEY!, new JsonRpcProvider(process.env.OP_RPC)),
   sequencerUrls,
   uploader,
 });
@@ -126,7 +126,7 @@ Nodes refuse census files on private hosts or behind redirects, and ignore a pro
 | --- | --- | --- |
 | `signer` | required | An ethers `Signer`. A bare `Wallet` can vote; managing elections needs a provider on the network's chain. |
 | `sequencerUrls` | required | The deployment's sequencer nodes. Votes are routed among them per voter, with failover. |
-| `network` | `'gnosis'` | A preset name, or `{ chainId, processRegistry, startBlock?, rpcUrls? }` for another deployment. |
+| `network` | `'optimism'` | A preset name, or `{ chainId, processRegistry, startBlock?, rpcUrls? }` for another deployment. |
 | `uploader` | none | Publishes census files and metadata documents. Required to create elections. |
 | `rpcUrls` | signer's provider, else the preset's | JSON-RPCs for chain reads, in order of preference. |
 | `keySequencerUrl` | first usable node | The node that issues sequencer election keys and publishes their results. |
