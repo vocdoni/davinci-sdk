@@ -66,6 +66,11 @@
         "name": "_noticeMin",
         "type": "uint32",
         "internalType": "uint32"
+      },
+      {
+        "name": "_l1BlobVerifier",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -626,6 +631,19 @@
         "name": "",
         "type": "uint32",
         "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "l1BlobVerifier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IL1BlobVerifier"
       }
     ],
     "stateMutability": "view"
@@ -1355,6 +1373,78 @@
   },
   {
     "type": "function",
+    "name": "submitStateTransitionL1",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "internalType": "bytes31"
+      },
+      {
+        "name": "publicValues",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "proofBytes",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "commitments",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "ys",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "kzgProofs",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "l1",
+        "type": "tuple",
+        "internalType": "struct IL1BlobVerifier.L1BlobProof",
+        "components": [
+          {
+            "name": "headers",
+            "type": "bytes[]",
+            "internalType": "bytes[]"
+          },
+          {
+            "name": "txs",
+            "type": "tuple[]",
+            "internalType": "struct IL1BlobVerifier.L1TxProof[]",
+            "components": [
+              {
+                "name": "headerIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "key",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "proof",
+                "type": "bytes[]",
+                "internalType": "bytes[]"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "ziskVerifier",
     "inputs": [],
     "outputs": [
@@ -1562,6 +1652,31 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProcessStateTransitionedL1",
+    "inputs": [
+      {
+        "name": "processId",
+        "type": "bytes31",
+        "indexed": true,
+        "internalType": "bytes31"
+      },
+      {
+        "name": "l1BlockNumbers",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "versionedHashes",
+        "type": "bytes32[]",
+        "indexed": false,
+        "internalType": "bytes32[]"
       }
     ],
     "anonymous": false
@@ -1953,6 +2068,11 @@
   {
     "type": "error",
     "name": "UnknownProcessIdPrefix",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongDAMode",
     "inputs": []
   }
 ]

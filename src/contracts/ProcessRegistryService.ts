@@ -84,7 +84,7 @@ export const SHORTEN_SLACK_SECONDS = 45;
 
 /**
  * Blocks per `eth_getLogs` of {@link ProcessRegistryService.eventWindows}:
- * under the caps of public RPCs (Gnosis providers commonly allow 10,000).
+ * under the caps of public RPCs (commonly 10,000).
  */
 export const LOG_BLOCK_RANGE = 5_000;
 
@@ -373,6 +373,17 @@ export function parseRegistryLog(log: RegistryLog): RegistryEvent | null {
           'newOverwrittenVotesCount'
         ),
         nBlobs: big(field(a, 'nBlobs'), 'nBlobs'),
+      };
+    case 'ProcessStateTransitionedL1':
+      return {
+        ...base,
+        name: 'ProcessStateTransitionedL1',
+        l1BlockNumbers: tuple(field(a, 'l1BlockNumbers'), 'l1BlockNumbers').map((v, i) =>
+          big(v, `l1BlockNumbers[${i}]`)
+        ),
+        versionedHashes: tuple(field(a, 'versionedHashes'), 'versionedHashes').map((v, i) =>
+          bytesHex(v, `versionedHashes[${i}]`)
+        ),
       };
     case 'ProcessResultsSet':
       return {

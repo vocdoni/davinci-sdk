@@ -21,8 +21,8 @@ import {
   decodeDavinciError,
 } from '../../../src/contracts/abis';
 
-// Drift guard for the vendored ABIs (davinci-contracts 0f00014, the council
-// branch over 36c0b0a with the v2 decryption gate; its ICouncilManager is
+// Drift guard for the vendored ABIs (davinci-contracts bdccdd6, feat/op-core with
+// the ZisK 1.3.2 stack and the L1-blob mode; the registry ABI is equal at fd79251 minus docs; its ICouncilManager is
 // davinci-dkg-council's v2 adapter surface, verbatim). Every value below is written out by hand from that commit's
 // contracts; a sync that moves any of them must be a deliberate change here
 // too.
@@ -125,13 +125,15 @@ const REGISTRY_EVENTS: Record<string, string> = {
     '0xdf161c6af27d090672f982bb8002da0e7f2a530ffbd779e02ab9eba9397e51f1',
   'ProcessStateTransitioned(bytes31,address,bytes32,bytes32,uint256,uint256,uint256)':
     '0x36c6781d994e030a156d2f6fa11abcc1cd6814482a5d61f90da3f336318b1d23',
+  'ProcessStateTransitionedL1(bytes31,uint256[],bytes32[])':
+    '0x4707050fda6801db89adf05b220e5793cac2e1ce5346f94f5c4d504b5e52519b',
   'ProcessResultsSet(bytes31,address,uint256[])':
     '0xdf1be195647bf0f039490311aa7fd2242eb64a0eb3844c37f174b8d7c25d448e',
   'ResultsDecryptionRequested(bytes31,bytes12,bytes32,uint16,uint8)':
     '0xdca6075f07367349a836825d3ee7c35c204d2e727ae81a5b7a48aca95b9c270b',
 };
 
-// All 63 registry errors, by name.
+// All 64 registry errors, by name.
 const REGISTRY_ERRORS: Record<string, string> = {
   BallotModeMaxValueSumTooLarge: '0x271fb805',
   BallotModeMaxValueTooLarge: '0x481eb79f',
@@ -194,6 +196,7 @@ const REGISTRY_ERRORS: Record<string, string> = {
   ResultsNotReady: '0xe0d4dc50',
   SmtLengthMismatch: '0xd0882493',
   SmtMaxLevelsReached: '0xe53f4904',
+  WrongDAMode: '0xe734380b',
   Unauthorized: '0x82b42900',
   UnknownProcessIdPrefix: '0x4532ee1a',
 };
@@ -324,7 +327,7 @@ describe('vendored contract ABIs', () => {
       commit: string;
       files: Record<string, string>;
     };
-    expect(source.commit).toBe('0f000143720f8a523b50741e2847d42f0381f0a5');
+    expect(source.commit).toBe('bdccdd671758ab59e833a7fef90fbe0ebc2509db');
     expect(CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual([
       'CouncilAdapter.json',
@@ -408,7 +411,7 @@ describe('vendored contract ABIs', () => {
     expect(decodeDavinciError('0xa5d6eb98')?.name).toBe('DecryptionNotOpen');
   });
 
-  it('pin the registry constructor: the Council manager after the DKG manager', () => {
+  it('pin the registry constructor: the Council manager after the DKG manager, the L1 blob verifier last', () => {
     expect(registry.deploy.inputs.map(i => `${i.name}:${i.type}`)).toEqual([
       '_chainID:uint32',
       '_ziskVerifier:address',
@@ -423,6 +426,7 @@ describe('vendored contract ABIs', () => {
       '_graceCeil:uint32',
       '_graceMaxTotal:uint32',
       '_noticeMin:uint32',
+      '_l1BlobVerifier:address',
     ]);
   });
 

@@ -238,6 +238,14 @@ export type RegistryEvent = RegistryEventLog &
         overwrittenVotesCount: bigint;
         nBlobs: bigint;
       }
+    | {
+        name: 'ProcessStateTransitionedL1';
+        processId: string;
+        /** Ethereum blocks of the blob transactions (L1-blob mode). */
+        l1BlockNumbers: bigint[];
+        /** Versioned hashes of the transition's blobs. */
+        versionedHashes: string[];
+      }
     | { name: 'ProcessResultsSet'; processId: string; sender: string; result: bigint[] }
     | {
         name: 'ResultsDecryptionRequested';
