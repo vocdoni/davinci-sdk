@@ -50,6 +50,10 @@ export const OPTIMISM: DavinciNetwork = Object.freeze({
   chainId: 10,
   processRegistry: OPTIMISM_REGISTRY,
   startBlock: OPTIMISM_START_BLOCK,
+  // Only mainnet.optimism.io serves 5,000- and 10,000-block `eth_getLogs`
+  // windows across history. publicnode refuses windows ending more than about
+  // 8 hours back (403); drpc.org refuses windows of 1,000 blocks and up on its
+  // free plan (400), so it can serve recent reads only and goes last.
   rpcUrls: Object.freeze([
     'https://mainnet.optimism.io',
     'https://optimism-rpc.publicnode.com',
