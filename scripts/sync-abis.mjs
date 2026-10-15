@@ -8,7 +8,7 @@
 // The first form vendors the registry, DKG, Council and verifier ABIs into abi/; the
 // second vendors the on-chain census contracts into
 // abi/census/, and the creation code of OwnedCensus and PoseidonT3 into
-// test/e2e/contracts/census.json, which the live suite deploys on Gnosis
+// test/e2e/contracts/census.json, which the live suite deploys on OP Mainnet
 // (the anvil suite checks it against its own build). The ABIs are read from
 // the forge build output (`out/` by default). The script refuses a checkout
 // with uncommitted changes under src/ and a build whose sources differ from

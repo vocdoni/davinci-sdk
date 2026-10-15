@@ -123,17 +123,15 @@ export class Organizer {
   }
 }
 
-/** The bill as text: one line per transaction and the total, in xDAI. */
+/** The bill as text: one line per transaction and the total, in ETH. */
 export function formatBill(lines: readonly BillLine[]): string {
   const total = lines.reduce((sum, l) => sum + l.cost, 0n);
   const width = Math.max(10, ...lines.map(l => l.label.length));
   const rows = lines.map(
     l =>
       `  ${l.label.padEnd(width)}  gas ${String(l.gasUsed).padStart(9)} @ ` +
-      `${formatUnits(l.gasPrice, 'gwei').padStart(12)} gwei  ${formatEther(l.cost)} xDAI` +
+      `${formatUnits(l.gasPrice, 'gwei').padStart(12)} gwei  ${formatEther(l.cost)} ETH` +
       `${l.ok ? '' : '  (no receipt or reverted)'}  ${l.hash}`
   );
-  return [`organizer: ${lines.length} transactions, ${formatEther(total)} xDAI`, ...rows].join(
-    '\n'
-  );
+  return [`organizer: ${lines.length} transactions, ${formatEther(total)} ETH`, ...rows].join('\n');
 }

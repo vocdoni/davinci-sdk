@@ -1,9 +1,11 @@
-# Live suite on Gnosis
+# Live suite on OP Mainnet
 
-`yarn test:e2e` runs the SDK against the Gnosis deployment: the preset
+> The registry in the `optimism` preset is a placeholder until the DKG and Council registry is deployed. The `run` phase spends real ETH on mainnet and refuses to start unless `DAVINCI_E2E_CONFIRM_MAINNET=1`.
+
+`yarn test:e2e` runs the SDK against the OP Mainnet deployment: the preset
 registry, real sequencer nodes with their prover, and the live DKG committee.
 It creates eight elections, votes through the nodes, waits for the results and
-checks them. It spends the organizer's xDAI, so it runs only when asked, in
+checks them. It spends the organizer's ETH, so it runs only when asked, in
 two phases:
 
 - **prepare** (offline) draws the voter keys of the file-based censuses into a
@@ -50,8 +52,8 @@ sequencer-key creations stay under the key node's 10 requests a minute.
 ## Before a run
 
 - Docker.
-- The organizer key file: a funded Gnosis account (the run refuses below
-  0.05 xDAI). The key is read from the file and never printed. Use an account
+- The organizer key file: a funded OP Mainnet account (the run refuses below
+  0.005 ETH). The key is read from the file and never printed. Use an account
   kept for this suite: at start the run cancels any of its last 16 processes
   still open, left by an interrupted run.
 - The sequencer node URLs, reachable from where the run happens. Every node
@@ -63,12 +65,13 @@ sequencer-key creations stay under the key node's 10 requests a minute.
 | Variable | Phase | |
 |---|---|---|
 | `DAVINCI_SDK_E2E` | both | `prepare` or `run`; unset skips the suite (the script sets it) |
-| `DAVINCI_SDK_E2E_DIR` | both | the private directory of the voter keys, default `~/.davinci-gnosis/sdk-e2e` (mode 0700, `voters.json` 0600); refused inside the checkout |
+| `DAVINCI_SDK_E2E_DIR` | both | the private directory of the voter keys, default `~/.davinci-optimism/sdk-e2e` (mode 0700, `voters.json` 0600); refused inside the checkout |
 | `DAVINCI_SDK_E2E_ARTIFACTS` | both | where the checked circuit files are kept, default `~/.cache/davinci-sdk-e2e/artifacts` |
 | `DAVINCI_SDK_E2E_BASE_URL` | run | `https://raw.githubusercontent.com/vocdoni/davinci-sdk/<commit>/test/e2e/fixtures` |
 | `DAVINCI_E2E_NODES` | run | the node URLs, comma-separated |
 | `DAVINCI_E2E_ORGANIZER_KEY` | run | path of the organizer's key file (hex) |
-| `DAVINCI_E2E_RPC` | run | optional Gnosis JSON-RPCs tried before the preset's, comma-separated |
+| `DAVINCI_E2E_CONFIRM_MAINNET` | run | must be `1`: the run sends real transactions on OP Mainnet |
+| `DAVINCI_E2E_RPC` | run | optional OP Mainnet JSON-RPCs tried before the preset's, comma-separated |
 
 They can also go in `test/.env` (see `test/.env.example`). The script also
 reads `E2E_DOCKER_CACHE` (the container's `node_modules`, yarn cache and
@@ -142,7 +145,7 @@ commit, or from `fixtures_commit`. Secrets:
 
 ## Measured
 
-One run on 2026-09-30, from the Docker runner on the host of both nodes
+One run on Gnosis (since retired) on 2026-09-30, from the Docker runner on the host of both nodes
 (sequencer v0.3.2), with the Gnosis preset RPCs and all eight scenarios
 passing:
 
@@ -174,4 +177,5 @@ gas price of that day this was 2.3e-10 xDAI. The largest items are the
 deterministic address, so every run deploys one), the `OwnedCensus`
 deployment (1.5 M) and the creations (0.6-0.7 M with a sequencer key, 1.0 M
 for `dkg`, 1.4 M for `dkg-locked`). Settlements and results are paid by the
-node operators. Keep the organizer above the 0.05 xDAI the run checks for.
+node operators. Keep the organizer above the 0.005 ETH the run checks for
+(the figures above are from Gnosis; they have not been measured on OP Mainnet).

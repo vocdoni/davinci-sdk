@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { getAddress, sha256, type Provider } from 'ethers';
 import { TxStatus, type TxStatusEvent } from '../../../src/contracts/SmartContractService';
 import censusSource from '../../../src/contracts/abi/census/source.json';
-import { GNOSIS } from '../../../src/networks';
+import { OPTIMISM } from '../../../src/networks';
 import { DirArtifactCache } from '../artifactCache';
 import {
   CENSUS_CONTRACT_COMMIT,
@@ -168,8 +168,8 @@ describe('the organizer queue', () => {
       ['lost', 0n, false],
     ]);
     const text = formatBill(lines);
-    expect(text).toMatch(/2 transactions, 0\.0002 xDAI/);
-    expect(text).toMatch(/create +gas +100000 @ +2\.0 gwei +0\.0002 xDAI +0xaa$/m);
+    expect(text).toMatch(/2 transactions, 0\.0002 ETH/);
+    expect(text).toMatch(/create +gas +100000 @ +2\.0 gwei +0\.0002 ETH +0xaa$/m);
     expect(text).toMatch(/lost +gas +0 .* \(no receipt or reverted\) +0xbb$/m);
   });
 });
@@ -226,6 +226,7 @@ describe('the settings', () => {
     'DAVINCI_E2E_NODES',
     'DAVINCI_E2E_ORGANIZER_KEY',
     'DAVINCI_E2E_RPC',
+    'DAVINCI_E2E_CONFIRM_MAINNET',
   ];
   let saved: Record<string, string | undefined>;
   beforeEach(() => {
@@ -248,20 +249,30 @@ describe('the settings', () => {
     );
   });
 
+  it('refuse to spend on mainnet without a confirmation', () => {
+    process.env.DAVINCI_SDK_E2E_BASE_URL = 'https://files.example.org/fixtures';
+    process.env.DAVINCI_E2E_NODES = 'http://127.0.0.1:1';
+    process.env.DAVINCI_E2E_ORGANIZER_KEY = '/keys/org.key';
+    expect(() => runSettings()).toThrow(/DAVINCI_E2E_CONFIRM_MAINNET=1/);
+    process.env.DAVINCI_E2E_CONFIRM_MAINNET = '1';
+    expect(() => runSettings()).not.toThrow();
+  });
+
   it('put the given RPCs before the preset ones', () => {
     process.env.DAVINCI_SDK_E2E_BASE_URL = 'https://files.example.org/fixtures/';
     process.env.DAVINCI_E2E_NODES = ' http://127.0.0.1:1 ,http://127.0.0.1:2';
     process.env.DAVINCI_E2E_ORGANIZER_KEY = '/keys/org.key';
-    process.env.DAVINCI_E2E_RPC = `https://rpc.example.org,${GNOSIS.rpcUrls[1]}`;
+    process.env.DAVINCI_E2E_CONFIRM_MAINNET = '1';
+    process.env.DAVINCI_E2E_RPC = `https://rpc.example.org,${OPTIMISM.rpcUrls[1]}`;
     const s = runSettings();
     expect(s.baseUrl).toBe('https://files.example.org/fixtures');
     expect(s.nodes).toEqual(['http://127.0.0.1:1', 'http://127.0.0.1:2']);
     expect(s.organizerKeyFile).toBe('/keys/org.key');
     expect(s.rpcUrls).toEqual([
       'https://rpc.example.org',
-      GNOSIS.rpcUrls[1],
-      GNOSIS.rpcUrls[0],
-      ...GNOSIS.rpcUrls.slice(2),
+      OPTIMISM.rpcUrls[1],
+      OPTIMISM.rpcUrls[0],
+      ...OPTIMISM.rpcUrls.slice(2),
     ]);
   });
 

@@ -22,7 +22,7 @@ import {
   rpc,
 } from './harness';
 
-// The live suite deploys OwnedCensus on Gnosis from creation code vendored
+// The live suite deploys OwnedCensus on OP Mainnet from creation code vendored
 // with `yarn sync:abis --census`; this checks it against this suite's own
 // build of the same commit, and runs its deployment both ways.
 const ACCOUNT = 9;

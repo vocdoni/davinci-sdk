@@ -12,7 +12,7 @@ import { DavinciSDK } from '../../../src/DavinciSDK';
 import { checkCensusUrl } from '../../../src/census/publish';
 import type { CensusProviders } from '../../../src/census/types';
 import { ProcessStatus, type GraceParams } from '../../../src/contracts/types';
-import { FailoverRpcProvider, GNOSIS, computeProcessId } from '../../../src/networks';
+import { FailoverRpcProvider, OPTIMISM, computeProcessId } from '../../../src/networks';
 import { BallotProver } from '../../../src/prover/BallotProver';
 import { DirArtifactCache } from '../artifactCache';
 import { FIXTURES_DIR, redact, say, type RunSettings } from '../env';
@@ -23,7 +23,7 @@ import { fixtureFiles, votersOf, type Voters } from '../spec';
 import { loadVoterKeys } from '../voters';
 
 /** The organizer keeps at least this much, as the Rust live e2e does. */
-export const MIN_BALANCE = parseEther('0.05');
+export const MIN_BALANCE = parseEther('0.005');
 
 /** How many of the organizer's latest processes a run checks for leftovers. */
 const LEFTOVER_WINDOW = 16;
@@ -78,11 +78,11 @@ export async function connect(settings: RunSettings): Promise<Live> {
 
   const cache = new DirArtifactCache(settings.artifactsDir);
   const host = new FixtureHost(settings.baseUrl, local);
-  const provider = new FailoverRpcProvider(settings.rpcUrls, GNOSIS.chainId);
+  const provider = new FailoverRpcProvider(settings.rpcUrls, OPTIMISM.chainId);
   const wallet = new Wallet(readKey(settings.organizerKeyFile), provider);
   const sdk = new DavinciSDK({
     signer: wallet,
-    network: 'gnosis',
+    network: 'optimism',
     sequencerUrls: settings.nodes,
     rpcUrls: settings.rpcUrls,
     uploader: host.uploader,
@@ -102,10 +102,10 @@ export async function connect(settings: RunSettings): Promise<Live> {
     sdk.getGraceParams(),
     sdk.registry.getDkgAdapter(),
   ]);
-  say(`organizer ${wallet.address}: ${formatEther(balance)} xDAI`);
+  say(`organizer ${wallet.address}: ${formatEther(balance)} ETH`);
   if (balance < MIN_BALANCE) {
     throw new Error(
-      `the organizer holds ${formatEther(balance)} xDAI, below ${formatEther(MIN_BALANCE)}`
+      `the organizer holds ${formatEther(balance)} ETH, below ${formatEther(MIN_BALANCE)}`
     );
   }
   if (!adapter) throw new Error('the registry has no DKG adapter: the DKG scenarios cannot run');
@@ -133,7 +133,7 @@ export async function connect(settings: RunSettings): Promise<Live> {
     async voterSdk(signer, censusProviders) {
       const voter = new DavinciSDK({
         signer,
-        network: 'gnosis',
+        network: 'optimism',
         sequencerUrls: settings.nodes,
         rpcUrls: settings.rpcUrls,
         artifacts: { cache },
@@ -202,7 +202,7 @@ export async function finish(live: Live | undefined, rows: readonly Row[]): Prom
     process.stderr.write(`${formatBill(lines)}\n`);
     const sent = nonce - live.startNonce;
     process.stderr.write(
-      `balance ${formatEther(live.startBalance)} -> ${formatEther(balance)} xDAI ` +
+      `balance ${formatEther(live.startBalance)} -> ${formatEther(balance)} ETH ` +
         `(spent ${formatEther(live.startBalance - balance)}); ${sent} transactions by nonce` +
         (sent === lines.length ? '' : ` (${sent - lines.length} not itemized: cancellations)`) +
         '\n\n'
