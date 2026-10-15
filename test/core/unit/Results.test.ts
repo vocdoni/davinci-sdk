@@ -30,17 +30,17 @@ import {
   serializeMetadata,
 } from '../../../src/core';
 import { bjjMulBase } from '../../../src/crypto';
-import { GNOSIS, computeProcessId } from '../../../src/networks';
+import { OPTIMISM, computeProcessId } from '../../../src/networks';
 import { DocumentHost } from '../../helpers/documentHost';
 import { MockChain, revertWith } from '../../helpers/mockChain';
 
-const REGISTRY = GNOSIS.processRegistry;
+const REGISTRY = OPTIMISM.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
 const COUNCIL_ADAPTER = '0x000000000000000000000000000000000000C1a7';
 const COUNCIL_MANAGER = '0x000000000000000000000000000000000000c0DE';
 const APP_MANAGER = '0x9999F38Ff8Bf959E98Ddd5D4551f82775219c01B';
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
-const PID = computeProcessId(ORGANIZER, '0x83f2e36e', 3);
+const PID = computeProcessId(ORGANIZER, '0x6c19f170', 3);
 const NOW = 1_700_000_000;
 const EPOCH = `0x${'0e'.repeat(12)}`;
 const AID = `0x${'0d'.repeat(32)}`;

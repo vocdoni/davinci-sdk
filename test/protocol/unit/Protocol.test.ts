@@ -5,7 +5,7 @@ import {
   BALLOT_MIN,
   BALLOT_VK_HASH,
   BATCH_PROGRAM_VK,
-  GNOSIS,
+  OPTIMISM,
   MAX_BATCH_SIZE,
   MAX_BLOBS,
   MAX_CENSUS_DEPTH,
@@ -113,33 +113,34 @@ describe('release pins', () => {
 
 describe('networks', () => {
   const src = readFixture('sequencer/networks.rs');
-  const gnosis = src.slice(src.indexOf('pub const GNOSIS'));
+  const optimism = src.slice(src.indexOf('pub const OPTIMISM'));
 
-  it('mirror the sequencer client Gnosis preset', () => {
-    const field = (name: string) => capture(new RegExp(`${name}: ([^,]+),`), gnosis);
-    expect(GNOSIS.name).toBe(JSON.parse(field('name')));
-    expect(GNOSIS.chainId).toBe(Number(field('chain_id')));
-    expect(GNOSIS.processRegistry).toBe(
-      getAddress(`0x${capture(/address!\("([0-9a-fA-F]{40})"\)/, gnosis)}`)
+  it('mirror the sequencer client Optimism preset', () => {
+    const field = (name: string) => capture(new RegExp(`${name}: ([^,]+),`), optimism);
+    expect(OPTIMISM.name).toBe(JSON.parse(field('name')));
+    expect(OPTIMISM.chainId).toBe(Number(field('chain_id')));
+    expect(OPTIMISM.processRegistry).toBe(
+      getAddress(`0x${capture(/address!\("([0-9a-fA-F]{40})"\)/, optimism)}`)
     );
-    expect(GNOSIS.startBlock).toBe(Number(field('start_block').replace(/_/g, '')));
-    expect(GNOSIS.confirmations).toBe(Number(field('confirmations')));
-    const rpcs = capture(/rpc_urls: &\[([^\]]+)\]/, gnosis);
-    expect(GNOSIS.rpcUrls).toEqual([...rpcs.matchAll(/"([^"]+)"/g)].map(m => m[1]));
-    expect(`beacon:${GNOSIS.beaconUrls.join(',')}`).toBe(JSON.parse(field('blob_source')));
+    expect(OPTIMISM.startBlock).toBe(Number(field('start_block').replace(/_/g, '')));
+    expect(OPTIMISM.confirmations).toBe(Number(field('confirmations')));
+    const rpcs = capture(/rpc_urls: &\[([^\]]+)\]/, optimism);
+    // The SDK may list more public RPCs than the node; it never drops one of the node's.
+    for (const m of rpcs.matchAll(/"([^"]+)"/g)) expect(OPTIMISM.rpcUrls).toContain(m[1]);
+    expect(`beacon:${OPTIMISM.beaconUrls.join(',')}`).toBe(JSON.parse(field('blob_source')));
   });
 
   it('look presets up by name', () => {
-    expect(NETWORKS).toEqual([GNOSIS]);
-    expect(getNetwork(' Gnosis ')).toBe(GNOSIS);
+    expect(NETWORKS).toEqual([OPTIMISM]);
+    expect(getNetwork(' Optimism ')).toBe(OPTIMISM);
     expect(getNetwork('custom')).toBeUndefined();
-    expect(Object.isFrozen(GNOSIS)).toBe(true);
+    expect(Object.isFrozen(OPTIMISM)).toBe(true);
   });
 
   it('compute the process id prefix of a registry', () => {
-    expect(processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry)).toBe('0x83f2e36e');
-    expect(processIdPrefix(100n, GNOSIS.processRegistry.toLowerCase())).toBe('0x83f2e36e');
-    expect(processIdPrefix(1, GNOSIS.processRegistry)).not.toBe('0x83f2e36e');
-    expect(() => processIdPrefix(1n << 32n, GNOSIS.processRegistry)).toThrow('uint32');
+    expect(processIdPrefix(OPTIMISM.chainId, OPTIMISM.processRegistry)).toBe('0x6c19f170');
+    expect(processIdPrefix(10n, OPTIMISM.processRegistry.toLowerCase())).toBe('0x6c19f170');
+    expect(processIdPrefix(1, OPTIMISM.processRegistry)).not.toBe('0x6c19f170');
+    expect(() => processIdPrefix(1n << 32n, OPTIMISM.processRegistry)).toThrow('uint32');
   });
 });

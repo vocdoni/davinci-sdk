@@ -22,7 +22,7 @@ import { CensusOrigin, OffchainCensus, PublishedCensus } from '../../../src/cens
 import { bjjMulBase } from '../../../src/crypto';
 import {
   FailoverRpcProvider,
-  GNOSIS,
+  OPTIMISM,
   computeProcessId,
   processIdPrefix,
 } from '../../../src/networks';
@@ -54,7 +54,7 @@ const C = 'https://c.sequencer.test';
 
 // 20-byte creator + 4-byte registry prefix + 7-byte nonce.
 const pidWith = (prefix: string) => `0x${'aa'.repeat(20)}${prefix.slice(2)}${'00'.repeat(6)}01`;
-const PID = pidWith('0x83f2e36e');
+const PID = pidWith('0x6c19f170');
 const KEY_POINT = bjjMulBase(12345n);
 
 function onchainProcess(): Record<string, unknown> {
@@ -105,7 +105,7 @@ function onchainProcess(): Record<string, unknown> {
 // A registry that pins this release on `chain`, with its verifier and DKG adapter.
 function deploy(
   chain: MockChain,
-  registry = GNOSIS.processRegistry,
+  registry = OPTIMISM.processRegistry,
   calls: Record<string, CallHandler> = {}
 ): MockChain {
   chain.contract(registry, PROCESS_REGISTRY_ABI, {
@@ -135,7 +135,7 @@ function deploy(
 
 type NodeSpec = Partial<SequencerInfo> | 'down' | number | 'garbage';
 
-// Sequencer nodes by origin; a node of the Gnosis deployment unless told otherwise.
+// Sequencer nodes by origin; a node of the OP Mainnet deployment unless told otherwise.
 function nodes(specs: Record<string, NodeSpec>) {
   const seen: string[] = [];
   const fetchImpl = vi.fn((input: string | URL | Request) => {
@@ -152,8 +152,8 @@ function nodes(specs: Record<string, NodeSpec>) {
       url.pathname === '/info'
         ? {
             sequencerAddress: '0x70debac0bf6fcc5f99646fcbcffb6d8267184dec',
-            chainId: 100,
-            processRegistry: GNOSIS.processRegistry,
+            chainId: 10,
+            processRegistry: OPTIMISM.processRegistry,
             ballotVkHash: RELEASE_PINS.ballotVKHash,
             batchProgramVk: RELEASE_PINS.batchProgramVK,
             resultsProgramVk: RELEASE_PINS.resultsProgramVK,
@@ -219,15 +219,15 @@ afterEach(() => {
 });
 
 describe('DavinciSDK configuration', () => {
-  it('defaults to Gnosis and takes the deprecated single node URL too', () => {
+  it('defaults to OP Mainnet and takes the deprecated single node URL too', () => {
     const sdk = new DavinciSDK({
       signer: Wallet.createRandom(),
       sequencerUrls: [A, B],
       sequencerUrl: A,
     });
     const settings = sdk.getConfig();
-    expect(settings.network?.name).toBe('gnosis');
-    expect(settings.network?.processIdPrefix).toBe('0x83f2e36e');
+    expect(settings.network?.name).toBe('optimism');
+    expect(settings.network?.processIdPrefix).toBe('0x6c19f170');
     expect(settings.sequencerUrls).toEqual([A, B]);
     expect(settings.verifyDeployment).toBe(true);
     expect(settings.verifyProof).toBe(true);
@@ -246,18 +246,18 @@ describe('DavinciSDK configuration', () => {
       () =>
         new DavinciSDK({
           signer,
-          network: 'gnosis',
+          network: 'optimism',
           sequencerUrls: [A],
           addresses: { processRegistry: LOCAL_REGISTRY },
         })
-    ).toThrow(`addresses.processRegistry ${LOCAL_REGISTRY} is not the gnosis registry`);
+    ).toThrow(`addresses.processRegistry ${LOCAL_REGISTRY} is not the optimism registry`);
     expect(
       () =>
         new DavinciSDK({
           signer,
-          network: 'gnosis',
+          network: 'optimism',
           sequencerUrls: [A],
-          addresses: { processRegistry: GNOSIS.processRegistry.toLowerCase() },
+          addresses: { processRegistry: OPTIMISM.processRegistry.toLowerCase() },
         })
     ).not.toThrow();
   });
@@ -309,7 +309,7 @@ describe('DavinciSDK configuration', () => {
       (settings.verifyDeployment as { pins: Record<string, string> }).pins.ballotVKHash = 'x';
     }).toThrow(TypeError);
     expect(sdk.getConfig().sequencerUrls).toEqual([A, B]);
-    expect(sdk.getConfig().network?.chainId).toBe(100);
+    expect(sdk.getConfig().network?.chainId).toBe(10);
   });
 
   it('checks the artifacts table when the config is read', () => {
@@ -338,8 +338,8 @@ describe('DavinciSDK.init', () => {
     await Promise.all([sdk.init(), sdk.init()]);
     await sdk.init();
     expect(sdk.isInitialized()).toBe(true);
-    expect(sdk.network.name).toBe('gnosis');
-    expect(sdk.registry.address).toBe(GNOSIS.processRegistry);
+    expect(sdk.network.name).toBe('optimism');
+    expect(sdk.registry.address).toBe(OPTIMISM.processRegistry);
     expect(sdk.api.nodes.urls).toEqual([A, B]);
     expect(sdk.api.sequencer.getBaseUrl()).toBe(A);
     expect(sdk.nodeChecks.map(c => [c.url, c.status, c.reason])).toEqual([
@@ -366,18 +366,18 @@ describe('DavinciSDK.init', () => {
   });
 
   it("refuses a registry that is not on the network's chain, or not there at all", async () => {
-    const wrongChain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const wrongChain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       chainID: () => [10200],
     });
     const err = await errorOf(
       sdkWith({ signer: new Wallet(KEY, wrongChain), verifyDeployment: false }).sdk.init()
     );
     expect(err).toBeInstanceOf(DeploymentPinError);
-    expect(err).toMatchObject({ field: 'chainID', expected: '100', got: '10200' });
+    expect(err).toMatchObject({ field: 'chainID', expected: '10', got: '10200' });
 
     const empty = sdkWith({ signer: new Wallet(KEY, new MockChain()) });
     await expect(empty.sdk.init()).rejects.toThrow(
-      `cannot read the gnosis ProcessRegistry at ${GNOSIS.processRegistry} (is the read RPC on chain 100?)`
+      `cannot read the optimism ProcessRegistry at ${OPTIMISM.processRegistry} (is the read RPC on chain 10?)`
     );
   });
 
@@ -401,7 +401,7 @@ describe('DavinciSDK.init', () => {
 
   it('compares the nodes with the registry, not with this release', async () => {
     const other = `0x${'99'.repeat(32)}`;
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       ballotVKHash: () => [other],
     });
     const { sdk } = sdkWith(
@@ -430,7 +430,7 @@ describe('DavinciSDK.init', () => {
 
   it('succeeds with every node down; calls that need a node name them', async () => {
     const organizer = new Wallet(KEY).address;
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       getProcess: () => [{ ...onchainProcess(), organizationId: organizer }],
       setProcessStatus: () => [],
     });
@@ -535,14 +535,14 @@ describe('DavinciSDK.init', () => {
 describe('DavinciSDK read provider', () => {
   it("reads through the preset's RPCs for a voter without a provider", async () => {
     const chain = deploy(new MockChain());
-    const seen = rpcRoutes({ 'gnosis-rpc.publicnode.com': chain });
+    const seen = rpcRoutes({ 'mainnet.optimism.io': chain });
     const { sdk } = sdkWith({ signer: Wallet.createRandom() });
     await sdk.init();
     expect(seen.length).toBeGreaterThan(0);
-    expect(new Set(seen.map(s => s.host))).toEqual(new Set(['gnosis-rpc.publicnode.com']));
+    expect(new Set(seen.map(s => s.host))).toEqual(new Set(['mainnet.optimism.io']));
     expect(seen[0].userAgent).toBe('davinci-sdk');
     expect(sdk.provider).toBeInstanceOf(FailoverRpcProvider);
-    expect((sdk.provider as FailoverRpcProvider).urls).toEqual(GNOSIS.rpcUrls);
+    expect((sdk.provider as FailoverRpcProvider).urls).toEqual(OPTIMISM.rpcUrls);
     // A voter reads processes without a provider of its own.
     expect((await sdk.getProcess(PID)).processId).toBe(PID);
   });
@@ -558,7 +558,7 @@ describe('DavinciSDK read provider', () => {
     expect((sdk.provider as FailoverRpcProvider).urls).toEqual(['https://rpc.test']);
 
     const preset = deploy(new MockChain());
-    rpcRoutes({ 'gnosis-rpc.publicnode.com': preset });
+    rpcRoutes({ 'mainnet.optimism.io': preset });
     const elsewhere = new MockChain(1n);
     const other = sdkWith({ signer: new Wallet(KEY, elsewhere) });
     await other.sdk.init();
@@ -583,7 +583,7 @@ describe('DavinciSDK process routing', () => {
     await sdk.init();
     expect((await sdk.getProcess(PID)).processId).toBe(PID);
     await expect(sdk.getProcess(pidWith('0xdeadbeef'))).rejects.toThrow(
-      `Process ${pidWith('0xdeadbeef')} was not created by the gnosis registry (prefix 0xdeadbeef, want 0x83f2e36e).`
+      `Process ${pidWith('0xdeadbeef')} was not created by the optimism registry (prefix 0xdeadbeef, want 0x6c19f170).`
     );
     await expect(sdk.endProcess(pidWith('0xdeadbeef'))).rejects.toThrow('was not created by');
     await expect(sdk.getProcess('0x1234')).rejects.toThrow(TypeError);
@@ -601,7 +601,7 @@ describe('DavinciSDK process routing', () => {
     );
     await local.sdk.init();
     await expect(local.sdk.getProcess(PID)).rejects.toThrow(
-      `Process ${PID} belongs to gnosis (chain 100); this SDK works with chain 31337 (chain 31337).`
+      `Process ${PID} belongs to optimism (chain 10); this SDK works with chain 31337 (chain 31337).`
     );
   });
 
@@ -614,13 +614,13 @@ describe('DavinciSDK process routing', () => {
     });
     await elsewhere.sdk.init();
     await expect(elsewhere.sdk.endProcess(PID)).rejects.toThrow(
-      'The signer is on chain 1; the gnosis registry is on chain 100.'
+      'The signer is on chain 1; the optimism registry is on chain 10.'
     );
     await expect(elsewhere.sdk.createProcess({} as never)).rejects.toThrow(
       'The signer is on chain 1'
     );
     expect(() => elsewhere.sdk.processes).toThrow(
-      'The signer is on chain 1; the gnosis registry is on chain 100.'
+      'The signer is on chain 1; the optimism registry is on chain 10.'
     );
     expect(() => elsewhere.sdk.processOrchestrator).toThrow('The signer is on chain 1');
 
@@ -634,10 +634,10 @@ describe('DavinciSDK process routing', () => {
     const { sdk, node } = sdkWith({}, { [A]: 'down', [B]: {} });
     await sdk.init();
     expect(await sdk.listProcesses()).toEqual([PID]);
-    expect(await sdk.listProcesses(100)).toEqual([PID]);
+    expect(await sdk.listProcesses(10)).toEqual([PID]);
     expect(node.seen).toContain(`${B}/processes`);
     await expect(sdk.listProcesses(1)).rejects.toThrow(
-      'This SDK works with gnosis (chain 100), not chain 1.'
+      'This SDK works with optimism (chain 10), not chain 1.'
     );
   });
 });
@@ -646,7 +646,7 @@ describe('DavinciSDK ballot proving', () => {
   it("proves under the registry's ballot VK hash", async () => {
     // A registry (and its nodes) pinning another ballot key than this release.
     const key = `0x${'5b'.repeat(32)}`;
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, { ballotVKHash: () => [key] });
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, { ballotVKHash: () => [key] });
     const { sdk } = sdkWith(
       { signer: new Wallet(KEY, chain), verifyDeployment: false },
       { [A]: { ballotVkHash: key }, [B]: { ballotVkHash: key } }
@@ -679,7 +679,7 @@ describe('DavinciSDK ballot proving', () => {
     const questions = [{ title: 'q', choices: [{ title: 'a', value: 0 }] }];
     const doc = serializeMetadata(buildElectionMetadata({ title: 'Parks', questions }));
     const url = host.urlOf(doc);
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       getProcess: () => [
         {
           ...onchainProcess(),
@@ -710,7 +710,7 @@ describe('DavinciSDK ballot proving', () => {
     expect([info.title, info.metadataVerified]).toEqual(['Parks', true]);
     await expect(
       sdk.updateCensus(pidWith('0x01020304'), { root: '0x05', uri: url })
-    ).rejects.toThrow('was not created by the gnosis registry');
+    ).rejects.toThrow('was not created by the optimism registry');
     expect(
       () =>
         new DavinciSDK({
@@ -726,14 +726,14 @@ describe('DavinciSDK organizer controls', () => {
   const EPOCH = `0x${'0e'.repeat(12)}`;
   const registryIface = new Interface(PROCESS_REGISTRY_ABI);
 
-  // A Gnosis registry whose processes belong to the SDK's signer, and which
+  // A OP Mainnet registry whose processes belong to the SDK's signer, and which
   // creates the ids `processIdPrefix` and a nonce give.
   function organizerSdk() {
     const organizer = new Wallet(KEY).address;
-    const prefix = processIdPrefix(100, GNOSIS.processRegistry);
+    const prefix = processIdPrefix(10, OPTIMISM.processRegistry);
     const state = { nonce: 0, status: 0 };
     const pidOf = (n: number) => computeProcessId(organizer, prefix, n);
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       getProcess: () => [
         { ...onchainProcess(), organizationId: organizer, status: state.status, keyMode: 2 },
       ],
@@ -749,7 +749,7 @@ describe('DavinciSDK organizer controls', () => {
       revealProcessKey: () => [],
     });
     chain.contract(ADAPTER, DAVINCI_DKG_ADAPTER_ABI, {
-      registry: () => [GNOSIS.processRegistry],
+      registry: () => [OPTIMISM.processRegistry],
       registrationEpoch: () => [EPOCH],
     });
     chain.onMine = tx => {
@@ -759,7 +759,7 @@ describe('DavinciSDK organizer controls', () => {
         pidOf(state.nonce++),
         tx.from,
       ]);
-      return { status: 1, logs: [{ address: GNOSIS.processRegistry, topics, data }] };
+      return { status: 1, logs: [{ address: OPTIMISM.processRegistry, topics, data }] };
     };
     const { sdk } = sdkWith({ signer: new Wallet(KEY, chain) });
     const sent = () =>
@@ -793,7 +793,7 @@ describe('DavinciSDK organizer controls', () => {
       () => sdk.getGraceEnd(foreign),
       () => sdk.cancelOpenProcesses({ processIds: [foreign] }),
     ]) {
-      await expect(call()).rejects.toThrow('was not created by the gnosis registry');
+      await expect(call()).rejects.toThrow('was not created by the optimism registry');
     }
 
     const rpc = organizerSdk().chain;
@@ -804,7 +804,7 @@ describe('DavinciSDK organizer controls', () => {
     });
     await elsewhere.sdk.init();
     await expect(elsewhere.sdk.closeProcessIn(PID, 60)).rejects.toThrow(
-      'The signer is on chain 1; the gnosis registry is on chain 100.'
+      'The signer is on chain 1; the optimism registry is on chain 10.'
     );
     // Reads go through the read provider.
     expect((await elsewhere.sdk.getGraceParams()).noticeMin).toBe(60);
@@ -902,7 +902,7 @@ describe('DavinciSDK voting', () => {
     const census = new OffchainCensus();
     census.add([{ key: signer.address, weight: 2 }, `0x${'01'.repeat(20)}`]);
     const root = await census.root();
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       getProcess: () => [
         {
           ...onchainProcess(),
@@ -923,8 +923,8 @@ describe('DavinciSDK voting', () => {
       if (path === '/info') {
         return reply({
           sequencerAddress: '0x70debac0bf6fcc5f99646fcbcffb6d8267184dec',
-          chainId: 100,
-          processRegistry: GNOSIS.processRegistry,
+          chainId: 10,
+          processRegistry: OPTIMISM.processRegistry,
           ballotVkHash: RELEASE_PINS.ballotVKHash,
           batchProgramVk: RELEASE_PINS.batchProgramVK,
           resultsProgramVk: RELEASE_PINS.resultsProgramVK,
@@ -1011,7 +1011,7 @@ describe('DavinciSDK voting', () => {
     const { sdk } = await voterSdk();
     const other = pidWith('0x01020304');
     const vid = `0x8${'0'.repeat(15)}`;
-    const refused = 'was not created by the gnosis registry';
+    const refused = 'was not created by the optimism registry';
     await expect(sdk.submitVote({ processId: other, choices: [1] })).rejects.toThrow(refused);
     await expect(sdk.getVoteStatus(other, vid)).rejects.toThrow(refused);
     await expect(sdk.waitForVoteStatus(other, vid)).rejects.toThrow(refused);
@@ -1027,7 +1027,7 @@ describe('DavinciSDK voting', () => {
   });
 
   it('finalizes DKG results from an organizer signer', async () => {
-    const chain = deploy(new MockChain(), GNOSIS.processRegistry, {
+    const chain = deploy(new MockChain(), OPTIMISM.processRegistry, {
       finalizeResultsFromDKG: () => [],
     });
     const { sdk } = sdkWith({ signer: new Wallet(KEY, chain) });

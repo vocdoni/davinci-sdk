@@ -11,7 +11,7 @@ import {
 } from 'ethers';
 import {
   FailoverRpcProvider,
-  GNOSIS,
+  OPTIMISM,
   computeProcessId,
   networkOfProcessId,
   processIdPrefix,
@@ -22,20 +22,20 @@ import { PROCESS_REGISTRY_ABI } from '../../../src/contracts';
 
 const LOCAL_REGISTRY = '0x015eAc820688DA203a0bd730a8a7A4CDB97E1a02';
 const pidWith = (prefix: string) => `0x${'aa'.repeat(20)}${prefix.slice(2)}${'bb'.repeat(7)}`;
-const GNOSIS_PID = pidWith('0x83f2e36e');
+const OPTIMISM_PID = pidWith('0x6c19f170');
 
 describe('resolveNetwork', () => {
   it('resolves a known network by name', () => {
-    const net = resolveNetwork(' Gnosis ');
+    const net = resolveNetwork(' Optimism ');
     expect(net).toEqual({
-      name: 'gnosis',
-      chainId: 100,
-      processRegistry: GNOSIS.processRegistry,
-      startBlock: GNOSIS.startBlock,
-      rpcUrls: GNOSIS.rpcUrls,
-      processIdPrefix: '0x83f2e36e',
+      name: 'optimism',
+      chainId: 10,
+      processRegistry: OPTIMISM.processRegistry,
+      startBlock: OPTIMISM.startBlock,
+      rpcUrls: OPTIMISM.rpcUrls,
+      processIdPrefix: '0x6c19f170',
     });
-    expect(() => resolveNetwork('sepolia')).toThrow('unknown network "sepolia"; known: gnosis');
+    expect(() => resolveNetwork('sepolia')).toThrow('unknown network "sepolia"; known: optimism');
   });
 
   it('checks a custom deployment and fills in what a known one sets', () => {
@@ -54,14 +54,14 @@ describe('resolveNetwork', () => {
     });
     expect(local.processIdPrefix).toMatch(/^0x[0-9a-f]{8}$/);
 
-    // The Gnosis registry given by address takes the preset's other settings.
-    const gnosis = resolveNetwork({
-      chainId: 100,
-      processRegistry: GNOSIS.processRegistry.toLowerCase(),
+    // The OP Mainnet registry given by address takes the preset's other settings.
+    const optimism = resolveNetwork({
+      chainId: 10,
+      processRegistry: OPTIMISM.processRegistry.toLowerCase(),
     });
-    expect(gnosis).toEqual(resolveNetwork('gnosis'));
+    expect(optimism).toEqual(resolveNetwork('optimism'));
     expect(
-      resolveNetwork({ name: 'mine', chainId: 100, processRegistry: GNOSIS.processRegistry }).name
+      resolveNetwork({ name: 'mine', chainId: 10, processRegistry: OPTIMISM.processRegistry }).name
     ).toBe('mine');
 
     for (const chainId of [0, -1, 1.5, 2 ** 32]) {
@@ -78,9 +78,9 @@ describe('resolveNetwork', () => {
 
 describe('process id prefixes', () => {
   it('read bytes 20..23 and name the known network', () => {
-    expect(processIdPrefixOf(GNOSIS_PID)).toBe('0x83f2e36e');
-    expect(processIdPrefixOf(GNOSIS_PID.slice(2).toUpperCase())).toBe('0x83f2e36e');
-    expect(networkOfProcessId(GNOSIS_PID)).toBe(GNOSIS);
+    expect(processIdPrefixOf(OPTIMISM_PID)).toBe('0x6c19f170');
+    expect(processIdPrefixOf(OPTIMISM_PID.slice(2).toUpperCase())).toBe('0x6c19f170');
+    expect(networkOfProcessId(OPTIMISM_PID)).toBe(OPTIMISM);
     expect(networkOfProcessId(pidWith('0xdeadbeef'))).toBeUndefined();
     expect(() => processIdPrefixOf('0x1234')).toThrow(TypeError);
   });
@@ -245,7 +245,7 @@ describe('FailoverRpcProvider', () => {
     const signed = () =>
       Wallet.createRandom().signTransaction({
         type: 2,
-        chainId: 100,
+        chainId: 10,
         nonce: 0,
         gasLimit: 21_000,
         to: LOCAL_REGISTRY,

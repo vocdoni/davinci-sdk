@@ -51,7 +51,7 @@ export type DeploymentPins = Partial<Record<keyof typeof RELEASE_PINS, string>>;
 
 /**
  * Configuration of a {@link DavinciSDK}. Only `signer` and the sequencer node
- * URLs are required; the network defaults to Gnosis.
+ * URLs are required; the network defaults to OP Mainnet.
  */
 export interface DavinciSDKConfig {
   /**
@@ -61,7 +61,7 @@ export interface DavinciSDKConfig {
   signer: Signer;
 
   /**
-   * The deployment: a known network by name (default `'gnosis'`), or a custom
+   * The deployment: a known network by name (default `'optimism'`), or a custom
    * one, `{ chainId, processRegistry, startBlock?, rpcUrls? }`.
    */
   network?: string | CustomNetwork;
@@ -195,7 +195,7 @@ function deepFreeze<T>(value: T): T {
  * ```typescript
  * const sdk = new DavinciSDK({
  *   signer: wallet,
- *   network: 'gnosis',
+ *   network: 'optimism',
  *   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
  * });
  * await sdk.init();
@@ -251,7 +251,7 @@ export class DavinciSDK {
     checkArtifactsConfig(config.artifacts);
     const alias = config.addresses?.processRegistry;
     if (config.network !== undefined || alias === undefined) {
-      this._network = deepFreeze(resolveNetwork(config.network ?? 'gnosis'));
+      this._network = deepFreeze(resolveNetwork(config.network ?? 'optimism'));
       if (alias !== undefined && getAddress(alias) !== this._network.processRegistry) {
         throw new Error(
           `addresses.processRegistry ${alias} is not the ${this._network.name} registry ${this._network.processRegistry}`
