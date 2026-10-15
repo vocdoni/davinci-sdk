@@ -138,9 +138,9 @@ describe('networks', () => {
   });
 
   it('compute the process id prefix of a registry', () => {
-    expect(processIdPrefix(OPTIMISM.chainId, OPTIMISM.processRegistry)).toBe('0x6c19f170');
-    expect(processIdPrefix(10n, OPTIMISM.processRegistry.toLowerCase())).toBe('0x6c19f170');
-    expect(processIdPrefix(1, OPTIMISM.processRegistry)).not.toBe('0x6c19f170');
+    expect(processIdPrefix(OPTIMISM.chainId, OPTIMISM.processRegistry)).toBe('0xd6811950');
+    expect(processIdPrefix(10n, OPTIMISM.processRegistry.toLowerCase())).toBe('0xd6811950');
+    expect(processIdPrefix(1, OPTIMISM.processRegistry)).not.toBe('0xd6811950');
     expect(() => processIdPrefix(1n << 32n, OPTIMISM.processRegistry)).toThrow('uint32');
   });
 });

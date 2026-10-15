@@ -54,7 +54,7 @@ const C = 'https://c.sequencer.test';
 
 // 20-byte creator + 4-byte registry prefix + 7-byte nonce.
 const pidWith = (prefix: string) => `0x${'aa'.repeat(20)}${prefix.slice(2)}${'00'.repeat(6)}01`;
-const PID = pidWith('0x6c19f170');
+const PID = pidWith('0xd6811950');
 const KEY_POINT = bjjMulBase(12345n);
 
 function onchainProcess(): Record<string, unknown> {
@@ -227,7 +227,7 @@ describe('DavinciSDK configuration', () => {
     });
     const settings = sdk.getConfig();
     expect(settings.network?.name).toBe('optimism');
-    expect(settings.network?.processIdPrefix).toBe('0x6c19f170');
+    expect(settings.network?.processIdPrefix).toBe('0xd6811950');
     expect(settings.sequencerUrls).toEqual([A, B]);
     expect(settings.verifyDeployment).toBe(true);
     expect(settings.verifyProof).toBe(true);
@@ -583,7 +583,7 @@ describe('DavinciSDK process routing', () => {
     await sdk.init();
     expect((await sdk.getProcess(PID)).processId).toBe(PID);
     await expect(sdk.getProcess(pidWith('0xdeadbeef'))).rejects.toThrow(
-      `Process ${pidWith('0xdeadbeef')} was not created by the optimism registry (prefix 0xdeadbeef, want 0x6c19f170).`
+      `Process ${pidWith('0xdeadbeef')} was not created by the optimism registry (prefix 0xdeadbeef, want 0xd6811950).`
     );
     await expect(sdk.endProcess(pidWith('0xdeadbeef'))).rejects.toThrow('was not created by');
     await expect(sdk.getProcess('0x1234')).rejects.toThrow(TypeError);

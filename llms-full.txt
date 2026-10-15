@@ -268,7 +268,7 @@ const local = new DavinciSDK({
 
 ### The OP Mainnet deployment
 
-`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. The preset's registry is a placeholder until the OP registry with the DKG and Council adapters is deployed; that one creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
 Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
@@ -568,7 +568,7 @@ In every mode only the final tally is decrypted, after the grace window (`refere
 
 ## On OP Mainnet (production beta)
 
-The `optimism` deployment, the default network, offers (once its registry carries the DKG and Council adapters; the preset holds a placeholder registry until then) two committee options for elections whose ballots no single party can open.
+The `optimism` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
 
 | Option | `keyMode` | What the organizer prepares | When the results come |
 | --- | --- | --- | --- |

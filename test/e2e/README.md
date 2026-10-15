@@ -1,6 +1,6 @@
 # Live suite on OP Mainnet
 
-> The registry in the `optimism` preset is a placeholder until the DKG and Council registry is deployed. The `run` phase spends real ETH on mainnet and refuses to start unless `DAVINCI_E2E_CONFIRM_MAINNET=1`.
+> The `run` phase spends real ETH on mainnet and refuses to start unless `DAVINCI_E2E_CONFIRM_MAINNET=1`.
 
 `yarn test:e2e` runs the SDK against the OP Mainnet deployment: the preset
 registry, real sequencer nodes with their prover, and the live DKG committee.

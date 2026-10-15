@@ -20,7 +20,7 @@ on:
         required: true
         default: self-hosted
       confirm_mainnet:
-        description: Type "spend" to confirm real transactions on OP Mainnet (the registry is a placeholder until the DKG and Council registry is deployed)
+        description: Type "spend" to confirm real transactions on OP Mainnet
         required: true
       fixtures_commit:
         description: Commit whose test/e2e/fixtures are served (default the dispatched one)
