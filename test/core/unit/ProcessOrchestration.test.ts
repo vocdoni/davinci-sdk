@@ -56,15 +56,15 @@ import {
   pointToReducedTE,
   slotFromAddress,
 } from '../../../src/crypto';
-import { GNOSIS, computeProcessId } from '../../../src/networks';
+import { OPTIMISM, computeProcessId } from '../../../src/networks';
 import { DocumentHost } from '../../helpers/documentHost';
 import { MockChain, revertWith, type CallHandler } from '../../helpers/mockChain';
 
-const REGISTRY = GNOSIS.processRegistry;
+const REGISTRY = OPTIMISM.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
 const KEY = `0x${'11'.repeat(32)}`;
 const ORGANIZER = new Wallet(KEY).address;
-const PREFIX = '0x83f2e36e';
+const PREFIX = '0x6c19f170';
 const pidOf = (nonce: number, creator = ORGANIZER) => computeProcessId(creator, PREFIX, nonce);
 const PID = pidOf(0);
 const KEY_NODE = 'https://key.sequencer.test';

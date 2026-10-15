@@ -51,14 +51,14 @@ import {
   decodeVoteRequest,
   pickNode,
 } from '../../../src/sequencer';
-import { GNOSIS, computeProcessId } from '../../../src/networks';
+import { OPTIMISM, computeProcessId } from '../../../src/networks';
 import { RecentMap } from '../../../src/core/vote/recent';
 import { MockChain } from '../../helpers/mockChain';
 import { REAL_PROOF } from '../../helpers/realProof';
 
-const REGISTRY = GNOSIS.processRegistry;
+const REGISTRY = OPTIMISM.processRegistry;
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
-const PID = computeProcessId(ORGANIZER, '0x83f2e36e', 1);
+const PID = computeProcessId(ORGANIZER, '0x6c19f170', 1);
 const NOW = 1_700_000_000;
 const URLS = ['https://a.sequencer.test', 'https://b.sequencer.test', 'https://c.sequencer.test'];
 const KEY_POINT = bjjMulBase(12345n);

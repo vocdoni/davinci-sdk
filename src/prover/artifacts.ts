@@ -58,7 +58,7 @@ const a39a9f9 = (file: string, sha: string): ArtifactFile =>
  * The circuit files this release knows, by the ballot VK hash they prove
  * under.
  *
- * `0xbf1e…bb0e`, the key of the Gnosis registry, is davinci-circom commit
+ * `0xbf1e…bb0e`, the key of the registry, is davinci-circom commit
  * `a39a9f9` (`BallotProof(16)`, 64,816 constraints). Its files come from the
  * DAVINCI CDN (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<commit>/<file>`)
  * and, when that fails, from raw GitHub at the commit; both copies are checked

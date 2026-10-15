@@ -76,7 +76,7 @@ export class MockChain extends JsonRpcProvider {
   private readonly code = new Map<string, string>();
   private readonly known = new Map<string, { tx: Transaction; mined: Mined }>();
 
-  constructor(readonly chainId = 100n) {
+  constructor(readonly chainId = 10n) {
     const network = Network.from(chainId);
     // No request cache: tests move the chain between identical requests.
     super('http://mock.invalid', network, {

@@ -8,9 +8,9 @@
  * @example
  * ```typescript
  * import { JsonRpcProvider } from 'ethers';
- * import { GNOSIS, ProcessRegistryService } from '@vocdoni/davinci-sdk';
+ * import { OPTIMISM, ProcessRegistryService } from '@vocdoni/davinci-sdk';
  *
- * const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcProvider(rpcUrl));
+ * const registry = new ProcessRegistryService(OPTIMISM.processRegistry, new JsonRpcProvider(rpcUrl));
  * const process = await registry.getProcess(processId);
  * ```
  */

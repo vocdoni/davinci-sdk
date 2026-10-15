@@ -16,7 +16,7 @@ import { isNode } from './core/runtime';
  * URLs are never part of a network; they are always configuration.
  */
 export interface DavinciNetwork {
-  /** Lowercase name, e.g. `gnosis`. */
+  /** Lowercase name, e.g. `optimism`. */
   name: string;
   chainId: number;
   /** `ProcessRegistry` address. */
@@ -31,35 +31,43 @@ export interface DavinciNetwork {
   confirmations: number;
 }
 
+// TODO(new-op-registry): PLACEHOLDER. The only place to swap in the OP registry
+// with the DKG and Council adapters: these two values. Then re-sync
+// `test/fixtures/sequencer/networks.rs` and the prefix in `test/protocol/unit/Networks.test.ts`.
+/** `ProcessRegistry` of OP Mainnet. PLACEHOLDER: the registry before the DKG and Council adapters. */
+const OPTIMISM_REGISTRY = '0x7bfa68879f118C98B864FB52d2aD3a112eF1558F';
+/** Block {@link OPTIMISM_REGISTRY} was deployed at. PLACEHOLDER, swapped with the registry. */
+const OPTIMISM_START_BLOCK = 158_164_175;
+
 /**
- * Gnosis Chain, as in davinci-sequencer `client/src/networks.rs`. The DKG
- * and Council adapters, the verifier and the grace window settings are read
- * from the registry, not pinned here.
+ * OP Mainnet in L1-blob mode, as in davinci-sequencer `client/src/networks.rs`:
+ * transitions settle on OP and their blobs live on Ethereum, so `beaconUrls`
+ * are Ethereum beacon APIs. The DKG and Council adapters, the verifier and
+ * the grace window settings are read from the registry, not pinned here.
  */
-export const GNOSIS: DavinciNetwork = Object.freeze({
-  name: 'gnosis',
-  chainId: 100,
-  processRegistry: '0x20b96e465CA7C3536B9C733571ec1eCf42b2eA21',
-  startBlock: 48_633_301,
+export const OPTIMISM: DavinciNetwork = Object.freeze({
+  name: 'optimism',
+  chainId: 10,
+  processRegistry: OPTIMISM_REGISTRY,
+  startBlock: OPTIMISM_START_BLOCK,
   rpcUrls: Object.freeze([
-    'https://gnosis-rpc.publicnode.com',
-    'https://gnosis-rpc.blockreq.com/v1/rpc/public',
-    'https://rpc.gnosischain.com',
-    'https://gnosis.drpc.org',
+    'https://mainnet.optimism.io',
+    'https://optimism-rpc.publicnode.com',
+    'https://optimism.drpc.org',
   ]),
-  beaconUrls: Object.freeze(['https://rpc-gbc.gnosischain.com']),
-  confirmations: 3,
+  beaconUrls: Object.freeze(['https://ethereum-beacon-api.publicnode.com']),
+  confirmations: 1,
 });
 
 /** Every known deployment. */
-export const NETWORKS: readonly DavinciNetwork[] = Object.freeze([GNOSIS]);
+export const NETWORKS: readonly DavinciNetwork[] = Object.freeze([OPTIMISM]);
 
 /**
  * Looks up a known deployment by name (case-insensitive).
  *
  * @example
  * ```typescript
- * getNetwork('gnosis')?.chainId; // 100
+ * getNetwork('optimism')?.chainId; // 10
  * ```
  */
 export function getNetwork(name: string): DavinciNetwork | undefined {
@@ -76,7 +84,7 @@ export function getNetwork(name: string): DavinciNetwork | undefined {
  *
  * @example
  * ```typescript
- * processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry); // '0x83f2e36e'
+ * processIdPrefix(OPTIMISM.chainId, OPTIMISM.processRegistry); // '0x' + 8 hex digits
  * ```
  */
 export function processIdPrefix(chainId: number | bigint, registry: string): string {
@@ -125,7 +133,7 @@ export interface ResolvedNetwork {
  *
  * @example
  * ```typescript
- * resolveNetwork('gnosis').processIdPrefix; // '0x83f2e36e'
+ * resolveNetwork('optimism').processIdPrefix; // '0x' + 8 hex digits
  * resolveNetwork({ chainId: 31337, processRegistry: '0x…', rpcUrls: ['http://127.0.0.1:8545'] });
  * ```
  */
@@ -200,8 +208,8 @@ export function processIdPrefixOf(processId: string): string {
  *
  * @example
  * ```typescript
- * // The first process an organizer creates on Gnosis.
- * computeProcessId(organizer, resolveNetwork('gnosis').processIdPrefix, 0);
+ * // The first process an organizer creates on OP Mainnet.
+ * computeProcessId(organizer, resolveNetwork('optimism').processIdPrefix, 0);
  * ```
  */
 export function computeProcessId(creator: string, prefix: string, nonce: number | bigint): string {
