@@ -59,8 +59,8 @@ impl Network {
 pub const OPTIMISM: Network = Network {
     name: "optimism",
     chain_id: 10,
-    registry: address!("7bfa68879f118C98B864FB52d2aD3a112eF1558F"),
-    start_block: 158_164_175,
+    registry: address!("64d41aD49009204E8dAcc153Fc98a5Ee14cB6916"),
+    start_block: 158_245_426,
     rpc_urls: &[
         "https://optimism-rpc.publicnode.com",
         "https://mainnet.optimism.io",

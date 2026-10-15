@@ -49,7 +49,7 @@ From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) at commit
   census files.
 
 ```
-737ffb13c54f2e3d162db8a30337d4ada1cf8058ecd49e9d649f7fbff4bfa309  networks.rs
+c921b0b1b30846080bb08f48d3b19d275dd0622a1380eee977981e0818ec6540  networks.rs
 6a6d1f8cb0400f01fb53019a7327661ecee8c228134e9fc45dbba3cc682633e0  tracker.json
 4181ed7560b4b581d5ae471a84616f7ce09b717bd72e1fabfc0a27cf4773a9da  wire.json
 db6c536842e6f70bee847d697ca7eb9b5b73eb25134e5cde0f648bebe99a235f  census-files.json

@@ -13,7 +13,7 @@ In every mode only the final tally is decrypted, after the grace window (`refere
 
 ## On OP Mainnet (production beta)
 
-The `optimism` deployment, the default network, offers (once its registry carries the DKG and Council adapters; the preset holds a placeholder registry until then) two committee options for elections whose ballots no single party can open.
+The `optimism` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
 
 | Option | `keyMode` | What the organizer prepares | When the results come |
 | --- | --- | --- | --- |

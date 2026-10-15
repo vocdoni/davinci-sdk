@@ -31,13 +31,10 @@ export interface DavinciNetwork {
   confirmations: number;
 }
 
-// TODO(new-op-registry): PLACEHOLDER. The only place to swap in the OP registry
-// with the DKG and Council adapters: these two values. Then re-sync
-// `test/fixtures/sequencer/networks.rs` and the prefix in `test/protocol/unit/Networks.test.ts`.
-/** `ProcessRegistry` of OP Mainnet. PLACEHOLDER: the registry before the DKG and Council adapters. */
-const OPTIMISM_REGISTRY = '0x7bfa68879f118C98B864FB52d2aD3a112eF1558F';
-/** Block {@link OPTIMISM_REGISTRY} was deployed at. PLACEHOLDER, swapped with the registry. */
-const OPTIMISM_START_BLOCK = 158_164_175;
+/** `ProcessRegistry` of OP Mainnet, with the DKG and Council adapters. */
+const OPTIMISM_REGISTRY = '0x64d41aD49009204E8dAcc153Fc98a5Ee14cB6916';
+/** Block {@link OPTIMISM_REGISTRY} was deployed at. */
+const OPTIMISM_START_BLOCK = 158_245_426;
 
 /**
  * OP Mainnet in L1-blob mode, as in davinci-sequencer `client/src/networks.rs`:
