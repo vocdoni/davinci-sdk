@@ -84,7 +84,8 @@ export const SHORTEN_SLACK_SECONDS = 45;
 
 /**
  * Blocks per `eth_getLogs` of {@link ProcessRegistryService.eventWindows}:
- * under the caps of public RPCs (commonly 10,000).
+ * under the caps of public RPCs (commonly 10,000). 5,000 is within
+ * mainnet.optimism.io's cap of 10,000.
  */
 export const LOG_BLOCK_RANGE = 5_000;
 
