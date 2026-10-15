@@ -15,7 +15,7 @@ import { bjjMulBase, BJJ_SUBGROUP_ORDER } from '../../src/crypto/babyjubjub';
 import { buildBallot } from '../../src/crypto/ballot';
 import { checkBallot } from '../../src/crypto/ballotChecker';
 import { randomBallotSecret } from '../../src/crypto/encryption';
-import { computeProcessId, GNOSIS, processIdPrefix } from '../../src/networks';
+import { computeProcessId, OPTIMISM, processIdPrefix } from '../../src/networks';
 import { BALLOT_VK_HASH } from '../../src/protocol/release';
 import { BallotProver } from '../../src/prover/BallotProver';
 import { DirArtifactCache } from './artifactCache';
@@ -59,10 +59,10 @@ describe.skipIf(phase() !== 'prepare')('live e2e: prepare', () => {
 
   it('proves every planned ballot with the real circuit', async () => {
     const prover = new BallotProver({ artifacts: { cache: new DirArtifactCache(artifactsDir()) } });
-    // A stand-in election: an id of the Gnosis registry and a random key.
+    // A stand-in election: an id of the OP Mainnet registry and a random key.
     const processId = computeProcessId(
       Wallet.createRandom().address,
-      processIdPrefix(GNOSIS.chainId, GNOSIS.processRegistry),
+      processIdPrefix(OPTIMISM.chainId, OPTIMISM.processRegistry),
       0
     );
     const encryptionKey = bjjMulBase((randomBallotSecret() % (BJJ_SUBGROUP_ORDER - 1n)) + 1n);

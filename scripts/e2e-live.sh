@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs a phase of the live Gnosis suite (test/e2e, see test/e2e/README.md) in
+# Runs a phase of the live OP Mainnet suite (test/e2e, see test/e2e/README.md) in
 # node:22, with nothing but Docker on the host:
 #
 #   scripts/e2e-live.sh prepare
@@ -9,7 +9,7 @@
 #     scripts/e2e-live.sh run
 #
 # The checkout is mounted read-only, except test/e2e/fixtures for prepare.
-# The private directory DAVINCI_SDK_E2E_DIR (default ~/.davinci-gnosis/sdk-e2e,
+# The private directory DAVINCI_SDK_E2E_DIR (default ~/.davinci-optimism/sdk-e2e,
 # created mode 0700) is writable for prepare and read-only for run; so is the
 # organizer key file, mounted for run only. DAVINCI_SDK_E2E_ARTIFACTS (default
 # ~/.cache/davinci-sdk-e2e/artifacts) keeps the circuit files between runs.
@@ -30,7 +30,7 @@ case $phase in
 esac
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-private=${DAVINCI_SDK_E2E_DIR:-$HOME/.davinci-gnosis/sdk-e2e}
+private=${DAVINCI_SDK_E2E_DIR:-$HOME/.davinci-optimism/sdk-e2e}
 artifacts=${DAVINCI_SDK_E2E_ARTIFACTS:-$HOME/.cache/davinci-sdk-e2e/artifacts}
 cache=${E2E_DOCKER_CACHE:-$HOME/.cache/davinci-sdk-e2e/docker}
 image=${E2E_IMAGE:-node:22}
@@ -85,6 +85,7 @@ else
         -e DAVINCI_E2E_NODES
     )
     [[ -z ${DAVINCI_E2E_RPC:-} ]] || env_args+=(-e DAVINCI_E2E_RPC)
+    [[ -z ${DAVINCI_E2E_CONFIRM_MAINNET:-} ]] || env_args+=(-e DAVINCI_E2E_CONFIRM_MAINNET)
 fi
 
 echo "e2e $phase: log in $log"

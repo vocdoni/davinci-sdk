@@ -1,6 +1,6 @@
 /**
  * @fileoverview The live suite's `run` phase (`DAVINCI_SDK_E2E=run`): eight
- * elections on the Gnosis deployment, concurrently, one process each, through
+ * elections on the OP Mainnet deployment, concurrently, one process each, through
  * the sequencer nodes of `DAVINCI_E2E_NODES` (see test/e2e/README.md). Before
  * anything is created it checks the committed fixtures against the voter keys
  * and against what `DAVINCI_SDK_E2E_BASE_URL` serves, the registry pins, the
@@ -41,7 +41,7 @@ const SCENARIOS: Scenario[] = [
 /** The longest a scenario may take: settling, the grace window, results and the DKG. */
 const SCENARIO_TIMEOUT_MS = 60 * 60_000;
 
-describe.skipIf(phase() !== 'run')('live e2e on Gnosis', () => {
+describe.skipIf(phase() !== 'run')('live e2e on OP Mainnet', () => {
   let live: Live | undefined;
   const rows: Row[] = [];
 

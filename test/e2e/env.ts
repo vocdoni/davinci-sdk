@@ -4,7 +4,7 @@
  *
  * - `DAVINCI_SDK_E2E`: the phase, `prepare` or `run`; unset skips the suite.
  * - `DAVINCI_SDK_E2E_DIR`: the private directory holding the voter keys,
- *   default `~/.davinci-gnosis/sdk-e2e`; never inside the repository.
+ *   default `~/.davinci-optimism/sdk-e2e`; never inside the repository.
  * - `DAVINCI_SDK_E2E_ARTIFACTS`: where the checked circuit files are kept
  *   between runs, default `~/.cache/davinci-sdk-e2e/artifacts`.
  *
@@ -15,13 +15,14 @@
  * - `DAVINCI_E2E_NODES`: the sequencer node URLs, comma-separated.
  * - `DAVINCI_E2E_ORGANIZER_KEY`: the path of the organizer's key file (hex);
  *   the key is read from it and never printed.
- * - `DAVINCI_E2E_RPC`, optional: Gnosis JSON-RPCs tried before the preset's,
+ * - `DAVINCI_E2E_CONFIRM_MAINNET`: must be `1`; the run spends real ETH on OP Mainnet.
+ * - `DAVINCI_E2E_RPC`, optional: OP Mainnet JSON-RPCs tried before the preset's,
  *   comma-separated.
  */
 
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { GNOSIS } from '../../src/networks';
+import { OPTIMISM } from '../../src/networks';
 import { loadIntegrationEnv } from '../helpers/integrationEnv';
 
 loadIntegrationEnv();
@@ -49,7 +50,7 @@ function dirSetting(name: string, fallback: string): string {
 
 /** The private directory of the voter keys; refused inside the repository. */
 export function privateDir(): string {
-  const dir = dirSetting('DAVINCI_SDK_E2E_DIR', join(homedir(), '.davinci-gnosis', 'sdk-e2e'));
+  const dir = dirSetting('DAVINCI_SDK_E2E_DIR', join(homedir(), '.davinci-optimism', 'sdk-e2e'));
   if (dir === REPO || dir.startsWith(`${REPO}/`)) {
     throw new Error(`DAVINCI_SDK_E2E_DIR=${dir} is inside the repository; keep the keys out of it`);
   }
@@ -76,7 +77,7 @@ export interface RunSettings {
   baseUrl: string;
   nodes: string[];
   organizerKeyFile: string;
-  /** `DAVINCI_E2E_RPC` first, then the Gnosis preset's. */
+  /** `DAVINCI_E2E_RPC` first, then the OP Mainnet preset's. */
   rpcUrls: string[];
   privateDir: string;
   artifactsDir: string;
@@ -96,12 +97,17 @@ export function runSettings(): RunSettings {
   if (missing.length > 0) {
     throw new Error(`the run phase needs ${missing.join(', ')} (see test/e2e/README.md)`);
   }
+  if (process.env.DAVINCI_E2E_CONFIRM_MAINNET?.trim() !== '1') {
+    throw new Error(
+      'the run phase sends real transactions on OP Mainnet: set DAVINCI_E2E_CONFIRM_MAINNET=1 to confirm'
+    );
+  }
   const extra = list(process.env.DAVINCI_E2E_RPC);
   return {
     baseUrl: (process.env.DAVINCI_SDK_E2E_BASE_URL as string).trim().replace(/\/+$/, ''),
     nodes: list(process.env.DAVINCI_E2E_NODES),
     organizerKeyFile: resolve((process.env.DAVINCI_E2E_ORGANIZER_KEY as string).trim()),
-    rpcUrls: [...new Set([...extra, ...GNOSIS.rpcUrls])],
+    rpcUrls: [...new Set([...extra, ...OPTIMISM.rpcUrls])],
     privateDir: privateDir(),
     artifactsDir: artifactsDir(),
   };

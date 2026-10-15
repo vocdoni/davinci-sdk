@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-// The live suite on the Gnosis deployment (test/e2e/README.md). Skipped unless
+// The live suite on the OP Mainnet deployment (test/e2e/README.md). Skipped unless
 // DAVINCI_SDK_E2E is prepare or run; `run` runs its eight scenarios at once.
 export default defineConfig({
   test: {
