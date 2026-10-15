@@ -25,7 +25,16 @@ const work = join(root, 'node_modules', '.cache', 'davinci-docs');
 const DOCS = ['README.md', 'SECURITY.md', 'CHANGELOG.md', ...markdownUnder('docs')];
 // Where a file's checked part ends: the CHANGELOG's first entry of an older
 // major (`## [1.0.0] - …` by hand, `## 1.0.0` by Changesets).
-const MAJOR = Number(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version.split('.')[0]);
+// A pending `major` changeset counts: the entries before it show APIs it removes.
+const PENDING_MAJOR = readdirSync(join(root, '.changeset')).some(
+  f =>
+    f.endsWith('.md') &&
+    f !== 'README.md' &&
+    /^'@vocdoni\/davinci-sdk': major$/m.test(readFileSync(join(root, '.changeset', f), 'utf8'))
+);
+const MAJOR =
+  Number(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version.split('.')[0]) +
+  (PENDING_MAJOR ? 1 : 0);
 const UNTIL = {
   'CHANGELOG.md': { test: l => /^## \[?(\d+)\./.exec(l)?.[1] < MAJOR },
 };
