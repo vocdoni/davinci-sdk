@@ -14,7 +14,7 @@ const voter = new DavinciSDK({
   signer: new Wallet(process.env.VOTER_KEY!), // no provider needed
   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
 });
-await voter.init(); // reads Gnosis through its public RPCs, or `rpcUrls`
+await voter.init(); // reads OP Mainnet through its public RPCs, or `rpcUrls`
 ```
 
 In a browser, pass the wallet's signer (`await new BrowserProvider(window.ethereum).getSigner()`); the vote only asks it to sign a message.

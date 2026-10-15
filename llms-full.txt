@@ -13,7 +13,7 @@ For the index, see https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/ll
 
 # Davinci SDK (`@vocdoni/davinci-sdk`)
 
-The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the Gnosis production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
+The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
 
 One facade, **`DavinciSDK`**, does all of it. The layers below it (`ProcessRegistryService`, the node clients, the census classes, the crypto primitives, the prover) are exported too, for the cases the facade does not cover.
 
@@ -32,7 +32,7 @@ This is the entry point. Find the task in the table below, read the matching `re
 | --- | --- | --- |
 | Install, configure and `init()` the SDK; networks, node URLs, RPCs | `references/setup.md` | `recipes/bootstrap.ts` |
 | Create an election; end, pause, resume, cancel, extend, max voters | `references/process.md` | `recipes/create-process.ts` |
-| Choose who holds the election key (Automatic or an Election committee on Gnosis); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
+| Choose who holds the election key (Automatic or an Election committee on OP Mainnet); the organizer secret | `references/key-modes.md` | `recipes/dkg-locked.ts` |
 | Close early with notice; the grace window; a live meeting | `references/grace.md` | `recipes/close-early.ts` |
 | Build a census: Merkle file, updatable, on-chain contract, CSP | `references/census.md` | `recipes/onchain-census.ts` |
 | Titles and questions: the metadata document and its hash | `references/metadata.md` | — |
@@ -69,7 +69,7 @@ It builds on **ethers v6**, `snarkjs` and `circomlibjs`, and runs in Node 18 or 
 
 ## Mental model
 
-- **One deployment per SDK instance.** A `DavinciSDK` works with one network (default `'gnosis'`: chain 100 and its registry) and the sequencer nodes you configure. The SDK embeds no node URL and no hosting; you pass `sequencerUrls` and, to create elections, an `uploader`.
+- **One deployment per SDK instance.** A `DavinciSDK` works with one network (default `'optimism'`: chain 10 and its registry) and the sequencer nodes you configure. The SDK embeds no node URL and no hosting; you pass `sequencerUrls` and, to create elections, an `uploader`.
 - **`init()` is mandatory.** It picks the read RPC, checks that the registry pins what this release proves and verifies, and checks every node's `/info` against the registry. Nodes that are down or observers are left out for the session (`sdk.nodeChecks`).
 - **The SDK acts as its signer.** An organizer's signer needs a provider on the network's chain. A voter's can be a bare `Wallet`: the SDK reads the chain through `rpcUrls` or the network's public RPCs. To act as someone else, build another `DavinciSDK`.
 - **Voters trust the registry, not the nodes.** The election key, ballot mode and census root come from the contract; a node's view is only cross-checked. The circuit files are checked against the ballot VK hash the registry pins.
@@ -95,7 +95,7 @@ const uploader: Uploader = {
   },
 };
 
-// 1. The organizer: a signer with a provider on Gnosis.
+// 1. The organizer: a signer with a provider on OP Mainnet.
 const organizerWallet = new Wallet(process.env.ORGANIZER_KEY!, new JsonRpcProvider(rpcUrl));
 const sdk = new DavinciSDK({ signer: organizerWallet, sequencerUrls, uploader });
 await sdk.init();
@@ -184,7 +184,7 @@ import { JsonRpcProvider, Wallet } from 'ethers';
 
 const sdk = new DavinciSDK({
   signer: new Wallet(process.env.PRIVATE_KEY!, new JsonRpcProvider(rpcUrl)),
-  network: 'gnosis', // the default
+  network: 'optimism', // the default
   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
   uploader, // to create elections: publishes census files and metadata
 });
@@ -198,7 +198,7 @@ Node URLs are always configuration: the SDK embeds none, and they belong to whoe
 | Field | Default | What it is |
 | --- | --- | --- |
 | `signer` | required | ethers `Signer`. It signs votes, and transactions for organizer work. |
-| `network` | `'gnosis'` | A known network by name, or `{ chainId, processRegistry, startBlock?, rpcUrls?, name? }` for another deployment. |
+| `network` | `'optimism'` | A known network by name, or `{ chainId, processRegistry, startBlock?, rpcUrls?, name? }` for another deployment. |
 | `sequencerUrls` | required | Base URLs of the deployment's sequencer nodes. Votes are routed among them per voter; reads ask them in order. |
 | `keySequencerUrl` | first usable node | The node that issues sequencer election keys, and later publishes those elections' results. |
 | `rpcUrls` | see below | JSON-RPCs for chain reads, in order of preference. |
@@ -214,7 +214,7 @@ Deprecated and still accepted: `sequencerUrl` (added to `sequencerUrls`), `addre
 
 ### What `init()` does
 
-1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads Gnosis through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
+1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads OP Mainnet through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
 2. **Registry.** Its `chainID()` must be the network's (`DeploymentPinError('chainID')`).
 3. **Pins** (unless `verifyDeployment: false`): the batch and results program vks, the vadcop root and the ballot VK hash must be the ones this release carries, the verifier's code must hash to the pinned code hash, and the DKG and Council adapters, when the registry has them, must point back at it. A mismatch throws `DeploymentPinError` naming the field.
 4. **Nodes.** Every node's `/info` must report the network's chain, registry, ballot VK hash and program vks, or `init()` throws `NodeMismatchError`. A URL that answers but is not a sequencer fails too. Observers and nodes that do not answer are recorded in `sdk.nodeChecks` and left out for the session; a call that needs a node then fails with `SequencerUnavailableError` naming them.
@@ -234,16 +234,16 @@ console.log(sdk.network.name, sdk.network.chainId, sdk.network.processRegistry);
 | `createProcess`, every organizer control (`endProcess`, `closeProcessIn`, `setProcessGrace`, `revealProcessKey`, …), `finalizeResults` | yes |
 | `submitVote`, vote status, receipts, `getProcess`, `getResultsStatus`, `waitForResults`, eligibility reads | no |
 
-An organizer uses `new Wallet(key, provider)` or a browser signer; a voter can use `new Wallet(key)`. A write from a signer without a provider throws "Provider required for blockchain operations", and one from a signer on another chain throws "The signer is on chain X; the gnosis registry is on chain 100.". Both are thrown when a stream is first read, before any event.
+An organizer uses `new Wallet(key, provider)` or a browser signer; a voter can use `new Wallet(key)`. A write from a signer without a provider throws "Provider required for blockchain operations", and one from a signer on another chain throws "The signer is on chain X; the optimism registry is on chain 10.". Both are thrown when a stream is first read, before any event.
 
 ## Networks
 
 ```ts
-import { GNOSIS, NETWORKS, getNetwork, resolveNetwork } from '@vocdoni/davinci-sdk';
+import { OPTIMISM, NETWORKS, getNetwork, resolveNetwork } from '@vocdoni/davinci-sdk';
 
-GNOSIS.chainId; // 100
-getNetwork('gnosis')?.processRegistry;
-resolveNetwork('gnosis').processIdPrefix; // bytes 20..23 of every process id the registry assigns
+OPTIMISM.chainId; // 10
+getNetwork('optimism')?.processRegistry;
+resolveNetwork('optimism').processIdPrefix; // bytes 20..23 of every process id the registry assigns
 ```
 
 A preset carries the chain id, the registry address, its deployment block and public RPCs; the grace settings, the verifier and the DKG and Council adapters are read from the registry. A process id names its registry (bytes 20..23), so the facade refuses an id of another deployment before any request.
@@ -266,11 +266,11 @@ const local = new DavinciSDK({
 });
 ```
 
-### The Gnosis deployment
+### The OP Mainnet deployment
 
-`network: 'gnosis'` (the default, `GNOSIS`) is the DAVINCI production beta on Gnosis Chain. Its registry creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. The preset's registry is a placeholder until the OP registry with the DKG and Council adapters is deployed; that one creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
-Releases up to 2.x named an earlier Gnosis registry, now retired. Its processes stay readable as a custom network, through nodes that still follow it:
+Gnosis is retired: releases up to 3.x defaulted to a Gnosis registry (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
 ```ts
 const retired = new DavinciSDK({
@@ -281,8 +281,9 @@ const retired = new DavinciSDK({
     chainId: 100,
     processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
     startBlock: 48_504_090,
-    rpcUrls: GNOSIS.rpcUrls,
+    rpcUrls: ['https://gnosis-rpc.publicnode.com'],
   },
+  verifyDeployment: false,
 });
 await retired.init();
 ```
@@ -565,9 +566,9 @@ Companion to the [[davinci-sdk]] skill. Every process has one of four key modes,
 
 In every mode only the final tally is decrypted, after the grace window (`references/grace.md`), and never the individual ballots.
 
-## On Gnosis (production beta)
+## On OP Mainnet (production beta)
 
-The `gnosis` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
+The `optimism` deployment, the default network, offers (once its registry carries the DKG and Council adapters; the preset holds a placeholder registry until then) two committee options for elections whose ballots no single party can open.
 
 | Option | `keyMode` | What the organizer prepares | When the results come |
 | --- | --- | --- | --- |
@@ -723,7 +724,7 @@ The five parameters are immutables of the registry:
 
 ```ts
 const { defaultGrace, graceFloor, graceCeil, graceMaxTotal, noticeMin } = await sdk.getGraceParams();
-// Gnosis registry: 180, 150, 600, 1800 and 60 seconds
+// OP registry: 180, 150, 600, 1800 and 60 seconds
 ```
 
 ```ts
@@ -785,7 +786,7 @@ A meeting wants results a few minutes after the vote closes:
 2. **Close with notice**: announce "voting closes in one minute" and call `closeProcessIn(processId, noticeMin)`.
 3. **Wait for the results**: `waitForResults(processId, { onStatus })`.
 
-On the Gnosis registry, with a sequencer key and nodes that settle while voting runs, results land about four and a half minutes after the announcement: the notice and its slack, the last batch, the 150 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
+On the OP registry, with a sequencer key and nodes that settle while voting runs, results land about four and a half minutes after the announcement: the notice and its slack, the last batch, the 150 s grace, then the key node's results transaction. A DKG key adds the committee's round (1 to 5 minutes). Nodes configured for meetings (short batch timers) keep the backlog at the end small; ask the operators of the nodes you use.
 
 ```ts
 const { graceFloor, noticeMin } = await sdk.getGraceParams();
@@ -1176,7 +1177,7 @@ const voter = new DavinciSDK({
   signer: new Wallet(process.env.VOTER_KEY!), // no provider needed
   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
 });
-await voter.init(); // reads Gnosis through its public RPCs, or `rpcUrls`
+await voter.init(); // reads OP Mainnet through its public RPCs, or `rpcUrls`
 ```
 
 In a browser, pass the wallet's signer (`await new BrowserProvider(window.ethereum).getSigner()`); the vote only asks it to sign a message.
@@ -1932,10 +1933,10 @@ const writer = sdk.processes; // with the signer: writes (its provider must be o
 By hand, with any ethers runner:
 
 ```ts
-import { GNOSIS, ProcessRegistryService } from '@vocdoni/davinci-sdk';
+import { OPTIMISM, ProcessRegistryService } from '@vocdoni/davinci-sdk';
 import { JsonRpcProvider } from 'ethers';
 
-const registry = new ProcessRegistryService(GNOSIS.processRegistry, new JsonRpcProvider(rpcUrl), {
+const registry = new ProcessRegistryService(OPTIMISM.processRegistry, new JsonRpcProvider(rpcUrl), {
   receiptTimeoutMs: 180_000, // the default
 });
 ```
@@ -2021,7 +2022,7 @@ for await (const window of reader.eventWindows({ processId })) {
 }
 ```
 
-`RegistryEvent` is a union over the ten events (`ProcessCreated`, `ProcessStatusChanged`, `CensusUpdated`, `ProcessMetadataUpdated`, `ProcessDurationChanged`, `ProcessMaxVotersChanged`, `ProcessGraceChanged`, `ProcessStateTransitioned`, `ProcessResultsSet`, `ResultsDecryptionRequested`), each with `blockNumber`, `transactionHash` and `logIndex`. `fromBlock` defaults to the registry's deployment block for a known network and is required otherwise. `parseRegistryLogs(receipt.logs, registry.address)` decodes a receipt's logs.
+`RegistryEvent` is a union over the eleven events (`ProcessCreated`, `ProcessStatusChanged`, `CensusUpdated`, `ProcessMetadataUpdated`, `ProcessDurationChanged`, `ProcessMaxVotersChanged`, `ProcessGraceChanged`, `ProcessStateTransitioned`, `ProcessStateTransitionedL1` (L1-blob mode, emitted next to `ProcessStateTransitioned`), `ProcessResultsSet`, `ResultsDecryptionRequested`), each with `blockNumber`, `transactionHash` and `logIndex`. `fromBlock` defaults to the registry's deployment block for a known network and is required otherwise. `parseRegistryLogs(receipt.logs, registry.address)` decodes a receipt's logs.
 
 Listeners call back with exactly the event's arguments:
 
@@ -2103,7 +2104,7 @@ Companion to the [[davinci-sdk]] skill. Failures grouped by where they happen. E
 | `SequencerUnavailableError` (`nodes`) | every node of a role is down or an observer; `sdk.nodeChecks` says why |
 | `ArtifactError` | a malformed `artifacts` config; later, circuit files that cannot be read or are not the pinned ones |
 | "Provider required for blockchain operations" | an organizer call from a signer without a provider |
-| "The signer is on chain X; the gnosis registry is on chain 100." | an organizer call from a signer on another chain |
+| "The signer is on chain X; the optimism registry is on chain 10." | an organizer call from a signer on another chain |
 | "Process … belongs to …" / "was not created by the … registry" | a process id of another deployment |
 
 ## Creating a process
@@ -2294,7 +2295,7 @@ Each voter owns one **ballot slot** in the state tree: `0x10 + (be64(sha256("dav
  *
  * Configure the SDK for a deployment, initialize it and report what it found:
  *
- *   - the network (Gnosis by default) and the registry it points at
+ *   - the network (OP Mainnet by default) and the registry it points at
  *   - the registry pins, checked by init() against this SDK release
  *   - every sequencer node's /info, checked against the registry
  *   - the grace window parameters
@@ -2362,7 +2363,7 @@ main().then(
  *   - a single-choice preset over 4 options
  *   - the TxStatus stream a UI would show
  *
- * The organizer's signer needs a provider on the network's chain (Gnosis by
+ * The organizer's signer needs a provider on the network's chain (OP Mainnet by
  * default) and gas. Census files and metadata documents are published with an
  * HTTP PUT to UPLOAD_URL and must then be served, unchanged, at PUBLIC_URL over
  * public https: replace `uploader` with your own store.
@@ -2873,7 +2874,7 @@ main().then(
  *   - after the end and the grace window the results read `locked`
  *   - revealProcessKey lets the committee decrypt the tally
  *
- * The registry must have a DKG adapter (the Gnosis one does). The secret is
+ * The registry must have a DKG adapter (the OP Mainnet one does). The secret is
  * written to SECRET_FILE with owner-only permissions; keep it with the
  * organizer's other credentials.
  *

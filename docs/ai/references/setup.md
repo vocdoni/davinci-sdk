@@ -38,7 +38,7 @@ import { JsonRpcProvider, Wallet } from 'ethers';
 
 const sdk = new DavinciSDK({
   signer: new Wallet(process.env.PRIVATE_KEY!, new JsonRpcProvider(rpcUrl)),
-  network: 'gnosis', // the default
+  network: 'optimism', // the default
   sequencerUrls: ['https://sequencer-1.example.org', 'https://sequencer-2.example.org'],
   uploader, // to create elections: publishes census files and metadata
 });
@@ -52,7 +52,7 @@ Node URLs are always configuration: the SDK embeds none, and they belong to whoe
 | Field | Default | What it is |
 | --- | --- | --- |
 | `signer` | required | ethers `Signer`. It signs votes, and transactions for organizer work. |
-| `network` | `'gnosis'` | A known network by name, or `{ chainId, processRegistry, startBlock?, rpcUrls?, name? }` for another deployment. |
+| `network` | `'optimism'` | A known network by name, or `{ chainId, processRegistry, startBlock?, rpcUrls?, name? }` for another deployment. |
 | `sequencerUrls` | required | Base URLs of the deployment's sequencer nodes. Votes are routed among them per voter; reads ask them in order. |
 | `keySequencerUrl` | first usable node | The node that issues sequencer election keys, and later publishes those elections' results. |
 | `rpcUrls` | see below | JSON-RPCs for chain reads, in order of preference. |
@@ -68,7 +68,7 @@ Deprecated and still accepted: `sequencerUrl` (added to `sequencerUrls`), `addre
 
 ### What `init()` does
 
-1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads Gnosis through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
+1. **Read provider.** `rpcUrls` when given; else the signer's provider when it is on the network's chain; else the network's public RPCs. A voter's bare wallet therefore reads OP Mainnet through the preset RPCs. Over `rpcUrls` or the preset RPCs, a request that fails or is rate-limited moves to the next endpoint.
 2. **Registry.** Its `chainID()` must be the network's (`DeploymentPinError('chainID')`).
 3. **Pins** (unless `verifyDeployment: false`): the batch and results program vks, the vadcop root and the ballot VK hash must be the ones this release carries, the verifier's code must hash to the pinned code hash, and the DKG and Council adapters, when the registry has them, must point back at it. A mismatch throws `DeploymentPinError` naming the field.
 4. **Nodes.** Every node's `/info` must report the network's chain, registry, ballot VK hash and program vks, or `init()` throws `NodeMismatchError`. A URL that answers but is not a sequencer fails too. Observers and nodes that do not answer are recorded in `sdk.nodeChecks` and left out for the session; a call that needs a node then fails with `SequencerUnavailableError` naming them.
@@ -88,16 +88,16 @@ console.log(sdk.network.name, sdk.network.chainId, sdk.network.processRegistry);
 | `createProcess`, every organizer control (`endProcess`, `closeProcessIn`, `setProcessGrace`, `revealProcessKey`, …), `finalizeResults` | yes |
 | `submitVote`, vote status, receipts, `getProcess`, `getResultsStatus`, `waitForResults`, eligibility reads | no |
 
-An organizer uses `new Wallet(key, provider)` or a browser signer; a voter can use `new Wallet(key)`. A write from a signer without a provider throws "Provider required for blockchain operations", and one from a signer on another chain throws "The signer is on chain X; the gnosis registry is on chain 100.". Both are thrown when a stream is first read, before any event.
+An organizer uses `new Wallet(key, provider)` or a browser signer; a voter can use `new Wallet(key)`. A write from a signer without a provider throws "Provider required for blockchain operations", and one from a signer on another chain throws "The signer is on chain X; the optimism registry is on chain 10.". Both are thrown when a stream is first read, before any event.
 
 ## Networks
 
 ```ts
-import { GNOSIS, NETWORKS, getNetwork, resolveNetwork } from '@vocdoni/davinci-sdk';
+import { OPTIMISM, NETWORKS, getNetwork, resolveNetwork } from '@vocdoni/davinci-sdk';
 
-GNOSIS.chainId; // 100
-getNetwork('gnosis')?.processRegistry;
-resolveNetwork('gnosis').processIdPrefix; // bytes 20..23 of every process id the registry assigns
+OPTIMISM.chainId; // 10
+getNetwork('optimism')?.processRegistry;
+resolveNetwork('optimism').processIdPrefix; // bytes 20..23 of every process id the registry assigns
 ```
 
 A preset carries the chain id, the registry address, its deployment block and public RPCs; the grace settings, the verifier and the DKG and Council adapters are read from the registry. A process id names its registry (bytes 20..23), so the facade refuses an id of another deployment before any request.
@@ -120,11 +120,11 @@ const local = new DavinciSDK({
 });
 ```
 
-### The Gnosis deployment
+### The OP Mainnet deployment
 
-`network: 'gnosis'` (the default, `GNOSIS`) is the DAVINCI production beta on Gnosis Chain. Its registry creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. The preset's registry is a placeholder until the OP registry with the DKG and Council adapters is deployed; that one creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
 
-Releases up to 2.x named an earlier Gnosis registry, now retired. Its processes stay readable as a custom network, through nodes that still follow it:
+Gnosis is retired: releases up to 3.x defaulted to a Gnosis registry (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
 ```ts
 const retired = new DavinciSDK({
@@ -135,8 +135,9 @@ const retired = new DavinciSDK({
     chainId: 100,
     processRegistry: '0x6702e0141B6b72bCF8C1bdff20A82A35C5502E7D',
     startBlock: 48_504_090,
-    rpcUrls: GNOSIS.rpcUrls,
+    rpcUrls: ['https://gnosis-rpc.publicnode.com'],
   },
+  verifyDeployment: false,
 });
 await retired.init();
 ```

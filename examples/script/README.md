@@ -11,7 +11,7 @@ Each run creates a real election and spends the organizer's gas. A run takes abo
 
 - Node.js 18 or newer and Yarn.
 - The deployment's sequencer node URLs (the SDK embeds none).
-- A JSON-RPC of the network (Gnosis by default) and an organizer account with gas.
+- A JSON-RPC of the network (OP Mainnet by default) and an organizer account with gas.
 - Somewhere to publish census files and metadata documents: a web server serving a directory, or an endpoint that accepts an HTTP `PUT`, reachable over public https. Nodes refuse census files on private hosts or behind redirects.
 
 ## Setup

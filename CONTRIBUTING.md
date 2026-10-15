@@ -33,7 +33,7 @@ src/
 test/
   <area>/unit/    unit tests
   anvil/          organizer flows on the real contracts, on a local anvil chain
-  e2e/            the live suite on Gnosis (see test/e2e/README.md)
+  e2e/            the live suite on OP Mainnet (see test/e2e/README.md)
   fixtures/       test vectors
   helpers/        shared test utilities
 scripts/          ABI sync, documentation build and checks, live suite runner
@@ -52,7 +52,7 @@ yarn tsc --noEmit          # type check, sources and tests
 yarn test:unit             # unit tests, offline
 yarn test:anvil            # the anvil suite (needs Foundry)
 yarn test                  # both
-yarn test:e2e              # the live Gnosis suite; skipped unless DAVINCI_SDK_E2E is set
+yarn test:e2e              # the live OP Mainnet suite; skipped unless DAVINCI_SDK_E2E is set
 yarn test:core             # unit tests of one area: also test:contracts, test:sequencer, test:census, test:crypto
 yarn docs:build            # rebuild llms.txt and llms-full.txt from docs/ai
 yarn docs:check            # both are current, and every documentation code block type-checks
@@ -76,7 +76,7 @@ DAVINCI_CONTRACTS_DIR=../davinci-contracts
 DAVINCI_CENSUS_CONTRACT_DIR=../davinci-onchain-census-contract
 ```
 
-**The live suite** (`yarn test:e2e`, run through `scripts/e2e-live.sh`) creates elections on the Gnosis deployment through real sequencer nodes and spends real gas. Its phases, settings and costs are in [test/e2e/README.md](test/e2e/README.md).
+**The live suite** (`yarn test:e2e`, run through `scripts/e2e-live.sh`) creates elections on the OP Mainnet deployment through real sequencer nodes and spends real gas. Its phases, settings and costs are in [test/e2e/README.md](test/e2e/README.md).
 
 CI runs lint, formatting, the type check, the unit tests, the build, the documentation checks and the anvil suite on every pull request.
 

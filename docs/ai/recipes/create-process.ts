@@ -8,7 +8,7 @@
  *   - a single-choice preset over 4 options
  *   - the TxStatus stream a UI would show
  *
- * The organizer's signer needs a provider on the network's chain (Gnosis by
+ * The organizer's signer needs a provider on the network's chain (OP Mainnet by
  * default) and gas. Census files and metadata documents are published with an
  * HTTP PUT to UPLOAD_URL and must then be served, unchanged, at PUBLIC_URL over
  * public https: replace `uploader` with your own store.

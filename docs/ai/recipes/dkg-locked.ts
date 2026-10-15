@@ -9,7 +9,7 @@
  *   - after the end and the grace window the results read `locked`
  *   - revealProcessKey lets the committee decrypt the tally
  *
- * The registry must have a DKG adapter (the Gnosis one does). The secret is
+ * The registry must have a DKG adapter (the OP Mainnet one does). The secret is
  * written to SECRET_FILE with owner-only permissions; keep it with the
  * organizer's other credentials.
  *
