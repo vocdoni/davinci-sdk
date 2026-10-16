@@ -227,6 +227,8 @@ const RPC_USER_AGENT = 'davinci-sdk';
 const NONCE_WINDOW_MS = 1_500;
 /** Tries of a rate-limited (429) request on an RPC before the next one is asked. */
 const RPC_FAILOVER_ATTEMPTS = 4;
+/** Calls per JSON-RPC request: dRPC's free plan (a preset endpoint) refuses batches of more than 3. */
+const RPC_BATCH_MAX = 3;
 
 // A JSON-RPC answer that means "slow down" rather than a result, as alloy's
 // rate-limit policy reads it.
@@ -271,7 +273,10 @@ export class FailoverRpcProvider extends JsonRpcProvider {
   constructor(urls: readonly string[], chainId?: number) {
     if (urls.length === 0) throw new Error('at least one RPC URL is required');
     const network = chainId === undefined ? undefined : Network.from(chainId);
-    super(urls[0], network, network ? { staticNetwork: network } : {});
+    super(urls[0], network, {
+      ...(network ? { staticNetwork: network } : {}),
+      batchMaxCount: RPC_BATCH_MAX,
+    });
     this.urls = [...urls];
   }
 
