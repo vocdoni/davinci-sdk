@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.1
+### Patch Changes
+
+
+
+- [#99](https://github.com/vocdoni/davinci-sdk/pull/99) [`a2e0d19`](https://github.com/vocdoni/davinci-sdk/commit/a2e0d1916491a5d6edc645c4a7d2bdb99a526d05) Thanks [@p4u](https://github.com/p4u)! - `FailoverRpcProvider` sends at most 3 calls per JSON-RPC request. dRPC's free plan, the last endpoint of the `optimism` preset, refuses larger batches, so a batched call that fell through to it after the other endpoints failed or rate-limited used to fail with "Batch of more than 3 requests are not allowed".
+
 ## 4.0.0
 ### Major Changes
 
