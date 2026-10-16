@@ -210,6 +210,27 @@ describe('FailoverRpcProvider', () => {
     );
   });
 
+  it('sends at most 3 calls per request (dRPC refuses larger batches)', async () => {
+    const sizes: number[] = [];
+    FetchRequest.registerGetUrl(req => {
+      const body = JSON.parse(toUtf8String(req.body ?? new Uint8Array())) as
+        | JsonRpcPayload
+        | JsonRpcPayload[];
+      const calls = Array.isArray(body) ? body : [body];
+      sizes.push(calls.length);
+      const answers = calls.map(c => ({ jsonrpc: '2.0', id: c.id, result: '0x1' }));
+      return Promise.resolve(json(Array.isArray(body) ? answers : answers[0]));
+    });
+    const provider = new FailoverRpcProvider(['https://a.rpc.test'], 100);
+    const addresses = Array.from(
+      { length: 7 },
+      (_, i) => `0x${(i + 1).toString(16).padStart(40, '0')}`
+    );
+    await Promise.all(addresses.map(a => provider.getBalance(a)));
+    expect(sizes.reduce((s, n) => s + n, 0)).toBe(7);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(3);
+  });
+
   it('needs an endpoint', () => {
     expect(() => new FailoverRpcProvider([])).toThrow('at least one RPC URL');
   });
