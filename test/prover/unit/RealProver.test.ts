@@ -40,7 +40,7 @@ describe.skipIf(!DIR)('BallotProver with the real circuit files', () => {
 
   it('loads the pinned files: sha256s and both verification keys match', async () => {
     const files = await prover.load(BALLOT_VK_HASH);
-    expect(files.zkey.length).toBe(32_648_690);
+    expect(files.zkey.length).toBe(32_649_564);
     expect(files.wasm.length).toBe(2_428_512);
     expect(files.vkey.IC).toHaveLength(72);
   }, 60_000);

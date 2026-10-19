@@ -14,14 +14,14 @@ An election lives in a `ProcessRegistry` contract; the OP Mainnet deployment is 
 
 A voter may vote again; the latest ballot counts. A vote goes `pending` → `aggregated` → `processed` → `settled` as nodes batch it, which takes minutes (up to a quarter of an hour with default node settings). After the end, batches of votes cast before it keep landing until the grace window closes; every landing pushes the window out, up to a cap. The key holder then publishes the tally, seconds to a few minutes later.
 
-### Production beta on OP Mainnet
+### Pre-production on OP Mainnet
 
-The built-in `optimism` network (OP Mainnet, chain 10) is the DAVINCI production beta, and the default. Transitions settle on OP and their blobs live on Ethereum (L1-blob mode). Gnosis is retired. The production sequencer is `https://sequencer2.davinci.vote`. For elections whose ballots no single party can open, it offers two committees:
+The built-in `optimism` network (OP Mainnet, chain 10) is the DAVINCI pre-production deployment, and the default. Transitions settle on OP and their blobs live on Ethereum (L1-blob mode). Gnosis is retired. The production sequencer is `https://sequencer2.davinci.vote`. For elections whose ballots no single party can open, it offers two committees:
 
 - **Automatic** (`keyMode: 'dkg'`): a rotating committee of independent node operators holds the key. Nothing to prepare; results come a few minutes after the grace window. **Recommended for most elections.**
 - **Election committee** (`keyMode: 'council'` with a `ceremonyId`): a committee the organizer invites holds the key, set up in the Council app ([davinci-dkg-council](https://github.com/vocdoni/davinci-dkg-council)). Results stay locked until the ceremony opens decryption, on a scheduled date or when its organizer opens it.
 
-During the beta both committees' circuits come from development trusted setups. [`docs/ai/references/key-modes.md`](docs/ai/references/key-modes.md) explains both options, how to create a process with each and what every results state means.
+Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.2.0, `CEREMONY.md`); a public ceremony replaces it before public production. During the pre-production phase both committees' circuits come from development trusted setups. [`docs/ai/references/key-modes.md`](docs/ai/references/key-modes.md) explains both options, how to create a process with each and what every results state means.
 
 The rest of the stack: [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) (the node), [davinci-contracts](https://github.com/vocdoni/davinci-contracts) (the registry), [davinci-zkvm](https://github.com/vocdoni/davinci-zkvm) (batch and results proofs), [davinci-dkg](https://github.com/vocdoni/davinci-dkg) (committee keys) and [davinci-circom](https://github.com/vocdoni/davinci-circom) (the ballot circuit). The protocol is described in the [whitepaper](https://whitepaper.vocdoni.io).
 

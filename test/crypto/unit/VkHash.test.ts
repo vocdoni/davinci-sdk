@@ -9,13 +9,13 @@ import { loadFixture } from '../../helpers/fixtures';
 
 // Vectors: davinci-zkvm rust-sdk/testdata/{hashes,real_proof,genesis}.json and
 // rust-sdk/assets/ballot_proof_vkey.json (davinci-circom artifacts/ballot_proof_vkey.json at
-// e99127d, the development setup whose wire hash is artifacts/DEV_VK_HASH).
+// v1.2.0, the pre-production ceremony key whose wire hash is artifacts/VK_HASH).
 interface Hashes {
   ballot_vk_leaf: string;
 }
 
-// davinci-circom e99127d artifacts/DEV_VK_HASH.
-const DEV_VK_HASH = '0xe8e1e7377394b6600e7e31f2f2d012f148694d07c6088b205371a0fcc96418a9';
+// davinci-circom v1.2.0 artifacts/VK_HASH.
+const CEREMONY_VK_HASH = '0x7caffddcd7ea38439cbb45789b810d8eafceca65cff93dbeaae409b2bf64e219';
 
 const clone = (vk: SnarkjsVerificationKey) =>
   JSON.parse(JSON.stringify(vk)) as SnarkjsVerificationKey;
@@ -70,11 +70,11 @@ describe('ballot VK hash', () => {
   const hashes = loadFixture<Hashes>('zkvm/hashes.json');
   const pinned = loadFixture<SnarkjsVerificationKey>('zkvm/ballot_proof_vkey.json');
 
-  it('hashes the pinned key to the registry pin, state leaf 0x07 and DEV_VK_HASH', () => {
+  it('hashes the pinned key to the registry pin, state leaf 0x07 and CEREMONY_VK_HASH', () => {
     expect(ballotVkHash(pinned)).toBe(`0x${hashes.ballot_vk_leaf}`);
     expect(ballotVkHash(pinned)).toBe(BALLOT_VK_HASH);
-    expect(BALLOT_VK_HASH).toBe(DEV_VK_HASH);
-    expect((pinned as { setup?: string }).setup).toBe('dev');
+    expect(BALLOT_VK_HASH).toBe(CEREMONY_VK_HASH);
+    expect((pinned as { setup?: string }).setup).toBe('ceremony');
     const real = loadFixture<{ vk: SnarkjsVerificationKey }>('zkvm/real_proof.json');
     expect(ballotVkHash(real.vk)).toBe(BALLOT_VK_HASH);
     const genesis = loadFixture<{ ballot_vk_hash: string }[]>('zkvm/genesis.json');

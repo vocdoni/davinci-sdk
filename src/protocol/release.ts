@@ -30,10 +30,11 @@ export const ZISK_VERIFIER_CODEHASH =
 /**
  * sha256 of the ballot proof VK wire bytes (see `ballotVkHash`): registry
  * `ballotVKHash()` and state leaf 0x07. The key is davinci-circom
- * `artifacts/ballot_proof_vkey.json` at e99127d, its development setup
- * (`artifacts/DEV_VK_HASH`); the production ceremony replaces it.
+ * `artifacts/ballot_proof_vkey.json` of davinci-circom v1.2.0, its
+ * pre-production phase-2 ceremony key (`CEREMONY.md`, `artifacts/VK_HASH`); a
+ * public ceremony replaces it before public production.
  */
-export const BALLOT_VK_HASH = '0xe8e1e7377394b6600e7e31f2f2d012f148694d07c6088b205371a0fcc96418a9';
+export const BALLOT_VK_HASH = '0x7caffddcd7ea38439cbb45789b810d8eafceca65cff93dbeaae409b2bf64e219';
 
 /** The pins a deployment is checked against, by registry getter name. */
 export const RELEASE_PINS = {

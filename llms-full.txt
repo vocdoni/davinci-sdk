@@ -13,7 +13,7 @@ For the index, see https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/ll
 
 # Davinci SDK (`@vocdoni/davinci-sdk`)
 
-The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet production beta is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
+The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet pre-production deployment is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
 
 One facade, **`DavinciSDK`**, does all of it. The layers below it (`ProcessRegistryService`, the node clients, the census classes, the crypto primitives, the prover) are exported too, for the cases the facade does not cover.
 
@@ -268,7 +268,7 @@ const local = new DavinciSDK({
 
 ### The OP Mainnet deployment
 
-`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI production beta on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI pre-production deployment on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.2.0); a public ceremony replaces it before public production. The committees' circuits use development trusted setups during the beta.
 
 Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
@@ -566,7 +566,7 @@ Companion to the [[davinci-sdk]] skill. Every process has one of four key modes,
 
 In every mode only the final tally is decrypted, after the grace window (`references/grace.md`), and never the individual ballots.
 
-## On OP Mainnet (production beta)
+## On OP Mainnet (pre-production)
 
 The `optimism` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
 
@@ -575,7 +575,7 @@ The `optimism` deployment, the default network, offers two committee options for
 | **Automatic**: a rotating committee of independent node operators | `'dkg'` (`'dkg-locked'` to release the results on the organizer's word) | nothing | 1 to 5 minutes after the grace window |
 | **Election committee**: a committee the organizer invites (a board, an assembly) | `'council'` with a `ceremonyId` | a Live Council ceremony that grants the registry's Council adapter and the creating account | once the ceremony opens decryption: on its scheduled date, or when its organizer opens it |
 
-Sequencer keys remain for tests and demos. During the beta both committees prove their work with circuits from development trusted setups: one party generated each Groth16 setup, and whoever kept its secret randomness could forge committee proofs until multi-party ceremonies replace them.
+Sequencer keys remain for tests and demos. During pre-production both committees prove their work with circuits from development trusted setups: one party generated each Groth16 setup, and whoever kept its secret randomness could forge committee proofs until multi-party ceremonies replace them.
 
 ### With Automatic
 

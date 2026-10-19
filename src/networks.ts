@@ -32,9 +32,9 @@ export interface DavinciNetwork {
 }
 
 /** `ProcessRegistry` of OP Mainnet, with the DKG and Council adapters. */
-const OPTIMISM_REGISTRY = '0x64d41aD49009204E8dAcc153Fc98a5Ee14cB6916';
+const OPTIMISM_REGISTRY = '0x6F500A3e3A161EcB3C19A034bFB6a6Ac3b71abE6';
 /** Block {@link OPTIMISM_REGISTRY} was deployed at. */
-const OPTIMISM_START_BLOCK = 158_245_426;
+const OPTIMISM_START_BLOCK = 158_414_417;
 
 /**
  * OP Mainnet in L1-blob mode, as in davinci-sequencer `client/src/networks.rs`:

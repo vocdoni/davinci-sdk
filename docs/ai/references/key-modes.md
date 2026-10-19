@@ -11,7 +11,7 @@ Companion to the [[davinci-sdk]] skill. Every process has one of four key modes,
 
 In every mode only the final tally is decrypted, after the grace window (`references/grace.md`), and never the individual ballots.
 
-## On OP Mainnet (production beta)
+## On OP Mainnet (pre-production)
 
 The `optimism` deployment, the default network, offers two committee options for elections whose ballots no single party can open.
 
@@ -20,7 +20,7 @@ The `optimism` deployment, the default network, offers two committee options for
 | **Automatic**: a rotating committee of independent node operators | `'dkg'` (`'dkg-locked'` to release the results on the organizer's word) | nothing | 1 to 5 minutes after the grace window |
 | **Election committee**: a committee the organizer invites (a board, an assembly) | `'council'` with a `ceremonyId` | a Live Council ceremony that grants the registry's Council adapter and the creating account | once the ceremony opens decryption: on its scheduled date, or when its organizer opens it |
 
-Sequencer keys remain for tests and demos. During the beta both committees prove their work with circuits from development trusted setups: one party generated each Groth16 setup, and whoever kept its secret randomness could forge committee proofs until multi-party ceremonies replace them.
+Sequencer keys remain for tests and demos. During pre-production both committees prove their work with circuits from development trusted setups: one party generated each Groth16 setup, and whoever kept its secret randomness could forge committee proofs until multi-party ceremonies replace them.
 
 ### With Automatic
 

@@ -18,17 +18,17 @@ import {
 import { checkVerificationKey, loadArtifactFile } from '../../../src/prover/artifacts';
 import { NO_PHASE2_VKEY, OTHER_VKEY, PINNED_VKEY_TEXT } from '../../helpers/realProof';
 
-// davinci-circom e99127d: sha256sum of the checkout's artifacts/ (the dev setup).
-const E99127D = 'e99127d5a7190d152ccf94c5f457ad126fe62d03';
+// davinci-circom v1.2.0: sha256sum of the checkout's artifacts/ (the ceremony key).
+const V120 = '69df9559043d88d363e4d341fdeff76a305a26eb';
 const PINNED = {
   wasm: ['ballot_proof.wasm', '5b65876e8ca3acbe44191049cb86f917febb83cd3f0c56d3d7c828e3ebca6b86'],
   zkey: [
     'ballot_proof_pkey.zkey',
-    '610313b7dc2439180f17944625eab13206ea33249b1680e73b191ec7693c72c7',
+    'e634798d1a4bca81c743348f654e7cd8d458bd396065dbca1cfc4a0c6a90b084',
   ],
   vkey: [
     'ballot_proof_vkey.json',
-    '976577a9624aa410befb8cf6879092d07c2c82a52c4a28189b19c94d9c3c920d',
+    '4a05045a22a5019ca6cff8057b77c9968856175f9b20705e86925b6f12112f4b',
   ],
 } as const;
 
@@ -53,16 +53,16 @@ function serve(files: Record<string, Uint8Array | number>) {
 }
 
 describe('the ballot artifact table', () => {
-  it('pins the registry key to davinci-circom e99127d on the CDN, then raw GitHub', () => {
+  it('pins the registry key to davinci-circom v1.2.0 on the CDN, then raw GitHub', () => {
     expect(Object.keys(BALLOT_ARTIFACTS)).toEqual([BALLOT_VK_HASH]);
     const entry = BALLOT_ARTIFACTS[BALLOT_VK_HASH];
-    expect(entry.source).toContain(E99127D);
+    expect(entry.source).toContain(V120);
     for (const name of ['wasm', 'zkey', 'vkey'] as const) {
       const [file, hash] = PINNED[name];
       expect(entry[name]).toEqual({
-        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${E99127D}/${file}`,
+        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${V120}/${file}`,
         mirrors: [
-          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${E99127D}/artifacts/${file}`,
+          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${V120}/artifacts/${file}`,
         ],
         sha256: `0x${hash}`,
       });

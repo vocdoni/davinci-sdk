@@ -1,9 +1,10 @@
 # zkVM protocol vectors
 
 Verbatim copies from [davinci-zkvm](https://github.com/vocdoni/davinci-zkvm) at
-commit `867316bb18e59be3290682719795fb8d41b638b7` (branch `feat/protocol-v5`: the
-ballot proof with 71 public inputs, the Keccak census tree and the development
-ballot key). The Rust SDK tests against the same files, and its code is what
+v0.4.1 (commit `ef074744e09b12676a91ed9710e7a371b9a9ca56`: the ballot proof with 71
+public inputs, the Keccak census tree and the pre-production ceremony ballot key
+of davinci-circom v1.2.0; `ballots.json` and `leanimt.json` are unchanged since
+`867316bb`). The Rust SDK tests against the same files, and its code is what
 `src/crypto` and `src/protocol` mirror. Do not edit or reformat them: the tests compare byte for byte, and the
 checksums below identify the copy.
 
@@ -14,7 +15,7 @@ checksums below identify the copy.
 | `ballot_mode.json`, `ballots.json` | `rust-sdk/testdata/` (`ballots.json`: 1, 2, 6, 8 and 16 fields with their 71 public signals) | `Ballot.test.ts`, `RealProver.test.ts` |
 | `real_proof.json` | `rust-sdk/testdata/` (a 6-field proof under the pinned key, its 71 public signals) | `Ballot.test.ts`, `VkHash.test.ts`, `test/prover/unit/*` |
 | `hashes.json`, `genesis.json` | `rust-sdk/testdata/` | `VkHash.test.ts` |
-| `ballot_proof_vkey.json` | `rust-sdk/assets/` (davinci-circom `artifacts/ballot_proof_vkey.json` at e99127d, the development setup) | `VkHash.test.ts`, `test/prover/unit/*` (its sha256 is the artifact table's) |
+| `ballot_proof_vkey.json` | `rust-sdk/assets/` (davinci-circom `artifacts/ballot_proof_vkey.json` at v1.2.0, the ceremony key) | `VkHash.test.ts`, `test/prover/unit/*` (its sha256 is the artifact table's) |
 | `leanimt.json`, `census.json`, `slot.json` | `rust-sdk/testdata/` (Go reference; `leanimt.json` holds Keccak trees as `0x` hex, most roots above the BN254 modulus) | `Census.test.ts`, `Ecdsa.test.ts` |
 | `voteid_sig.json` | `rust-sdk/testdata/` (go-ethereum) | `Ecdsa.test.ts` |
 | `dkg_schnorr.json` | `rust-sdk/testdata/` (davinci-dkg) | `Dkg.test.ts` |
@@ -34,17 +35,17 @@ checksums here, and re-run `yarn test:unit`.
 ```
 dcf3affb75bdaef8e4166f3d49a0b2b9d9c99a9547374f8b4fe570327563bd70  babyjubjub.json
 aca50f12179a0d9edff052816a6fb7453b5d55ad3bbef21d56a48128b323f11f  ballot_mode.json
-976577a9624aa410befb8cf6879092d07c2c82a52c4a28189b19c94d9c3c920d  ballot_proof_vkey.json
+4a05045a22a5019ca6cff8057b77c9968856175f9b20705e86925b6f12112f4b  ballot_proof_vkey.json
 5a9696415205d15f01d3f74e752b0a2c312362827af27544861caf209b039b5a  ballots.json
 9183ed69a778e498159383d59db92a57cf8ff80b42e798897a62600c7500fac3  census.json
 8435f9dddb609b39dcf6cdd7fe208a8836fa9a57535ab2e05626a8fc8193adff  dkg_schnorr.json
 d5b2bf9bbafea3bede0043162536e7d598c5caee9edb5c4799b444ce8032a989  elgamal.json
-eb2a326ec0cb37fc6e2cd1b4b46c68f51fa69be9353ffd0c9c9a20fd9a780447  genesis.json
-1515e06ac967266209e2abbea6b15327c7e8ee77b40c90bb91f3909f66e898f2  hashes.json
+3716e526ddace7e6b243718327b9e8e3a34d8b121c9a81f9f3dabb92f8e2d2e1  genesis.json
+cf0889c0fde07507f48d43c8391c06a3ab70d61f93a91d5e5431fde1024a7d6f  hashes.json
 dcad19717e34f5361374de7b2e69bd0a454ac773fb8c7d38b25406b6f10dc436  leanimt.json
 7464dbecde8513b9493253fa8198770aa7627e37a59c3b422b3b1536a6ba2c72  limits.rs
 d88659f55a7e09d525d5b7d6f23cacd8d4f530d331e0a05bcbe470c81b2f1138  poseidon.json
-ccc3a5ce22dc04ac6d854ff0cfda4340a34e358739dd148793cd903ff6bc4a7a  real_proof.json
+1313ff9a9dff042fdb510c06d3b080cee1a685d390ed475edec9451ef50fd7bf  real_proof.json
 d78fb5b04770b759acb065052f732a77e84db91d448bb0b92d0443415ab86f83  release.rs
 13428077c402e218373e487e1c73e05e794340cd289ce1ebe1176de6fb530095  slot.json
 9d7433d98e8894719a269d0b5f38cadb87d06be87bf40f6d48aa54a1086f3b90  voteid_sig.json
