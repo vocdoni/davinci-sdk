@@ -1740,8 +1740,10 @@ export class ProcessOrchestrationService {
    * service created (by default), the ones given, or every process the
    * signer created on the registry (`all`). It tries them all, one
    * transaction each, and reports what it canceled and what failed; a
-   * process of another organizer fails with `Unauthorized`. Useful to clean
-   * up after tests, and after a `WrongProcessIdError`.
+   * process of another organizer fails with `Unauthorized`. A process past
+   * its grace end is left alone: the registry no longer cancels it, since
+   * its results may be on their way. Useful to clean up after tests, and
+   * after a `WrongProcessIdError`.
    *
    * @example
    * ```typescript
@@ -1772,6 +1774,12 @@ export class ProcessOrchestrationService {
       try {
         const process = await this.processRegistry.getProcess(processId);
         if (!isOpenStatus(process.status)) continue;
+        // davinci-contracts `setProcessStatus` refuses CANCELED from the grace end on.
+        const [now, graceEnd] = await Promise.all([
+          this.processRegistry.getChainTime(),
+          this.processRegistry.getProcessGraceEnd(process.processId),
+        ]);
+        if (now >= graceEnd) continue;
         await this.cancelProcess(process.processId);
         result.canceled.push(process.processId);
       } catch (err) {

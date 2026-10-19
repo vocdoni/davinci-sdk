@@ -7,16 +7,14 @@ import {
   IDENTITY_CIPHERTEXT,
   addressToField,
   ballotCoords,
-  ballotInputsHashPreimage,
+  ballotPublicSignals,
   bjjAdd,
   bjjMulBase,
   bjjNeg,
   buildBallot,
-  computeBallotInputsHash,
   computeVoteId,
   encryptBallot,
   isBallotPaddingValid,
-  multiPoseidon,
   packBallotMode,
   poseidon,
   processIdToField,
@@ -52,8 +50,7 @@ interface BallotJson {
   pk: Dec;
   vote_id: Int;
   ballot: string[];
-  inputs_hash: string;
-  inputs: string[];
+  public_signals: string[];
 }
 interface ElGamalBallots {
   pk: Dec;
@@ -175,35 +172,69 @@ describe('ballot encryption guards', () => {
   });
 });
 
-describe('vote id, inputs hash and circuit inputs', () => {
+describe('vote id, public signals and circuit inputs', () => {
   const ballots = loadFixture<BallotJson[]>('zkvm/ballots.json');
+  const paramsOf = async (b: BallotJson) => {
+    const processId = BigInt(b.process_id);
+    const address = addressToField(b.address);
+    const k = BigInt(b.k);
+    const m = mode(b.mode);
+    const pk = pt(b.pk);
+    return {
+      processId,
+      ballotMode: m,
+      encryptionKey: pk,
+      address,
+      voteId: await computeVoteId(processId, address, k),
+      ballot: await encryptBallot(pk, b.fields.map(BigInt), k, m.numFields),
+      weight: BigInt(b.weight),
+    };
+  };
 
-  it('match the Go reference for 16-field ballots', async () => {
-    expect(ballots.length).toBeGreaterThan(0);
+  it('match the Go reference at 1, 2, 6, 8 and 16 fields', async () => {
+    expect(ballots.map(b => b.mode.num_fields).sort((x, y) => x - y)).toEqual([1, 2, 6, 8, 16]);
     for (const b of ballots) {
-      const processId = BigInt(b.process_id);
-      const address = addressToField(b.address);
-      const k = BigInt(b.k);
-      const voteId = await computeVoteId(processId, address, k);
-      expect(voteId).toBe(BigInt(b.vote_id));
-      const m = mode(b.mode);
-      const pk = pt(b.pk);
-      const ballot = await encryptBallot(pk, b.fields.map(BigInt), k, m.numFields);
-      expect(coords(ballot)).toEqual(b.ballot);
-      const params = {
-        processId,
-        ballotMode: m,
-        encryptionKey: pk,
-        address,
-        voteId,
-        ballot,
-        weight: BigInt(b.weight),
-      };
-      expect(ballotInputsHashPreimage(params).map(String)).toEqual(b.inputs);
-      expect(b.inputs).toHaveLength(71);
-      expect(await computeBallotInputsHash(params)).toBe(BigInt(b.inputs_hash));
-      expect(await multiPoseidon(b.inputs.map(BigInt))).toBe(BigInt(b.inputs_hash));
+      const params = await paramsOf(b);
+      expect(params.voteId).toBe(BigInt(b.vote_id));
+      expect(coords(params.ballot)).toEqual(b.ballot);
+      const signals = ballotPublicSignals(params);
+      expect(signals).toHaveLength(71);
+      expect(signals.map(String), `nf = ${b.mode.num_fields}`).toEqual(b.public_signals);
     }
+  });
+
+  it('lay the 71 signals out in circuit order, padded fields as the identity', async () => {
+    for (const b of ballots) {
+      const params = await paramsOf(b);
+      const nf = params.ballotMode.numFields;
+      const signals = ballotPublicSignals(params);
+      expect(signals.slice(0, 7)).toEqual([
+        params.address,
+        params.voteId,
+        params.processId,
+        packBallotMode(params.ballotMode),
+        params.encryptionKey.x,
+        params.encryptionKey.y,
+        params.weight,
+      ]);
+      for (let f = 0; f < 16; f++) {
+        const c = params.ballot[f];
+        const want = f < nf ? [c.c1.x, c.c1.y, c.c2.x, c.c2.y] : [0n, 1n, 0n, 1n];
+        expect(signals.slice(7 + 4 * f, 11 + 4 * f), `nf = ${nf}, field ${f}`).toEqual(want);
+      }
+      expect(signals.every(x => x >= 0n && x < BN254_FR)).toBe(true);
+    }
+  });
+
+  it('refuse a ballot whose padding is not the identity', async () => {
+    const b = ballots.find(x => x.mode.num_fields === 1) as BallotJson;
+    const params = await paramsOf(b);
+    const ballot = [...params.ballot];
+    ballot[15] = ballot[0];
+    expect(() => ballotPublicSignals({ ...params, ballot })).toThrow('identity');
+    expect(() => ballotPublicSignals({ ...params, ballot: ballot.slice(0, 15) })).toThrow(
+      'identity'
+    );
   });
 
   it('buildBallot assembles the same values and the circuit inputs', async () => {
@@ -220,9 +251,22 @@ describe('vote id, inputs hash and circuit inputs', () => {
       const address = addressToField(b.address);
       expect(built.voteId).toBe(BigInt(b.vote_id));
       expect(coords(built.ballot)).toEqual(b.ballot);
-      expect(built.inputsHash).toBe(BigInt(b.inputs_hash));
-      expect(built.publicSignals).toEqual([address, BigInt(b.vote_id), BigInt(b.inputs_hash)]);
+      expect(built.publicSignals.map(String)).toEqual(b.public_signals);
+      expect(built).not.toHaveProperty('inputsHash');
       const ci = built.circuitInputs;
+      expect(Object.keys(ci).sort()).toEqual(
+        [
+          'address',
+          'cipherfields',
+          'encryption_pubkey',
+          'fields',
+          'k',
+          'packed_ballot_mode',
+          'process_id',
+          'vote_id',
+          'weight',
+        ].sort()
+      );
       expect(ci.fields).toHaveLength(16);
       expect(ci.fields.slice(0, b.fields.length)).toEqual(b.fields.map(String));
       expect(ci.fields.slice(b.fields.length).every(f => f === '0')).toBe(true);
@@ -234,7 +278,6 @@ describe('vote id, inputs hash and circuit inputs', () => {
       expect(ci.k).toBe(b.k);
       expect(ci.encryption_pubkey).toEqual([b.pk.x, b.pk.y]);
       expect(ci.cipherfields.flat(2)).toEqual(b.ballot);
-      expect(ci.inputs_hash).toBe(b.inputs_hash);
     }
   });
 
@@ -249,6 +292,7 @@ describe('vote id, inputs hash and circuit inputs', () => {
       weight: BigInt(b.weight),
       k: BigInt(b.k),
     });
+    expect(pubs).toHaveLength(71);
     expect(built.publicSignals.map(String)).toEqual(pubs);
     expect(coords(built.ballot)).toEqual(b.ballot);
   });

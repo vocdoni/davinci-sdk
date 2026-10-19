@@ -66,7 +66,6 @@ fn sample_vote(census: Option<CensusProofWire>) -> VoteRequest {
         vote_id: 0x8000_0000_0000_1234,
         ballot: sample_ballot(),
         ballot_proof: sample_proof(),
-        ballot_inputs_hash: Fr::from(999u64),
         signature: [7u8; 65],
         weight: 42,
         census_proof: census,
@@ -100,7 +99,7 @@ fn view(m: BallotMode) -> ProcessView {
         ballot_mode: m,
         census: CensusView {
             census_origin: 1,
-            census_root: Fr::from(5u64),
+            census_root: [5; 32],
             census_uri: "file:///tmp/census.json".into(),
         },
         state_root: [4; 32],
@@ -114,6 +113,8 @@ fn view(m: BallotMode) -> ProcessView {
         result: None,
         ignored: false,
         note: None,
+        pending_votes: None,
+        next_seal_not_before: None,
     }
 }
 
@@ -207,27 +208,8 @@ fn vote_request_cases(good: &Value) -> Value {
         good,
         vec![
             ok_json("canonical"),
-            set("Fr = p", p!["ballotInputsHash"], json!(P)),
-            set("hex Fr", p!["ballotInputsHash"], json!("0x10")),
-            set("negative Fr", p!["ballotInputsHash"], json!("-1")),
-            set("number Fr", p!["ballotInputsHash"], json!(5)),
-            set("empty Fr", p!["ballotInputsHash"], json!("")),
-            set(
-                "Fr with leading zeros",
-                p!["ballotInputsHash"],
-                json!("000999"),
-            ),
-            set(
-                "Fr of 80 zeros",
-                p!["ballotInputsHash"],
-                json!("0".repeat(80)),
-            ),
-            set(
-                "Fr of 81 digits",
-                p!["ballotInputsHash"],
-                json!("0".repeat(81)),
-            ),
-            set("Fr with a sign", p!["ballotInputsHash"], json!("+999")),
+            // An SDK 4 vote: the inputs hash is an unknown field now.
+            set("ballotInputsHash", p!["ballotInputsHash"], json!("999")),
             set("off curve", p!["ballot", 0, "c1", "x"], json!("5")),
             set("coord = p", p!["ballot", 3, "c2", "y"], json!(P)),
             ("15 ciphertexts", vec![Op::Pop(p!["ballot"])]),
@@ -333,7 +315,49 @@ fn vote_request_cases(good: &Value) -> Value {
                 p!["censusProof", "type"],
                 json!("Merkle"),
             ),
-            set("census proof root = p", p!["censusProof", "root"], json!(P)),
+            set("census proof root as decimal p", p!["censusProof", "root"], json!(P)),
+            set(
+                "census proof root above p",
+                p!["censusProof", "root"],
+                json!(hexs(0xff, 32)),
+            ),
+            set(
+                "census proof root upper hex",
+                p!["censusProof", "root"],
+                json!(format!("0x{}", "EE".repeat(32))),
+            ),
+            set(
+                "census proof root without 0x",
+                p!["censusProof", "root"],
+                json!("ee".repeat(32)),
+            ),
+            set(
+                "census proof root with 0X",
+                p!["censusProof", "root"],
+                json!(format!("0X{}", "ee".repeat(32))),
+            ),
+            set(
+                "census proof root of 63 digits",
+                p!["censusProof", "root"],
+                json!(format!("0x{}", "e".repeat(63))),
+            ),
+            set(
+                "census proof root of 65 digits",
+                p!["censusProof", "root"],
+                json!(format!("0x{}", "e".repeat(65))),
+            ),
+            set("census proof root as a number", p!["censusProof", "root"], json!(5)),
+            set("census proof leaf as decimal", p!["censusProof", "leaf"], json!("5")),
+            set(
+                "census proof sibling without 0x",
+                p!["censusProof", "siblings", 0],
+                json!("ab".repeat(32)),
+            ),
+            set(
+                "census proof sibling not hex",
+                p!["censusProof", "siblings", 0],
+                json!(format!("0x{}", "zz".repeat(32))),
+            ),
             set(
                 "census proof extra field",
                 p!["censusProof", "depth"],
@@ -463,7 +487,23 @@ fn process_view_cases(good: &Value) -> Value {
                 ],
             ),
             set("31-byte state root", p!["stateRoot"], json!(hexs(4, 31))),
-            set("census root = p", p!["census", "censusRoot"], json!(P)),
+            set("census root as decimal p", p!["census", "censusRoot"], json!(P)),
+            set("census root as decimal", p!["census", "censusRoot"], json!("5")),
+            set(
+                "census root above p",
+                p!["census", "censusRoot"],
+                json!(hexs(0xee, 32)),
+            ),
+            set(
+                "census root upper hex",
+                p!["census", "censusRoot"],
+                json!(format!("0x{}", "EE".repeat(32))),
+            ),
+            set(
+                "census root short",
+                p!["census", "censusRoot"],
+                json!("0x05"),
+            ),
             set(
                 "census extra field",
                 p!["census", "contractAddress"],
@@ -657,7 +697,17 @@ fn participant_cases(good: &Value) -> Value {
                 p!["censusProof", "type"],
                 json!("merkle"),
             ),
-            set("proof leaf = p", p!["censusProof", "leaf"], json!(P)),
+            set("proof leaf as decimal p", p!["censusProof", "leaf"], json!(P)),
+            set(
+                "proof root above p",
+                p!["censusProof", "root"],
+                json!(hexs(0xee, 32)),
+            ),
+            set(
+                "proof sibling as decimal",
+                p!["censusProof", "siblings", 0],
+                json!("7"),
+            ),
             set("bad address", p!["address"], json!("0x06")),
             set("unknown field", p!["slot"], json!(1)),
         ],
@@ -824,6 +874,12 @@ fn main() {
         settled_by_self: 7,
         synced_from_others: 8,
         lost_races: 3,
+        bisections: 0,
+        isolated_votes: 0,
+        held_batches: 0,
+        guest_rejections: 0,
+        reorgs: 0,
+        rebuilds: 0,
     };
     let info_json = serde_json::to_value(&info).unwrap();
     let observer = serde_json::to_value(Info {

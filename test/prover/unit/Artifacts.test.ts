@@ -16,19 +16,19 @@ import {
   type BallotArtifactSet,
 } from '../../../src/prover';
 import { checkVerificationKey, loadArtifactFile } from '../../../src/prover/artifacts';
-import { PINNED_VKEY_TEXT, V1_VKEY } from '../../helpers/realProof';
+import { NO_PHASE2_VKEY, OTHER_VKEY, PINNED_VKEY_TEXT } from '../../helpers/realProof';
 
-// davinci-circom a39a9f9: sha256sum of the checkout's artifacts/.
-const A39A9F9 = 'a39a9f9867bb70726ad2137ed536d75670e042b9';
+// davinci-circom e99127d: sha256sum of the checkout's artifacts/ (the dev setup).
+const E99127D = 'e99127d5a7190d152ccf94c5f457ad126fe62d03';
 const PINNED = {
-  wasm: ['ballot_proof.wasm', '07ecaef89f730cd4a3ee0355821a1fee4eb235fe8934f3c4bf24744bf1c7e4d5'],
+  wasm: ['ballot_proof.wasm', '5b65876e8ca3acbe44191049cb86f917febb83cd3f0c56d3d7c828e3ebca6b86'],
   zkey: [
     'ballot_proof_pkey.zkey',
-    '4fa825ca364142b066f4a905564f54ed9ff330e6b748c517d08708f866eedf1e',
+    '610313b7dc2439180f17944625eab13206ea33249b1680e73b191ec7693c72c7',
   ],
   vkey: [
     'ballot_proof_vkey.json',
-    '498fa6f25d2b4adebe880eb2aa368712fba2821dda5a94efaea4d62725fa9ad7',
+    '976577a9624aa410befb8cf6879092d07c2c82a52c4a28189b19c94d9c3c920d',
   ],
 } as const;
 
@@ -53,16 +53,16 @@ function serve(files: Record<string, Uint8Array | number>) {
 }
 
 describe('the ballot artifact table', () => {
-  it('pins the registry key to davinci-circom a39a9f9 on the CDN, then raw GitHub', () => {
+  it('pins the registry key to davinci-circom e99127d on the CDN, then raw GitHub', () => {
     expect(Object.keys(BALLOT_ARTIFACTS)).toEqual([BALLOT_VK_HASH]);
     const entry = BALLOT_ARTIFACTS[BALLOT_VK_HASH];
-    expect(entry.source).toContain(A39A9F9);
+    expect(entry.source).toContain(E99127D);
     for (const name of ['wasm', 'zkey', 'vkey'] as const) {
       const [file, hash] = PINNED[name];
       expect(entry[name]).toEqual({
-        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${A39A9F9}/${file}`,
+        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${E99127D}/${file}`,
         mirrors: [
-          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${A39A9F9}/artifacts/${file}`,
+          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${E99127D}/artifacts/${file}`,
         ],
         sha256: `0x${hash}`,
       });
@@ -344,8 +344,11 @@ describe('checkVerificationKey', () => {
   it('accepts the key the registry pins and names any other', () => {
     const pinned: unknown = JSON.parse(PINNED_VKEY_TEXT);
     expect(checkVerificationKey('vkey', pinned, BALLOT_VK_HASH)).toBe(pinned);
-    expect(() => checkVerificationKey('zkey', V1_VKEY, BALLOT_VK_HASH)).toThrow(
-      `zkey: its verification key hashes to ${ballotVkHash(V1_VKEY)}, the registry pins ${BALLOT_VK_HASH}`
+    expect(() => checkVerificationKey('zkey', OTHER_VKEY, BALLOT_VK_HASH)).toThrow(
+      `zkey: its verification key hashes to ${ballotVkHash(OTHER_VKEY)}, the registry pins ${BALLOT_VK_HASH}`
+    );
+    expect(() => checkVerificationKey('vkey', NO_PHASE2_VKEY, BALLOT_VK_HASH)).toThrow(
+      'vkey: not a ballot verification key: vk has delta == gamma'
     );
     const err = (() => {
       try {

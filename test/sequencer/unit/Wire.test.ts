@@ -38,7 +38,7 @@ import { CensusOrigin } from '../../../src/census/types';
 import { readFixture } from '../../helpers/fixtures';
 
 // Vectors: test/fixtures/sequencer/wire.json, the samples of davinci-sequencer
-// client/tests/api.rs serialized by `davinci_client::api` at cb2d39c, and the
+// client/tests/api.rs serialized by `davinci_client::api` at b109a4d, and the
 // strict-decoding verdict of the same types for every edited copy (generator
 // in test/fixtures/sequencer/wire-gen).
 type Json = unknown;
@@ -161,10 +161,9 @@ const sampleProof = {
 
 const addr = (b: number) => `0x${b.toString(16).padStart(2, '0').repeat(20)}`;
 
-async function merkleWire(): Promise<CensusProofWire> {
+function merkleWire(): CensusProofWire {
   const leaves = [0, 1, 2, 3, 4].map(i => censusLeaf(addr(i), 1n));
-  const tree = await LeanIMT.create(leaves);
-  return { type: 'merkle', ...tree.proof(3) };
+  return { type: 'merkle', ...new LeanIMT(leaves).proof(3) };
 }
 
 const cspWire: CensusProofWire = {
@@ -182,7 +181,6 @@ function sampleVote(censusProof?: CensusProofWire): VoteRequest {
     voteId: 0x8000000000001234n,
     ballot: sampleBallot(),
     ballotProof: sampleProof,
-    ballotInputsHash: 999n,
     signature: `0x${'07'.repeat(65)}`,
     weight: 42n,
     ...(censusProof && { censusProof }),
@@ -193,39 +191,62 @@ function sampleVote(censusProof?: CensusProofWire): VoteRequest {
 const asJson = (v: unknown): unknown => JSON.parse(JSON.stringify(v)) as unknown;
 
 describe('vote request wire', () => {
-  it('encodes byte for byte like the sequencer client', async () => {
-    const merkle = sampleVote(await merkleWire());
+  it('encodes byte for byte like the sequencer client', () => {
+    const merkle = sampleVote(merkleWire());
     expect(asJson(encodeVoteRequest(merkle))).toEqual(wire.voteRequest.merkle);
     expect(asJson(encodeVoteRequest(sampleVote(cspWire)))).toEqual(wire.voteRequest.csp);
     const bare = asJson(encodeVoteRequest(sampleVote()));
     expect(bare).toEqual(wire.voteRequest.noCensusProof);
-    expect(Object.keys(bare as object)).toHaveLength(8);
+    expect(Object.keys(bare as object)).toHaveLength(7);
   });
 
-  it('writes the fields in the order of the node types', async () => {
-    const j = encodeVoteRequest(sampleVote(await merkleWire()));
+  it('writes the fields in the order of the node types, without an inputs hash', () => {
+    const j = encodeVoteRequest(sampleVote(merkleWire()));
     expect(Object.keys(j)).toEqual([
       'processId',
       'address',
       'voteId',
       'ballot',
       'ballotProof',
-      'ballotInputsHash',
       'signature',
       'weight',
       'censusProof',
     ]);
     expect(j.voteId).toBe('0x8000000000001234');
     expect(j.weight).toBe('42');
-    expect(j.ballotInputsHash).toBe('999');
     const ballot = j.ballot as unknown[];
     expect(ballot).toHaveLength(16);
     expect(ballot[15]).toEqual({ c1: { x: '0', y: '1' }, c2: { x: '0', y: '1' } });
-    expect((j.censusProof as { type: string }).type).toBe('merkle');
+    // Census values: `0x` and 64 lowercase hex digits.
+    const proof = j.censusProof as { type: string; root: string; leaf: string; siblings: string[] };
+    expect(proof.type).toBe('merkle');
+    for (const v of [proof.root, proof.leaf, ...proof.siblings]) {
+      expect(v).toMatch(/^0x[0-9a-f]{64}$/);
+    }
   });
 
-  it('decodes back to the same vote', async () => {
-    const merkle = sampleVote(await merkleWire());
+  it('refuses an SDK 4 vote, which carries the inputs hash', () => {
+    const old = { ...(wire.voteRequest.merkle as object), ballotInputsHash: '999' };
+    expect(() => decodeVoteRequest(old)).toThrow('unknown field ballotInputsHash');
+  });
+
+  it('carries census values at and above the BN254 modulus unreduced', () => {
+    const top = (1n << 256n) - 1n;
+    const good = sampleVote(merkleWire());
+    const proof = good.censusProof as CensusProofWire & { type: 'merkle' };
+    const above = {
+      ...good,
+      censusProof: { ...proof, root: top, siblings: [P, ...proof.siblings] },
+    };
+    const j = encodeVoteRequest(above);
+    const wired = j.censusProof as { root: string; siblings: string[] };
+    expect(wired.root).toBe(`0x${'ff'.repeat(32)}`);
+    expect(BigInt(wired.siblings[0])).toBe(P);
+    expect(decodeVoteRequest(asJson(j))).toEqual({ ...above, address: addr(0x11) });
+  });
+
+  it('decodes back to the same vote', () => {
+    const merkle = sampleVote(merkleWire());
     const back = decodeVoteRequest(wire.voteRequest.merkle);
     expect(back).toEqual({ ...merkle, address: '0x1111111111111111111111111111111111111111' });
     expect(asJson(encodeVoteRequest(back))).toEqual(wire.voteRequest.merkle);
@@ -239,10 +260,10 @@ describe('vote request wire', () => {
     expectVerdicts(wire.voteRequest.csp, wire.cspRequestCases, decodeVoteRequest);
   });
 
-  it('never writes what the node would refuse', async () => {
-    const good = sampleVote(await merkleWire());
+  it('never writes what the node would refuse', () => {
+    const good = sampleVote(merkleWire());
+    const proof = good.censusProof as CensusProofWire;
     const bad: [string, VoteRequest][] = [
-      ['hash = p', { ...good, ballotInputsHash: P }],
       ['vote id below 2^63', { ...good, voteId: 0x7fffffffffffffffn }],
       ['vote id of 9 bytes', { ...good, voteId: 1n << 64n }],
       ['15 ciphertexts', { ...good, ballot: good.ballot.slice(1) }],
@@ -258,10 +279,9 @@ describe('vote request wire', () => {
       ['short signature', { ...good, signature: `0x${'07'.repeat(64)}` }],
       ['index past 2^53', { ...good, censusProof: { ...cspWire, index: 1n << 53n } }],
       ['recid 256', { ...good, censusProof: { ...cspWire, recid: 256 } }],
-      [
-        'root = p',
-        { ...good, censusProof: { ...(good.censusProof as CensusProofWire), root: P } as never },
-      ],
+      ['root 2^256', { ...good, censusProof: { ...proof, root: 1n << 256n } as never }],
+      ['negative leaf', { ...good, censusProof: { ...proof, leaf: -1n } as never }],
+      ['sibling 2^256', { ...good, censusProof: { ...proof, siblings: [1n << 256n] } as never }],
     ];
     for (const [label, v] of bad) {
       expect(() => encodeVoteRequest(v), label).toThrow(RangeError);
@@ -288,9 +308,14 @@ describe('response wire', () => {
     });
     expect(v.census).toEqual({
       censusOrigin: 1,
-      censusRoot: 5n,
+      censusRoot: BigInt(`0x${'05'.repeat(32)}`),
       censusURI: 'file:///tmp/census.json',
     });
+    const above = {
+      ...(wire.processView.ready as object),
+      census: { censusOrigin: 1, censusRoot: `0x${'ee'.repeat(32)}`, censusURI: 'x' },
+    };
+    expect(decodeProcessView(above).census.censusRoot).toBe(BigInt(`0x${'ee'.repeat(32)}`));
     expect(v.stateRoot).toBe(`0x${'04'.repeat(32)}`);
     expect(v.synced).toBe(false);
     expect(v.ignored).toBe(false);
@@ -460,7 +485,7 @@ describe('checkProcessView', () => {
     ballotMode: view.ballotMode,
     census: {
       origin: CensusOrigin.OffchainStatic,
-      root: `0x${'00'.repeat(31)}05`,
+      root: `0x${'05'.repeat(32)}`,
       contractAddress: '0x0000000000000000000000000000000000000000',
       uri: view.census.censusURI,
     },

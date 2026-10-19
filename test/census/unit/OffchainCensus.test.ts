@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sha256, toUtf8Bytes, toUtf8String } from 'ethers';
 import { CensusError, CensusOrigin, OffchainCensus } from '../../../src/census';
-import { verifyLeanIMTProof } from '../../../src/crypto';
+import { BN254_FR, verifyLeanIMTProof } from '../../../src/crypto';
 import { readFixture } from '../../helpers/fixtures';
 
 interface Proof {
@@ -38,15 +38,14 @@ interface DemoCase {
   node: boolean;
 }
 
-// Every large integer in this file is a string already; its bodies hold bare
-// numbers that must stay as they are.
+// Census values are `0x` and 64 lowercase hex digits, as the client writes
+// them; the bodies hold bare numbers that must stay as they are.
 const vectors = JSON.parse(readFixture('sequencer/census-files.json')) as {
   sets: CensusSet[];
   documents: DocumentCase[];
   demo: DemoCase[];
 };
 
-const hex = (dec: string) => `0x${BigInt(dec).toString(16).padStart(64, '0')}`;
 const A = '0x1111111111111111111111111111111111111111';
 const B = '0x2222222222222222222222222222222222222222';
 const C = '0x3333333333333333333333333333333333333333';
@@ -123,13 +122,15 @@ describe('OffchainCensus', () => {
     expect(census.getWeight(A)).toBe('309485009821345068724781055');
   });
 
-  it('reproduces the Rust census files, roots, proofs and slots', async () => {
+  it('reproduces the Rust census files, Keccak roots, proofs and slots', async () => {
+    // Roots above the BN254 modulus included.
+    expect(vectors.sets.filter(set => BigInt(set.root) >= BN254_FR)).toHaveLength(8);
     for (const set of vectors.sets) {
       const census = new OffchainCensus();
       census.add(set.participants);
       expect(toUtf8String(census.serialize()), set.name).toBe(set.pretty);
       expect(census.toJSON()).toEqual({ participants: set.participants });
-      expect(await census.root(), set.name).toBe(hex(set.root));
+      expect(await census.root(), set.name).toBe(set.root);
       expect(set.node).toEqual({ compact: true, pretty: true });
       for (const [i, p] of set.participants.entries()) {
         expect(census.slotOf(p.key)).toBe(BigInt(set.slots[i]));
@@ -141,7 +142,7 @@ describe('OffchainCensus', () => {
           pathBits: BigInt(want.pathBits),
           siblings: want.siblings.map(BigInt),
         });
-        expect(await verifyLeanIMTProof(proof)).toBe(true);
+        expect(verifyLeanIMTProof(proof)).toBe(true);
         expect(await census.witness(p.key)).toEqual({
           type: 'merkle',
           weight: BigInt(p.weight),
@@ -162,7 +163,7 @@ describe('OffchainCensus', () => {
         const census = OffchainCensus.fromJSON(form);
         expect(census).toBeInstanceOf(OffchainCensus);
         expect(census.participants).toEqual(set.participants);
-        expect(await census.root()).toBe(hex(set.root));
+        expect(await census.root()).toBe(set.root);
       }
     }
   });
@@ -176,7 +177,7 @@ describe('OffchainCensus', () => {
       expect(d.node && d.rewritten).toBe(true);
       const census = OffchainCensus.fromJSON(bytes);
       expect(census.size).toBe(d.members);
-      expect(await census.root()).toBe(hex(d.root));
+      expect(await census.root()).toBe(d.root);
       expect(census.serialize()).toEqual(bytes);
     }
   });
@@ -193,7 +194,7 @@ describe('OffchainCensus', () => {
       }
       accepted.push(doc.name);
       expect(doc.node.ok, doc.name).toBe(true);
-      expect(await census.root(), doc.name).toBe(hex(doc.node.root as string));
+      expect(await census.root(), doc.name).toBe(doc.node.root);
     }
     // What the SDK reads; the rest the nodes read too (numbers as weights,
     // `address`, dumps, JSON lines, the zero address as an empty leaf) or refuse.
@@ -211,6 +212,18 @@ describe('OffchainCensus', () => {
     expect(refusedByBoth).toEqual(
       expect.arrayContaining(['byte-order mark', 'participants twice', 'same address twice'])
     );
+    // A dump's root is a census value too: `0x` and 64 hex digits, either case.
+    const dumps = Object.fromEntries(
+      vectors.documents.filter(d => d.name.startsWith('dump')).map(d => [d.name, d.node.ok])
+    );
+    expect(dumps).toEqual({
+      'dump with its root': true,
+      'dump with its root in upper hex': true,
+      'dump with another root': false,
+      'dump with a decimal root': false,
+      'dump with a decimal string root': false,
+      'dump with a short root': false,
+    });
   });
 
   it('refuses an empty census and a non-member proof', async () => {

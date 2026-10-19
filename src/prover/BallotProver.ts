@@ -6,7 +6,11 @@
 
 import * as snarkjs from 'snarkjs';
 import type { BuiltBallot } from '../crypto/ballot';
-import { BALLOT_PROOF_PUBLIC_SIGNALS, type SnarkjsVerificationKey } from '../crypto/groth16';
+import {
+  BALLOT_PROOF_PUBLIC_SIGNALS,
+  ballotVkWireBytes,
+  type SnarkjsVerificationKey,
+} from '../crypto/groth16';
 import type { Groth16Proof } from '../sequencer/types';
 import {
   checkArtifactsConfig,
@@ -25,10 +29,10 @@ export interface BallotProverOptions {
   verifyProof?: boolean;
 }
 
-/** A ballot proof and what it proves: `[address, voteId, inputsHash]` as decimal strings. */
+/** A ballot proof and what it proves: its 71 public signals as decimal strings. */
 export interface BallotProof {
   proof: Groth16Proof;
-  publicSignals: [string, string, string];
+  publicSignals: string[];
 }
 
 /** What the prover needs of a built ballot (`buildBallot`). */
@@ -41,7 +45,9 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
  * whose `ballotVkHash` equals the registry's `ballotVKHash()`, as the keys a
  * {@link BallotProver} loads do.
  *
- * @returns false for a proof that does not verify or does not parse
+ * @returns false for a proof that does not verify or does not parse, other
+ *   than 71 public signals, or a key `ballotVkHash` refuses (other than 72 IC
+ *   points, `delta == gamma`, a point off its curve)
  */
 export async function verifyBallotProof(
   vkey: SnarkjsVerificationKey,
@@ -50,6 +56,7 @@ export async function verifyBallotProof(
 ): Promise<boolean> {
   if (publicSignals.length !== BALLOT_PROOF_PUBLIC_SIGNALS) return false;
   try {
+    ballotVkWireBytes(vkey);
     return await snarkjs.groth16.verify(vkey, publicSignals.map(String), proof);
   } catch {
     return false;
@@ -129,7 +136,7 @@ export class BallotProver {
     if (this.verifyProofs && !(await verifyBallotProof(files.vkey, proof, got))) {
       throw new BallotProofError('the ballot proof does not verify');
     }
-    return { proof, publicSignals: [want[0], want[1], want[2]] };
+    return { proof, publicSignals: want };
   }
 
   /**

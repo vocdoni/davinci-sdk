@@ -210,7 +210,7 @@ const receipt = await voter.getVoteReceipt(processId, vote.voteId); // once sett
 ```
 
 - `choices` holds one integer per ballot field; field `i` is the choice whose metadata `value` is `i`.
-- The first vote downloads the circuit files (about 44 MB) and checks them against the ballot VK hash the registry pins.
+- The first vote downloads the circuit files (about 35 MB) and checks them against the ballot VK hash the registry pins.
 - A revote goes to the node that took the voter's previous ballot, so it settles after it. The SDK remembers that node in memory; an app that reloads stores `vote.node` and passes it back as `node`.
 - A refused vote is a `VoteError` with a `reason`: `not-in-census`, `not-started`, `closed`, `invalid`, `duplicate`, `slot-busy`, `max-voters`, `busy` or `unavailable`.
 - `isAddressAbleToVote`, `getAddressWeight` (a `bigint`) and `hasAddressVoted` read membership and past votes.

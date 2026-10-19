@@ -1,4 +1,5 @@
 import {
+  BALLOT_PROOF_PUBLIC_SIGNALS,
   BALLOT_VK_HASH,
   SnarkjsVerificationKey,
   ballotVkHash,
@@ -6,12 +7,15 @@ import {
 } from '../../../src';
 import { loadFixture } from '../../helpers/fixtures';
 
-// Vectors: davinci-zkvm rust-sdk/testdata/{hashes,real_proof,real_proof_v1,genesis}.json and
-// rust-sdk/assets/ballot_proof_vkey.json (davinci-circom artifacts/ballot_proof_vkey.json at a39a9f9).
+// Vectors: davinci-zkvm rust-sdk/testdata/{hashes,real_proof,genesis}.json and
+// rust-sdk/assets/ballot_proof_vkey.json (davinci-circom artifacts/ballot_proof_vkey.json at
+// e99127d, the development setup whose wire hash is artifacts/DEV_VK_HASH).
 interface Hashes {
   ballot_vk_leaf: string;
-  ballot_vk_leaf_v1: string;
 }
+
+// davinci-circom e99127d artifacts/DEV_VK_HASH.
+const DEV_VK_HASH = '0xe8e1e7377394b6600e7e31f2f2d012f148694d07c6088b205371a0fcc96418a9';
 
 const clone = (vk: SnarkjsVerificationKey) =>
   JSON.parse(JSON.stringify(vk)) as SnarkjsVerificationKey;
@@ -66,31 +70,30 @@ describe('ballot VK hash', () => {
   const hashes = loadFixture<Hashes>('zkvm/hashes.json');
   const pinned = loadFixture<SnarkjsVerificationKey>('zkvm/ballot_proof_vkey.json');
 
-  it('hashes the pinned key to the registry pin and state leaf 0x07', () => {
+  it('hashes the pinned key to the registry pin, state leaf 0x07 and DEV_VK_HASH', () => {
     expect(ballotVkHash(pinned)).toBe(`0x${hashes.ballot_vk_leaf}`);
     expect(ballotVkHash(pinned)).toBe(BALLOT_VK_HASH);
+    expect(BALLOT_VK_HASH).toBe(DEV_VK_HASH);
+    expect((pinned as { setup?: string }).setup).toBe('dev');
     const real = loadFixture<{ vk: SnarkjsVerificationKey }>('zkvm/real_proof.json');
     expect(ballotVkHash(real.vk)).toBe(BALLOT_VK_HASH);
-    for (const g of loadFixture<{ ballot_vk_hash: string }[]>('zkvm/genesis.json')) {
-      expect(`0x${g.ballot_vk_hash}`).toBe(BALLOT_VK_HASH);
-    }
+    const genesis = loadFixture<{ ballot_vk_hash: string }[]>('zkvm/genesis.json');
+    expect(genesis.length).toBeGreaterThan(0);
+    for (const g of genesis) expect(`0x${g.ballot_vk_hash}`).toBe(BALLOT_VK_HASH);
   });
 
-  it('tells the v1.0.0 key apart', () => {
-    const v1 = loadFixture<{ vk: SnarkjsVerificationKey }>('zkvm/real_proof_v1.json');
-    expect(ballotVkHash(v1.vk)).toBe(`0x${hashes.ballot_vk_leaf_v1}`);
-    expect(ballotVkHash(v1.vk)).not.toBe(BALLOT_VK_HASH);
-  });
-
-  it('lays out the wire bytes: 64 + 3 x 128 + 8 + 4 x 64', () => {
+  it('lays out the wire bytes: 64 + 3 x 128 + 8 + 72 x 64', () => {
+    expect(BALLOT_PROOF_PUBLIC_SIGNALS).toBe(71);
+    expect(pinned.nPublic).toBe(71);
+    expect(pinned.IC).toHaveLength(72);
     const wire = ballotVkWireBytes(pinned);
-    expect(wire).toHaveLength(64 + 3 * 128 + 8 + 4 * 64);
+    expect(wire).toHaveLength(64 + 3 * 128 + 8 + 72 * 64);
     // alpha.x as LE32 first.
     const alphaX = BigInt(pinned.vk_alpha_1[0]);
     expect(Buffer.from(wire.slice(0, 32)).reverse().toString('hex')).toBe(
       alphaX.toString(16).padStart(64, '0')
     );
-    expect(Array.from(wire.slice(448, 456))).toEqual([4, 0, 0, 0, 0, 0, 0, 0]);
+    expect(Array.from(wire.slice(448, 456))).toEqual([72, 0, 0, 0, 0, 0, 0, 0]);
     // Missing protocol and curve default to groth16/bn128, like the Rust parser.
     const bare = clone(pinned);
     delete bare.protocol;
@@ -100,7 +103,7 @@ describe('ballot VK hash', () => {
 
   it('writes an identity point as zeros', () => {
     const vk = clone(pinned);
-    vk.IC[3] = ['1', '2', '0'];
+    vk.IC[71] = ['1', '2', '0'];
     const wire = ballotVkWireBytes(vk);
     expect(wire.slice(wire.length - 64).every(b => b === 0)).toBe(true);
   });
@@ -108,7 +111,22 @@ describe('ballot VK hash', () => {
   it('refuses keys the Rust parser refuses', () => {
     const fewer = clone(pinned);
     fewer.IC.pop();
-    expect(() => ballotVkHash(fewer)).toThrow('IC points');
+    expect(() => ballotVkHash(fewer)).toThrow('vk has 71 IC points, want 72');
+    const more = clone(pinned);
+    more.IC.push(more.IC[1]);
+    expect(() => ballotVkHash(more)).toThrow('vk has 73 IC points, want 72');
+    // The shape of a key with the old three public inputs.
+    expect(() => ballotVkHash({ ...clone(pinned), IC: pinned.IC.slice(0, 4) })).toThrow(
+      'vk has 4 IC points, want 72'
+    );
+    // Without a phase-2 contribution delta is gamma, and anyone can forge proofs.
+    const noPhase2 = clone(pinned);
+    noPhase2.vk_delta_2 = clone(pinned).vk_gamma_2;
+    expect(() => ballotVkHash(noPhase2)).toThrow('delta == gamma');
+    // Compared as points, not as strings: gamma with leading zeros is still gamma.
+    const padded = clone(pinned);
+    padded.vk_delta_2 = pinned.vk_gamma_2.map((c, i) => (i < 2 ? c.map(x => `0${x}`) : c));
+    expect(() => ballotVkHash(padded)).toThrow('delta == gamma');
     const offCurve = clone(pinned);
     offCurve.vk_alpha_1[0] = '5';
     expect(() => ballotVkHash(offCurve)).toThrow('not on the curve');

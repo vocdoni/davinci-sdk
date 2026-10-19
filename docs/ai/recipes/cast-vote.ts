@@ -10,7 +10,7 @@
  *   - watchVoteStatus until settled (or error), then a receipt
  *
  * The SDK builds, encrypts, proves and signs the ballot. The first vote
- * downloads the circuit files (about 44 MB) and checks them.
+ * downloads the circuit files (about 35 MB) and checks them.
  *
  * Environment: DAVINCI_NODES, VOTER_PRIVATE_KEY
  *

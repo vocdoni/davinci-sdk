@@ -1,12 +1,13 @@
 /**
  * Protocol cryptography of the zkVM stack: BabyJubJub and ElGamal, ballots
- * and their proof inputs, the Merkle census and slots, CSP and vote-id
- * signatures, tracker proofs, the ballot VK hash and the DKG organizer proof.
+ * and their public signals, the Keccak Merkle census and slots, CSP and
+ * vote-id signatures, tracker proofs, the ballot VK hash and the DKG
+ * organizer proof.
  * Every function computes byte for byte what the davinci-zkvm Rust SDK does.
  */
 
 export { BN254_FR, addressToField, processIdToField } from './field';
-export { poseidon, multiPoseidon } from './poseidon';
+export { poseidon } from './poseidon';
 export {
   type BjjPoint,
   BJJ_B8,
@@ -32,14 +33,13 @@ export {
 export {
   type Ballot,
   type BallotCircuitInputs,
-  type BallotInputsHashParams,
   type BallotModeValues,
+  type BallotPublicSignalsParams,
   type BuildBallotParams,
   type BuiltBallot,
   ballotCoords,
-  ballotInputsHashPreimage,
+  ballotPublicSignals,
   buildBallot,
-  computeBallotInputsHash,
   computeVoteId,
   encryptBallot,
   isBallotPaddingValid,

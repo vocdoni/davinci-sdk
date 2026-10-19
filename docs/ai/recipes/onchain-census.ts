@@ -3,8 +3,8 @@
  *
  * An election whose census is an append-only census contract (origin 3):
  * davinci-onchain-census-contract, branch davinci-zkvm. `OwnedCensus` is its
- * owner-managed version; deploy one with Foundry from that repository (it
- * links the PoseidonT3 library), owned by PRIVATE_KEY's account.
+ * owner-managed version; deploy one with Foundry from that repository (its
+ * Keccak lean-IMT links no library), owned by PRIVATE_KEY's account.
  *
  *   - add members with their weights (fixed once added)
  *   - check the contract is a census the nodes accept

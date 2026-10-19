@@ -1,3 +1,4 @@
+import { AbiCoder, keccak256 } from 'ethers';
 import {
   BN254_FR,
   LeanIMT,
@@ -6,14 +7,15 @@ import {
   censusLeaf,
   censusLeafAddress,
   censusLeafWeight,
-  poseidon,
   slotFromAddress,
   slotFromCspIndex,
   verifyLeanIMTProof,
 } from '../../../src/crypto';
+import { censusNodeHash } from '../../../src/crypto/census';
 import { loadFixture } from '../../helpers/fixtures';
 
-// Vectors: davinci-zkvm rust-sdk/testdata/{leanimt,census,slot}.json (lean-imt-go, Go reference).
+// Vectors: davinci-zkvm rust-sdk/testdata/{leanimt,census,slot}.json (Go reference: lean-imt-go
+// shape with a Keccak hasher over 32-byte big-endian values; values are 0x hex).
 type Int = string | number;
 interface LeanImtVectors {
   leaves: string[];
@@ -35,90 +37,125 @@ describe('lean-IMT', () => {
   const v = loadFixture<LeanImtVectors>('zkvm/leanimt.json');
   const leaves = v.leaves.map(BigInt);
 
-  it('matches lean-imt-go roots and compact proofs, inserted or built at once', async () => {
-    const tree = await LeanIMT.create();
+  it("hashes a node as Solidity's keccak256(abi.encode(left, right))", () => {
+    const [l, r] = [leaves[0], (1n << 256n) - 1n];
+    const solidity = keccak256(AbiCoder.defaultAbiCoder().encode(['uint256', 'uint256'], [l, r]));
+    expect(censusNodeHash(l, r)).toBe(BigInt(solidity));
+    expect(censusNodeHash(l, r)).not.toBe(censusNodeHash(r, l));
+    expect(() => censusNodeHash(1n << 256n, 0n)).toThrow();
+  });
+
+  it('matches the Go roots and compact proofs, inserted or built at once', () => {
+    const tree = new LeanIMT();
     expect(tree.root).toBe(0n);
     expect(() => tree.proof(0)).toThrow('out of range');
     let checked = 0;
+    let above = 0;
     for (const t of v.trees) {
-      tree.insert(leaves[t.size - 1]);
-      expect(tree.size).toBe(t.size);
-      expect(tree.root, `size ${t.size}`).toBe(BigInt(t.root));
-      const bulk = await LeanIMT.create(leaves.slice(0, t.size));
-      expect(bulk.root, `bulk size ${t.size}`).toBe(BigInt(t.root));
+      while (tree.size < t.size) tree.insert(leaves[tree.size]);
+      const root = BigInt(t.root);
+      expect(tree.root, `size ${t.size}`).toBe(root);
+      if (t.size === 1) expect(root, 'a single-member root is the leaf').toBe(leaves[0]);
+      if (root >= BN254_FR) above++;
+      const bulk = new LeanIMT(leaves.slice(0, t.size));
+      expect(bulk.root, `bulk size ${t.size}`).toBe(root);
       for (const p of t.proofs ?? []) {
         const want: LeanIMTProof = {
-          root: BigInt(t.root),
+          root,
           leaf: BigInt(p.leaf),
           pathBits: BigInt(p.path_bits),
           siblings: p.siblings.map(BigInt),
         };
         expect(tree.proof(p.index), `size ${t.size} index ${p.index}`).toEqual(want);
         expect(bulk.proof(p.index)).toEqual(want);
-        expect(await verifyLeanIMTProof(want)).toBe(true);
+        expect(verifyLeanIMTProof(want)).toBe(true);
         checked++;
       }
       expect(() => tree.proof(t.size)).toThrow('out of range');
     }
-    expect(checked).toBe(1 + 2 + 3 + 5 + 8 + 13 + 33);
+    expect(checked).toBe(1 + 2 + 3 + 5 + 8 + 13 + 33 + 5);
+    // Most roots are above the BN254 modulus and are kept as they are.
+    expect(v.trees.filter(t => t.size > 1)).toHaveLength(43);
+    expect(above).toBe(36);
   });
 
-  it('builds the same tree at once as leaf by leaf', async () => {
+  it('builds the same tree at once as leaf by leaf', () => {
     const all = Array.from({ length: 70 }, (_, i) => BigInt(i * 31 + 7));
     for (const n of [0, 1, 2, 3, 4, 5, 7, 8, 9, 16, 17, 33, 70]) {
-      const inserted = await LeanIMT.create();
+      const inserted = new LeanIMT();
       all.slice(0, n).forEach(l => inserted.insert(l));
-      const bulk = await LeanIMT.create(all.slice(0, n));
+      const bulk = new LeanIMT(all.slice(0, n));
       expect([bulk.root, bulk.depth, bulk.size]).toEqual([inserted.root, inserted.depth, n]);
       for (let i = 0; i < n; i++) {
         const p = bulk.proof(i);
         expect(p).toEqual(inserted.proof(i));
-        expect(await verifyLeanIMTProof(p)).toBe(true);
+        expect(verifyLeanIMTProof(p)).toBe(true);
       }
     }
-    const grown = await LeanIMT.create(all.slice(0, 13));
+    const grown = new LeanIMT(all.slice(0, 13));
     grown.insert(all[13]);
-    expect(grown.root).toBe((await LeanIMT.create(all.slice(0, 14))).root);
+    expect(grown.root).toBe(new LeanIMT(all.slice(0, 14)).root);
     expect(grown.indexOf(all[13])).toBe(13);
     expect(grown.indexOf(1n)).toBe(-1);
     expect(grown.leaves).toEqual(all.slice(0, 14));
   });
 
-  it('verifies proofs by the guest rules', async () => {
-    const tree = await LeanIMT.create(Array.from({ length: 13 }, (_, i) => BigInt(i + 100)));
+  it('verifies proofs by the guest rules', () => {
+    const tree = new LeanIMT(Array.from({ length: 13 }, (_, i) => BigInt(i + 100)));
     const p = tree.proof(6);
-    expect(await verifyLeanIMTProof(p)).toBe(true);
+    expect(verifyLeanIMTProof(p)).toBe(true);
     const high = 1n << BigInt(p.siblings.length);
-    expect(await verifyLeanIMTProof({ ...p, pathBits: p.pathBits | high })).toBe(false);
-    expect(await verifyLeanIMTProof({ ...p, leaf: p.leaf + 1n })).toBe(false);
-    expect(await verifyLeanIMTProof({ ...p, root: p.root + 1n })).toBe(false);
+    expect(verifyLeanIMTProof({ ...p, pathBits: p.pathBits | high })).toBe(false);
+    expect(verifyLeanIMTProof({ ...p, leaf: p.leaf + 1n })).toBe(false);
+    expect(verifyLeanIMTProof({ ...p, root: p.root ^ (1n << 255n) })).toBe(false);
     const sib = [...p.siblings];
     sib[0] += 1n;
-    expect(await verifyLeanIMTProof({ ...p, siblings: sib })).toBe(false);
-    expect(await verifyLeanIMTProof({ ...p, siblings: [...p.siblings.slice(0, -1), -1n] })).toBe(
-      false
-    );
+    expect(verifyLeanIMTProof({ ...p, siblings: sib })).toBe(false);
+    expect(verifyLeanIMTProof({ ...p, siblings: [...p.siblings.slice(0, -1), -1n] })).toBe(false);
+    expect(verifyLeanIMTProof({ ...p, root: 1n << 256n })).toBe(false);
 
-    // Leaves and roots are field elements.
-    const lone = await LeanIMT.create([7n]);
+    // An internal node presented as a leaf at a shorter path reaches the
+    // root, but it is not below 2^248 (guest check 3A.6).
+    const node = 0xffn << 248n;
+    const other = 100n;
     expect(
-      await verifyLeanIMTProof({ ...lone.proof(0), leaf: 7n + BN254_FR, root: 7n + BN254_FR })
+      verifyLeanIMTProof({
+        root: censusNodeHash(node, other),
+        leaf: node,
+        pathBits: 0n,
+        siblings: [other],
+      })
     ).toBe(false);
-    await expect(LeanIMT.create([BN254_FR])).rejects.toThrow('below p');
-    expect(() => lone.insert(-1n)).toThrow('below p');
+    const below = node >> 8n;
+    expect(
+      verifyLeanIMTProof({
+        root: censusNodeHash(below, other),
+        leaf: below,
+        pathBits: 0n,
+        siblings: [other],
+      })
+    ).toBe(true);
+    expect(() => new LeanIMT([1n << 248n])).toThrow('2^248');
+    expect(() => tree.insert(-1n)).toThrow('2^248');
+
+    // Roots and siblings are 256-bit values, not field elements.
+    const big = (1n << 256n) - 1n;
+    expect(
+      verifyLeanIMTProof({ root: censusNodeHash(7n, big), leaf: 7n, pathBits: 0n, siblings: [big] })
+    ).toBe(true);
 
     // 61 siblings verify, 62 do not, even when the walk reaches the root.
-    const walk = async (n: number) => {
-      let node = 5n;
+    const walk = (n: number) => {
+      let at = 5n;
       const siblings: bigint[] = [];
       for (let i = 0; i < n; i++) {
-        node = await poseidon([node, BigInt(i)]);
+        at = censusNodeHash(at, BigInt(i));
         siblings.push(BigInt(i));
       }
-      return { root: node, leaf: 5n, pathBits: 0n, siblings };
+      return { root: at, leaf: 5n, pathBits: 0n, siblings };
     };
-    expect(await verifyLeanIMTProof(await walk(61))).toBe(true);
-    expect(await verifyLeanIMTProof(await walk(62))).toBe(false);
+    expect(verifyLeanIMTProof(walk(61))).toBe(true);
+    expect(verifyLeanIMTProof(walk(62))).toBe(false);
   });
 });
 

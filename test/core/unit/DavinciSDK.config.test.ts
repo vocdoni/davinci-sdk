@@ -5,6 +5,7 @@ import {
   ZeroAddress,
   keccak256,
   sha256,
+  toBeHex,
   toUtf8Bytes,
   toUtf8String,
   type JsonRpcPayload,
@@ -653,13 +654,13 @@ describe('DavinciSDK ballot proving', () => {
     );
     const ballot = {
       circuitInputs: {} as never,
-      publicSignals: [1n, 2n, 3n] as [bigint, bigint, bigint],
+      publicSignals: [1n, 2n, 3n],
     };
     await expect(sdk.proveBallot(ballot)).rejects.toThrow('SDK must be initialized');
     await sdk.init();
     const proved = {
       proof: {} as never,
-      publicSignals: ['1', '2', '3'] as [string, string, string],
+      publicSignals: ['1', '2', '3'],
     };
     const prove = vi.spyOn(sdk.ballotProver, 'prove').mockResolvedValue(proved);
     expect(await sdk.proveBallot(ballot)).toBe(proved);
@@ -886,7 +887,7 @@ describe('DavinciSDK voting', () => {
       maxValueSum: '10',
       minValueSum: '0',
     },
-    census: { censusOrigin: 1, censusRoot: BigInt(root).toString(), censusURI: 'https://c.test' },
+    census: { censusOrigin: 1, censusRoot: root, censusURI: 'https://c.test' },
     stateRoot: `0x${'04'.repeat(32)}`,
     synced: true,
     votersCount: 0,
@@ -941,10 +942,10 @@ describe('DavinciSDK voting', () => {
           address: signer.address.toLowerCase(),
           weight: '2',
           censusProof: {
-            root: p.root.toString(),
-            leaf: p.leaf.toString(),
+            root: toBeHex(p.root, 32),
+            leaf: toBeHex(p.leaf, 32),
             pathBits: Number(p.pathBits),
-            siblings: p.siblings.map(String),
+            siblings: p.siblings.map(s => toBeHex(s, 32)),
           },
         });
       }
@@ -976,7 +977,7 @@ describe('DavinciSDK voting', () => {
           pi_c: ['1', '2', '1'],
           protocol: 'groth16',
         },
-        publicSignals: ballot.publicSignals.map(String) as [string, string, string],
+        publicSignals: ballot.publicSignals.map(String),
       })
     );
     return { sdk, signer, posted, prove };

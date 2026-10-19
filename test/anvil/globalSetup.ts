@@ -1,8 +1,8 @@
 /**
  * @fileoverview The anvil suite's chain: an anvil node with the davinci-contracts
  * registry deployed by its own `script/DeployAll.s.sol`, and what the tests
- * deploy from (an `OwnedCensus` of davinci-onchain-census-contract, linked to
- * its `PoseidonT3`).
+ * deploy from (an `OwnedCensus` of davinci-onchain-census-contract; its Keccak
+ * lean-IMT links no library).
  *
  * Two registries, both pinned to this release (`src/protocol/release.ts`) with
  * a short grace window:
@@ -235,23 +235,6 @@ function artifact(dir: string, path: string): Artifact {
   return JSON.parse(readFileSync(join(forgeDir(dir), 'out', path), 'utf8')) as Artifact;
 }
 
-// Bytecode with every library placeholder replaced by the library's address.
-function linked(a: Artifact, libraries: Record<string, string>): string {
-  let code = a.bytecode.object.replace(/^0x/, '');
-  for (const byLib of Object.values(a.bytecode.linkReferences ?? {})) {
-    for (const [lib, refs] of Object.entries(byLib)) {
-      const address = libraries[lib];
-      if (!address) throw new Error(`no address for library ${lib}`);
-      for (const { start, length } of refs) {
-        const at = start * 2;
-        code = code.slice(0, at) + address.slice(2).toLowerCase() + code.slice(at + length * 2);
-      }
-    }
-  }
-  if (code.includes('__$')) throw new Error('bytecode still has library placeholders');
-  return `0x${code}`;
-}
-
 // anvil on a port it picks itself (it prints it), its output in `log`.
 async function startAnvil(log: string): Promise<{ child: ChildProcess; url: string }> {
   const bin = tool('anvil');
@@ -378,10 +361,10 @@ export default async function setup(project: TestProject): Promise<() => void> {
       council: mockCouncilAddress,
     });
 
-    const poseidon = await deploy(deployer, artifact(census, 'PoseidonT3.sol/PoseidonT3.json'));
-    const ownedCensus = linked(artifact(census, 'OwnedCensus.sol/OwnedCensus.json'), {
-      PoseidonT3: poseidon,
-    });
+    const ownedCensus = artifact(census, 'OwnedCensus.sol/OwnedCensus.json');
+    if (Object.keys(ownedCensus.bytecode.linkReferences ?? {}).length > 0) {
+      throw new Error(`OwnedCensus of ${census} links a library: not a Keccak census build`);
+    }
     provider.destroy();
 
     const env: AnvilEnv = {
@@ -396,7 +379,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
       councilRegistryBlock: withCouncil.block,
       mockCouncil: mockCouncilAddress,
       mockCouncilAbi: JSON.stringify(mockCouncil.abi),
-      ownedCensusBytecode: ownedCensus,
+      ownedCensusBytecode: ownedCensus.bytecode.object,
     };
     project.provide('anvil', env);
   } catch (err) {

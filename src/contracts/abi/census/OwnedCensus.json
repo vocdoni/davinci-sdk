@@ -351,17 +351,12 @@
   },
   {
     "type": "error",
-    "name": "LeafAlreadyExists",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "LeafCannotBeZero",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "LeafGreaterThanSnarkScalarField",
+    "name": "LeafTooLarge",
     "inputs": []
   },
   {

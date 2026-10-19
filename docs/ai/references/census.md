@@ -68,7 +68,7 @@ import { CensusOrigin, PublishedCensus } from '@vocdoni/davinci-sdk';
 
 const census = new PublishedCensus(
   CensusOrigin.OffchainStatic,
-  '0x0a3b…root', // the lean-IMT root, as 0x hex or a bigint
+  '0x0a3b…root', // the Keccak lean-IMT root: 0x and 64 hex digits, or a bigint
   'https://files.example.org/census.json'
 );
 await sdk.createProcess({ ...config, census, maxVoters: 1000 });
@@ -96,7 +96,7 @@ await sdk.updateCensus(processId, members); // publishes the new version, then s
 
 ## On-chain census (origin 3)
 
-The census is a contract of [davinci-onchain-census-contract](https://github.com/vocdoni/davinci-onchain-census-contract): an append-only lean-IMT with fixed weights and one ballot slot per member. `OwnedCensus` is its owner-managed version. Deploy one with Foundry from that repository (it links the `PoseidonT3` library), then manage it with `OnchainCensusService`:
+The census is a contract of [davinci-onchain-census-contract](https://github.com/vocdoni/davinci-onchain-census-contract): an append-only lean-IMT with fixed weights and one ballot slot per member. `OwnedCensus` is its owner-managed version. Deploy one with Foundry from that repository (its Keccak lean-IMT links no library), then manage it with `OnchainCensusService`:
 
 ```ts
 import { OnchainCensus, OnchainCensusService, SmartContractService } from '@vocdoni/davinci-sdk';

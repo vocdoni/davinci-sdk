@@ -59,7 +59,6 @@ async function sendWithWeight(
     voteId: built.voteId,
     ballot: built.ballot,
     ballotProof: proof,
-    ballotInputsHash: built.inputsHash,
     signature: encodeEcdsaSignature(await signVoteId(voter, built.voteId)),
     weight,
   };

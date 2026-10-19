@@ -101,9 +101,9 @@ interface Built {
 }
 
 /**
- * A lean-IMT census of addresses and weights (origins 1 and 2). Members are
- * leaves `(address << 88) | weight` in the order they were added, which is
- * the order of the census file nodes download.
+ * A Keccak lean-IMT census of addresses and weights (origins 1 and 2).
+ * Members are leaves `(address << 88) | weight` in the order they were added,
+ * which is the order of the census file nodes download.
  *
  * Every member gets the ballot slot its address derives; two members on one
  * slot would overwrite each other's ballots, so `add` refuses a member whose
@@ -123,7 +123,7 @@ export abstract class MerkleCensus extends Census {
   // Lowercase address -> weight, in leaf order.
   private readonly members = new Map<string, bigint>();
   private readonly slots = new Map<bigint, string>();
-  private built?: Promise<Built>;
+  private built?: Built;
 
   constructor(censusOrigin: CensusOrigin) {
     super(censusOrigin);
@@ -239,7 +239,8 @@ export abstract class MerkleCensus extends Census {
   }
 
   /**
-   * The lean-IMT root of the members, `bytes32` hex.
+   * The Keccak lean-IMT root of the members, `bytes32` hex (a 256-bit value,
+   * usually above the BN254 modulus).
    *
    * @throws CensusError for a census without members
    */
@@ -302,20 +303,13 @@ export abstract class MerkleCensus extends Census {
   }
 
   private build(): Promise<Built> {
-    if (this.built) return this.built;
+    if (this.built) return Promise.resolve(this.built);
     if (this.members.size === 0) {
       return Promise.reject(new CensusError('the census has no members'));
     }
     const keys = Array.from(this.members.keys());
     const leaves = keys.map(k => censusLeaf(k, this.members.get(k) as bigint));
-    const built = LeanIMT.create(leaves).then(
-      tree => ({ tree, index: new Map(keys.map((k, i) => [k, i])) }),
-      (err: unknown) => {
-        if (this.built === built) this.built = undefined;
-        throw err;
-      }
-    );
-    this.built = built;
-    return built;
+    this.built = { tree: new LeanIMT(leaves), index: new Map(keys.map((k, i) => [k, i])) };
+    return Promise.resolve(this.built);
   }
 }

@@ -50,7 +50,6 @@ function vote(): VoteRequest {
       pi_c: ['5', '6', '1'],
       protocol: 'groth16',
     },
-    ballotInputsHash: 7n,
     signature: `0x${'09'.repeat(65)}`,
     weight: 3n,
   };

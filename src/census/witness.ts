@@ -17,7 +17,7 @@ export interface WitnessContext {
   processId: string;
   census: {
     origin: CensusOrigin | number;
-    /** `bytes32` hex or the integer: the lean-IMT root, or the CSP address. */
+    /** `bytes32` hex or the integer: the Keccak lean-IMT root, or the CSP address. */
     root: string | bigint;
   };
 }
@@ -54,11 +54,19 @@ function leafOf(address: string, weight: bigint): bigint {
  *
  * @throws CensusWitnessError naming what does not match
  */
-export async function checkCensusWitness(
+export function checkCensusWitness(
   process: WitnessContext,
   address: string,
   witness: CensusWitness
 ): Promise<CheckedWitness> {
+  return new Promise(ok => ok(checkWitness(process, address, witness)));
+}
+
+function checkWitness(
+  process: WitnessContext,
+  address: string,
+  witness: CensusWitness
+): CheckedWitness {
   const voter = getAddress(address);
   const origin = Number(process.census.origin) as CensusOrigin;
   const root = BigInt(process.census.root);
@@ -72,7 +80,7 @@ export async function checkCensusWitness(
     if (
       proof.leaf !== leaf ||
       (origin !== CensusOrigin.Onchain && proof.root !== root) ||
-      !(await verifyLeanIMTProof(proof))
+      !verifyLeanIMTProof(proof)
     ) {
       throw new CensusWitnessError('the census proof is not for this voter and census');
     }

@@ -55,7 +55,7 @@ export interface AnvilEnv {
   mockCouncil: string;
   /** Its ABI, as JSON. */
   mockCouncilAbi: string;
-  /** `OwnedCensus` creation code, linked to the deployed `PoseidonT3`. */
+  /** `OwnedCensus` creation code (it links no library). */
   ownedCensusBytecode: string;
 }
 

@@ -8,7 +8,7 @@
  *   point, the same one for the same process id.
  * - `GET /processes/{pid}/participants/{address}` answers for a census file
  *   uploaded here, at the root the registry holds for the process, with its
- *   lean-IMT proof.
+ *   Keccak lean-IMT proof (census values `0x` + 64 hex digits, as nodes write them).
  * - Everything else a node serves is 404 with code 40401: no vote was ever
  *   taken here.
  * - `uploader` stores census files and metadata documents, served back under
@@ -17,7 +17,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Wallet, getAddress, keccak256, toUtf8Bytes, toUtf8String } from 'ethers';
+import { Wallet, getAddress, keccak256, toBeHex, toUtf8Bytes, toUtf8String } from 'ethers';
 import type { ProcessRegistryService } from '../../src/contracts/ProcessRegistryService';
 import { BJJ_SUBGROUP_ORDER, bjjMulBase, type BjjPoint } from '../../src/crypto/babyjubjub';
 import { OffchainCensus } from '../../src/census/classes/OffchainCensus';
@@ -174,10 +174,10 @@ export class MockNode {
         address: getAddress(voter),
         weight,
         censusProof: {
-          root: proof.root.toString(),
-          leaf: proof.leaf.toString(),
+          root: toBeHex(proof.root, 32),
+          leaf: toBeHex(proof.leaf, 32),
           pathBits: Number(proof.pathBits),
-          siblings: proof.siblings.map(s => s.toString()),
+          siblings: proof.siblings.map(s => toBeHex(s, 32)),
         },
       });
       return;

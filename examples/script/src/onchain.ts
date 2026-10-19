@@ -23,34 +23,16 @@ import {
   SmartContractService,
   type DavinciSDK,
 } from '@vocdoni/davinci-sdk';
-import { ContractFactory, Wallet, getAddress, type Signer } from 'ethers';
+import { ContractFactory, Wallet, type Signer } from 'ethers';
 import creationCode from '../../../test/e2e/contracts/census.json';
 import { connect, info, organizerSigner, step, uploader, voteWhenReady } from './config';
 
 const OPTIONS = ['Grants', 'Audits', 'Reserve'];
 
-// poseidon-solidity deploys PoseidonT3 at this address on chains that have it.
-const POSEIDON_T3 = '0x3333333C0A88F9BE4fd23ed0536F9B6c427e3B93';
-
-// Deploys an OwnedCensus linked to PoseidonT3 (the deterministic copy, else a new one).
+// Deploys an OwnedCensus; its Keccak lean-IMT links no library.
 async function deployOwnedCensus(signer: Signer): Promise<string> {
-  const code = creationCode.contracts;
-  let library = POSEIDON_T3;
-  if ((await signer.provider!.getCode(library)) === '0x') {
-    const poseidon = await new ContractFactory([], code.PoseidonT3.bytecode, signer).deploy();
-    library = await (await poseidon.waitForDeployment()).getAddress();
-    info('PoseidonT3 deployed at', library);
-  }
-  let bytecode = code.OwnedCensus.bytecode.slice(2);
-  const libraryHex = getAddress(library).slice(2).toLowerCase();
-  for (const byName of Object.values(code.OwnedCensus.linkReferences)) {
-    for (const refs of Object.values(byName)) {
-      for (const { start, length } of refs) {
-        bytecode = bytecode.slice(0, start * 2) + libraryHex + bytecode.slice((start + length) * 2);
-      }
-    }
-  }
-  const census = await new ContractFactory(OWNED_CENSUS_ABI, `0x${bytecode}`, signer).deploy();
+  const { bytecode } = creationCode.contracts.OwnedCensus;
+  const census = await new ContractFactory(OWNED_CENSUS_ABI, bytecode, signer).deploy();
   return (await census.waitForDeployment()).getAddress();
 }
 

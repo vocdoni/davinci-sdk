@@ -1,16 +1,16 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getAddress, sha256, type Provider } from 'ethers';
+import { sha256, type Provider } from 'ethers';
 import { TxStatus, type TxStatusEvent } from '../../../src/contracts/SmartContractService';
 import censusSource from '../../../src/contracts/abi/census/source.json';
 import { OPTIMISM } from '../../../src/networks';
 import { DirArtifactCache } from '../artifactCache';
 import {
   CENSUS_CONTRACT_COMMIT,
-  POSEIDON_T3_ADDRESS,
-  isPoseidonT3,
-  linkOwnedCensus,
+  OWNED_CENSUS_BYTECODE,
+  isOwnedCensus,
+  withoutMetadata,
 } from '../census';
 import vendored from '../contracts/census.json';
 import { phase, redact, redactError, runSettings } from '../env';
@@ -50,29 +50,16 @@ describe('the circuit file cache', () => {
 });
 
 describe("the live suite's census contract", () => {
-  it('is vendored from the commit of the census ABIs, with PoseidonT3 at its usual address', () => {
+  it('is vendored from the commit of the census ABIs, with no library to link', () => {
     expect(CENSUS_CONTRACT_COMMIT).toBe(censusSource.commit);
-    expect(getAddress(POSEIDON_T3_ADDRESS)).toBe(POSEIDON_T3_ADDRESS);
+    expect(Object.keys(vendored.contracts)).toEqual(['OwnedCensus']);
+    expect(OWNED_CENSUS_BYTECODE).toMatch(/^0x[0-9a-f]+$/);
   });
 
-  it('links PoseidonT3 into OwnedCensus where the build says', () => {
-    const library = '0x00000000000000000000000000000000000000ab';
-    const code = linkOwnedCensus(library);
-    const at =
-      2 +
-      vendored.contracts.OwnedCensus.linkReferences[
-        'lib/poseidon-solidity/contracts/PoseidonT3.sol'
-      ].PoseidonT3[0].start *
-        2;
-    expect(code.slice(at, at + 40)).toBe(library.slice(2).toLowerCase());
-    expect(code).not.toMatch(/__\$/);
-    expect(code.length).toBe(vendored.contracts.OwnedCensus.bytecode.length);
-    expect(() => linkOwnedCensus('0x12')).toThrow();
-  });
-
-  it('recognizes PoseidonT3 only by its runtime code', () => {
-    expect(isPoseidonT3('0x')).toBe(false);
-    expect(isPoseidonT3(`0x73${'11'.repeat(20)}3014`)).toBe(false);
+  it('recognizes OwnedCensus only by its runtime code, metadata aside', () => {
+    expect(isOwnedCensus('0x')).toBe(false);
+    expect(isOwnedCensus(`0x73${'11'.repeat(20)}3014`)).toBe(false);
+    expect(withoutMetadata('0x12')).toBe('0x12');
   });
 });
 

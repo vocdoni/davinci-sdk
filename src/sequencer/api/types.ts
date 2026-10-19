@@ -1,9 +1,10 @@
 /**
  * @fileoverview The sequencer HTTP API types, decoded (davinci-sequencer
  * `client/src/api.rs`). On the wire field names are camelCase, field
- * elements decimal strings, bytes `0x` hex, vote ids `0x` + 16 hex digits and
- * points twisted Edwards `{x, y}`; here they are bigints and checked points.
- * Hex values are lowercase with `0x`, addresses checksummed.
+ * elements decimal strings, census values (roots, leaves, siblings) `0x` + 64
+ * hex digits, bytes `0x` hex, vote ids `0x` + 16 hex digits and points twisted
+ * Edwards `{x, y}`; here they are bigints and checked points. Hex values are
+ * lowercase with `0x`, addresses checksummed.
  */
 
 import type { BjjPoint } from '../../crypto/babyjubjub';
@@ -43,7 +44,7 @@ export type SequencerProcessStatus =
 export interface CensusView {
   /** 1 static Merkle, 2 dynamic Merkle, 3 on-chain contract, 4 CSP. */
   censusOrigin: number;
-  /** Lean-IMT root, or the CSP address as an integer. */
+  /** Keccak lean-IMT root (256 bits, never reduced), or the CSP address as an integer. */
   censusRoot: bigint;
   censusURI: string;
 }
@@ -159,9 +160,8 @@ export interface VoteRequest {
   voteId: bigint;
   /** Exactly 16 ciphertexts; fields at or above `numFields` hold the identity. */
   ballot: Ballot;
-  /** snarkjs Groth16 proof of `BallotProof(16)`. */
+  /** snarkjs Groth16 proof of `BallotProof(16)`; nodes derive its 71 public signals. */
   ballotProof: Groth16Proof;
-  ballotInputsHash: bigint;
   /** 65 bytes `r || s || v`, personal-sign over the vote id. */
   signature: string;
   /** The census weight, below 2^128 (a usable one is below 2^88). */

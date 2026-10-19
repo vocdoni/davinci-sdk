@@ -5,6 +5,7 @@ import {
   checkCensusWitness,
   type MerkleCensusWitness,
 } from '../../../src/census';
+import { BN254_FR } from '../../../src/crypto';
 
 const PID = `0x${'ab'.repeat(31)}`;
 const A = '0x1111111111111111111111111111111111111111';
@@ -38,6 +39,21 @@ describe('checkCensusWitness for a Merkle census', () => {
     for (const origin of [CensusOrigin.OffchainDynamic, CensusOrigin.Onchain]) {
       await checkCensusWitness({ ...process, census: { ...process.census, origin } }, B, witness);
     }
+  });
+
+  it('takes a proof under a root above the BN254 modulus, as it is', async () => {
+    const census = new OffchainCensus();
+    census.add([{ key: A, weight: 2 }, { key: B, weight: 7 }, C]);
+    const root = await census.root();
+    expect(BigInt(root) >= BN254_FR).toBe(true);
+    const process = { processId: PID, census: { origin: CensusOrigin.OffchainStatic, root } };
+    const witness = await census.witness(A);
+    expect(await checkCensusWitness(process, A, witness)).toEqual({
+      weight: 2n,
+      censusProof: { type: 'merkle', ...witness.proof },
+    });
+    const asInteger = { ...process, census: { ...process.census, root: BigInt(root) } };
+    expect(await checkCensusWitness(asInteger, A, witness)).toMatchObject({ weight: 2n });
   });
 
   it('pins the root for origins 1 and 2, not for an on-chain census', async () => {

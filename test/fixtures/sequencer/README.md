@@ -1,7 +1,12 @@
 # Sequencer client vectors
 
-From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) at commit
-`cb2d39c91d9b3ed92216dedef7a4ba55b18859a5`.
+From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer): `wire.json`
+and `census-files.json` at commit `b109a4d9c47451455b54c274aed40827eff38ad0` (branch
+`feat/protocol-v5`: census values `0x` and 64 hex digits, no `ballotInputsHash`, Keccak
+census roots), next to davinci-zkvm `867316bb18e59be3290682719795fb8d41b638b7`;
+`tracker.json` at `cb2d39c91d9b3ed92216dedef7a4ba55b18859a5`, which `tracker-gen`
+reproduces byte for byte at `b109a4d`; `networks.rs` at d1c534c (feat/op-core),
+re-copied at the OP redeploy (Merge and release).
 
 - `networks.rs`: verbatim copy of `client/src/networks.rs`, the known deployments,
   from branch feat/op-core (commit `d1c534c`, OP Mainnet in L1-blob mode).
@@ -51,8 +56,8 @@ From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer) at commit
 ```
 c921b0b1b30846080bb08f48d3b19d275dd0622a1380eee977981e0818ec6540  networks.rs
 6a6d1f8cb0400f01fb53019a7327661ecee8c228134e9fc45dbba3cc682633e0  tracker.json
-4181ed7560b4b581d5ae471a84616f7ce09b717bd72e1fabfc0a27cf4773a9da  wire.json
-db6c536842e6f70bee847d697ca7eb9b5b73eb25134e5cde0f648bebe99a235f  census-files.json
+c6c690d5a277d8914223b3466016cefe1d2c9275b3c17d3c3cf72afb1b339c9e  wire.json
+b293e19055b27ae24d4a536888fa4d2e6c6812a65d560a8d34513f62402bb068  census-files.json
 9ec77a356a33c245334516f3e5521c02849a5bb42e13a7f2139a183cef20ec9e  demo/1-community-project/metadata.json
 0a3fd057ef18c06651369065a661852a96d4b09816af29205f7a1fe8fd662e90  demo/3-budget-2027/census-2.json
 d3999a2bf1a6a4080051efd402b3708add559ac215ae334c90b88219fdf4290d  demo/3-budget-2027/census.json

@@ -1661,6 +1661,16 @@ describe('ProcessOrchestrationService.cancelOpenProcesses', () => {
     expect((mixed.failed[0].error as ContractServiceError).revertName).toBe('Unauthorized');
   });
 
+  it('leaves a process past its grace end, which the registry no longer cancels', async () => {
+    const { orchestrator, state, sent } = setup();
+    await orchestrator.createProcess(config);
+    state.graceEnd = BigInt(NOW);
+    expect(await orchestrator.cancelOpenProcesses()).toEqual({ canceled: [], failed: [] });
+    expect(sent().filter(t => t.name === 'setProcessStatus')).toHaveLength(0);
+    state.graceEnd = BigInt(NOW + 1);
+    expect(await orchestrator.cancelOpenProcesses()).toEqual({ canceled: [pidOf(0)], failed: [] });
+  });
+
   it('finds every process of the signer by its nonce with all', async () => {
     const { orchestrator, state, wallet, sent } = setup();
     state.nonce = 3;

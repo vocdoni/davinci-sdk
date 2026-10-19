@@ -1,3 +1,4 @@
+import { toBeHex } from 'ethers';
 import {
   LeanIMT,
   bjjMulBase,
@@ -181,17 +182,17 @@ describe('VocdoniSequencerService', () => {
 
   it("accepts a participant proof only for the address's own leaf", async () => {
     const members = [VOTER, `0x${'22'.repeat(20)}`, `0x${'33'.repeat(20)}`];
-    const tree = await LeanIMT.create(members.map((a, i) => censusLeaf(a, BigInt(i + 5))));
+    const tree = new LeanIMT(members.map((a, i) => censusLeaf(a, BigInt(i + 5))));
     const answer = (address: string, weight: bigint, index: number) => {
       const p = tree.proof(index);
       return {
         address,
         weight: weight.toString(),
         censusProof: {
-          root: p.root.toString(),
-          leaf: p.leaf.toString(),
+          root: toBeHex(p.root, 32),
+          leaf: toBeHex(p.leaf, 32),
           pathBits: Number(p.pathBits),
-          siblings: p.siblings.map(s => s.toString()),
+          siblings: p.siblings.map(s => toBeHex(s, 32)),
         },
       };
     };
@@ -254,7 +255,6 @@ describe('VocdoniSequencerService', () => {
         pi_c: ['5', '6', '1'],
         protocol: 'groth16',
       },
-      ballotInputsHash: 7n,
       signature: `0x${'09'.repeat(65)}`,
       weight: 3n,
     };

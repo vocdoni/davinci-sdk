@@ -3,7 +3,8 @@ import { bigIntToHex } from '../../src/crypto/field';
 import type { Groth16Proof } from '../../src/sequencer/types';
 import { loadFixture, readFixture } from './fixtures';
 
-// davinci-zkvm rust-sdk/testdata/real_proof.json: a rapidsnark proof under the pinned VK.
+// davinci-zkvm rust-sdk/testdata/real_proof.json: a 6-field ballot proved under the pinned
+// (development) VK, with its 71 public signals.
 interface RealProofJson {
   vk: SnarkjsVerificationKey;
   proof: Groth16Proof;
@@ -30,11 +31,22 @@ interface RealProofJson {
 
 export const REAL_PROOF = loadFixture<RealProofJson>('zkvm/real_proof.json');
 
-/** The pinned verification key, byte for byte (davinci-circom a39a9f9). */
+/** The pinned verification key, byte for byte (davinci-circom e99127d, the dev setup). */
 export const PINNED_VKEY_TEXT = readFixture('zkvm/ballot_proof_vkey.json');
 
-/** The v1.0.0 verification key, which differs from the pinned one in `IC`. */
-export const V1_VKEY = loadFixture<{ vk: SnarkjsVerificationKey }>('zkvm/real_proof_v1.json').vk;
+/** A well-formed ballot key that is not the pinned one: its IC points 1 and 2 swapped. */
+export const OTHER_VKEY: SnarkjsVerificationKey = (() => {
+  const vk = JSON.parse(PINNED_VKEY_TEXT) as SnarkjsVerificationKey;
+  [vk.IC[1], vk.IC[2]] = [vk.IC[2], vk.IC[1]];
+  return vk;
+})();
+
+/** The pinned key without a phase-2 contribution: delta is gamma. */
+export const NO_PHASE2_VKEY: SnarkjsVerificationKey = (() => {
+  const vk = JSON.parse(PINNED_VKEY_TEXT) as SnarkjsVerificationKey;
+  vk.vk_delta_2 = vk.vk_gamma_2;
+  return vk;
+})();
 
 /** The ballot of the real proof, rebuilt with its secret `k`. */
 export async function realProofBallot(

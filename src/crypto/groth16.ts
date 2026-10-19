@@ -20,8 +20,12 @@ export interface SnarkjsVerificationKey {
   vk_alphabeta_12?: unknown;
 }
 
-/** Public signals of the ballot proof: `[address, voteId, inputsHash]`. */
-export const BALLOT_PROOF_PUBLIC_SIGNALS = 3;
+/**
+ * Public signals of the ballot proof: address, vote id, process id, packed
+ * ballot mode, election key x and y, weight, then the 64 ballot coordinates
+ * (davinci-zkvm `groth16::N_PUBLIC`; see `ballotPublicSignals`).
+ */
+export const BALLOT_PROOF_PUBLIC_SIGNALS = 71;
 
 // BN254 base field and the twist coefficient b' = 3 / (9 + u).
 const Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
@@ -140,27 +144,28 @@ function g2(v: string[][]): Uint8Array {
  * The VK wire bytes: alpha (G1: x, y as LE32), beta, gamma, delta (G2: x.c0,
  * x.c1, y.c0, y.c1, each LE32), the IC count as a u64 LE, then each IC point
  * (G1). An identity point is all zeros. The key must be Groth16 over bn128
- * with 3 public inputs, and every point must be canonical, on its curve and
- * in its prime-order subgroup: the keys the Rust parser accepts.
+ * with 71 public inputs (72 IC points), every point canonical, on its curve
+ * and in its prime-order subgroup, and `delta` must differ from `gamma` (a
+ * key without a phase-2 contribution lets anyone forge proofs): the keys
+ * davinci-zkvm `BallotVerifier::from_snarkjs` and the batch guest accept.
  */
 export function ballotVkWireBytes(vk: SnarkjsVerificationKey): Uint8Array {
   if ((vk.protocol ?? 'groth16') !== 'groth16' || (vk.curve ?? 'bn128') !== 'bn128') {
     throw new TypeError('vk is not groth16/bn128');
   }
-  if (!Array.isArray(vk.IC) || vk.IC.length !== BALLOT_PROOF_PUBLIC_SIGNALS + 1) {
-    throw new RangeError(`vk has ${vk.IC?.length} IC points, want 4`);
+  const want = BALLOT_PROOF_PUBLIC_SIGNALS + 1;
+  if (!Array.isArray(vk.IC) || vk.IC.length !== want) {
+    throw new RangeError(`vk has ${vk.IC?.length} IC points, want ${want}`);
+  }
+  const gamma = g2(vk.vk_gamma_2);
+  const delta = g2(vk.vk_delta_2);
+  if (gamma.every((b, i) => b === delta[i])) {
+    throw new RangeError('vk has delta == gamma (no phase-2 contribution)');
   }
   const count = new Uint8Array(8);
   count[0] = vk.IC.length;
   return getBytes(
-    concat([
-      g1(vk.vk_alpha_1),
-      g2(vk.vk_beta_2),
-      g2(vk.vk_gamma_2),
-      g2(vk.vk_delta_2),
-      count,
-      ...vk.IC.map(g1),
-    ])
+    concat([g1(vk.vk_alpha_1), g2(vk.vk_beta_2), gamma, delta, count, ...vk.IC.map(g1)])
   );
 }
 

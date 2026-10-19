@@ -493,7 +493,7 @@ describe('vendored contract ABIs', () => {
   });
 });
 
-// davinci-onchain-census-contract (671ef5b).
+// davinci-onchain-census-contract (a2d00ca, the Keccak lean-IMT).
 const CENSUS_FUNCTIONS: Record<string, string> = {
   'getCensusRoot()': '0xc1da8691',
   'getRootBlockNumber(uint256)': '0x650e5fcf',
@@ -538,7 +538,7 @@ describe('vendored census contract ABIs', () => {
       files: Record<string, string>;
     };
     expect(source.repository).toBe('https://github.com/vocdoni/davinci-onchain-census-contract');
-    expect(source.commit).toBe('671ef5bdc39bd57b5ed1c570e506af370a0db910');
+    expect(source.commit).toBe('a2d00caf0bbb48075a7ed536eb38f3672a28f271');
     expect(CENSUS_CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual(['OnchainCensus.json', 'OwnedCensus.json']);
     for (const [file, sha] of Object.entries(source.files)) {
@@ -584,6 +584,16 @@ describe('vendored census contract ABIs', () => {
     );
     expect(must(owned.getError('LengthMismatch'), 'LengthMismatch').selector).toBe('0xff633a38');
     expect(onchain.getFunction('addMember')).toBeNull();
+  });
+
+  it('carry the Keccak lean-IMT errors, not the Poseidon tree ones', () => {
+    // KeccakLeanIMT._insert refuses a zero leaf and one of 2^248 or more.
+    expect(must(owned.getError('LeafCannotBeZero'), 'LeafCannotBeZero').selector).toBe(
+      '0x29691be2'
+    );
+    expect(must(owned.getError('LeafTooLarge'), 'LeafTooLarge').selector).toBe('0x6d95da4a');
+    expect(owned.getError('LeafAlreadyExists')).toBeNull();
+    expect(owned.getError('LeafGreaterThanSnarkScalarField')).toBeNull();
   });
 });
 

@@ -2,7 +2,8 @@
  * @fileoverview Strict JSON codecs of the sequencer API, as the serde types
  * of davinci-sequencer `client/src/api.rs` read and write them. Decoding only
  * accepts canonical values: field elements are decimal strings below p,
- * points lie on the curve, byte strings have their exact length, and the
+ * census values `0x` and exactly 64 hex digits (either case), points lie on
+ * the curve, byte strings have their exact length, and the
  * bodies the node checks field by field (votes, census proofs, points, ballot
  * modes) carry no unknown field. Responses may grow new fields.
  */
@@ -88,6 +89,14 @@ function decimal(v: unknown, path: string, digits: number, bound: bigint): bigin
 }
 
 const fieldElement = (v: unknown, path: string) => decimal(v, path, 80, BN254_FR);
+
+// A census value (root, leaf, sibling): `0x` and exactly 64 hex digits, either
+// case, read as a 256-bit integer (davinci-zkvm `census::node_from_hex`).
+function censusValue(v: unknown, path: string): bigint {
+  const s = string(v, path);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(s)) fail(path, 'want 0x and 64 hex digits');
+  return BigInt(s);
+}
 const u128 = (v: unknown, path: string) => decimal(v, path, 39, U128_BOUND);
 const u64Decimal = (v: unknown, path: string) => decimal(v, path, 39, U64_BOUND);
 
@@ -176,11 +185,11 @@ const MERKLE_FIELDS = ['root', 'leaf', 'pathBits', 'siblings'] as const;
 
 function merkleProof(o: Json, path: string): LeanIMTProof {
   return {
-    root: fieldElement(o.root, `${path}.root`),
-    leaf: fieldElement(o.leaf, `${path}.leaf`),
+    root: censusValue(o.root, `${path}.root`),
+    leaf: censusValue(o.leaf, `${path}.leaf`),
     pathBits: BigInt(uint(o.pathBits, `${path}.pathBits`, 64)),
     siblings: array(o.siblings, `${path}.siblings`).map((s, i) =>
-      fieldElement(s, `${path}.siblings[${i}]`)
+      censusValue(s, `${path}.siblings[${i}]`)
     ),
   };
 }
@@ -207,9 +216,10 @@ function strings(v: unknown, path: string, length: number): string[] {
   return array(v, path, length).map((s, i) => string(s, `${path}[${i}]`));
 }
 
-// snarkjs proof; `protocol` and `curve` default like rapidsnark output.
+// snarkjs proof; `protocol` and `curve` default like rapidsnark output. Like
+// the node, no other key is taken.
 function snarkProof(v: unknown, path: string): Groth16Proof {
-  const o = object(v, path);
+  const o = object(v, path, ['pi_a', 'pi_b', 'pi_c', 'protocol', 'curve']);
   const piB = array(o.pi_b, `${path}.pi_b`, 3).map((p, i) => strings(p, `${path}.pi_b[${i}]`, 2));
   return {
     pi_a: strings(o.pi_a, `${path}.pi_a`, 3) as Groth16Proof['pi_a'],
@@ -231,15 +241,15 @@ const VOTE_REQUEST_FIELDS = [
   'voteId',
   'ballot',
   'ballotProof',
-  'ballotInputsHash',
   'signature',
   'weight',
   'censusProof',
 ] as const;
 
 /**
- * Decodes a `POST /votes` body the way the node does: unknown fields, a
- * non-canonical field element, an off-curve point or a wrong length are refused.
+ * Decodes a `POST /votes` body the way the node does: unknown fields (an old
+ * client's `ballotInputsHash` among them), a non-canonical field element or
+ * census value, an off-curve point or a wrong length are refused.
  *
  * @throws SequencerDecodeError
  */
@@ -252,7 +262,6 @@ export function decodeVoteRequest(json: unknown): VoteRequest {
     voteId: voteId(o.voteId, 'vote.voteId'),
     ballot: ballot(o.ballot, 'vote.ballot'),
     ballotProof: snarkProof(o.ballotProof, 'vote.ballotProof'),
-    ballotInputsHash: fieldElement(o.ballotInputsHash, 'vote.ballotInputsHash'),
     signature: hexBytes(o.signature, 'vote.signature', 65),
     weight: u128(o.weight, 'vote.weight'),
     ...(proof && { censusProof: proof }),
@@ -276,6 +285,12 @@ function checkBelow(v: bigint, bound: bigint, what: string): string {
   return v.toString();
 }
 
+// A census value as the node writes it: `0x` and 64 lowercase hex digits.
+function censusHex(v: bigint, what: string): string {
+  if (v < 0n || v >= 1n << 256n) invalid(`${what} is not a 256-bit value`);
+  return `0x${v.toString(16).padStart(64, '0')}`;
+}
+
 function checkSafe(v: bigint, what: string): number {
   if (v < 0n || v > BigInt(Number.MAX_SAFE_INTEGER)) invalid(`${what} must be at most 2^53 - 1`);
   return Number(v);
@@ -294,10 +309,10 @@ function encodeCensusProof(p: CensusProofWire): Json {
   if (p.type === 'merkle') {
     return {
       type: 'merkle',
-      root: checkBelow(p.root, BN254_FR, 'census proof root'),
-      leaf: checkBelow(p.leaf, BN254_FR, 'census proof leaf'),
+      root: censusHex(p.root, 'census proof root'),
+      leaf: censusHex(p.leaf, 'census proof leaf'),
       pathBits: checkSafe(p.pathBits, 'census proof pathBits'),
-      siblings: p.siblings.map(s => checkBelow(s, BN254_FR, 'census proof sibling')),
+      siblings: p.siblings.map(s => censusHex(s, 'census proof sibling')),
     };
   }
   if (p.type === 'csp') {
@@ -338,7 +353,6 @@ export function encodeVoteRequest(vote: VoteRequest): Json {
       protocol: proof.protocol ?? 'groth16',
       curve: proof.curve ?? 'bn128',
     },
-    ballotInputsHash: checkBelow(vote.ballotInputsHash, BN254_FR, 'ballotInputsHash'),
     signature: checkHex(vote.signature, 65, 'signature'),
     weight: checkBelow(vote.weight, U128_BOUND, 'weight'),
   };
@@ -400,7 +414,7 @@ export function decodeProcessView(json: unknown): ProcessView {
     ballotMode: ballotMode(o.ballotMode, 'process.ballotMode'),
     census: {
       censusOrigin: uint(census.censusOrigin, 'process.census.censusOrigin', 8),
-      censusRoot: fieldElement(census.censusRoot, 'process.census.censusRoot'),
+      censusRoot: censusValue(census.censusRoot, 'process.census.censusRoot'),
       censusURI: string(census.censusURI, 'process.census.censusURI'),
     },
     stateRoot: hexBytes(o.stateRoot, 'process.stateRoot', 32),

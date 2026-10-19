@@ -19,8 +19,7 @@ use davinci_client::api::CensusFile;
 use davinci_client::organizer::{census_file, merkle_census};
 use davinci_sequencer::census::{CensusError, CensusOptions, CensusStore};
 use davinci_sequencer::storage::Db;
-use davinci_zkvm_sdk::census::slot_key_address;
-use davinci_zkvm_sdk::crypto::field::{Fr, fr_from_be, fr_to_dec};
+use davinci_zkvm_sdk::census::{Node, node_from_hex, node_to_hex, slot_key_address};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -49,7 +48,7 @@ fn text(b: &[u8]) -> String {
     String::from_utf8(b.to_vec()).expect("utf-8")
 }
 
-async fn fetch(body: &[u8], root: &Fr) -> Result<(), CensusError> {
+async fn fetch(body: &[u8], root: &Node) -> Result<(), CensusError> {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("census.json");
     std::fs::write(&path, body).expect("write");
@@ -65,17 +64,15 @@ async fn fetch(body: &[u8], root: &Fr) -> Result<(), CensusError> {
 // The node's verdict: first against a root no census has, so a document that
 // parses fails with the root it built, then against that root.
 async fn verdict(body: &[u8]) -> Value {
-    let root = match fetch(body, &Fr::from(1u64)).await {
-        Err(CensusError::RootMismatch { got, .. }) => {
-            let mut be = [0u8; 32];
-            hex::decode_to_slice(got.trim_start_matches("0x"), &mut be).expect("root hex");
-            fr_from_be(&be).expect("root")
-        }
+    let mut probe = [0u8; 32];
+    probe[31] = 1;
+    let root = match fetch(body, &probe).await {
+        Err(CensusError::RootMismatch { got, .. }) => node_from_hex(&got).expect("root hex"),
         Err(e) => return json!({ "ok": false, "error": e.to_string() }),
         Ok(()) => panic!("a document built the probe root"),
     };
     match fetch(body, &root).await {
-        Ok(()) => json!({ "ok": true, "root": fr_to_dec(&root) }),
+        Ok(()) => json!({ "ok": true, "root": node_to_hex(&root) }),
         Err(e) => json!({ "ok": false, "error": e.to_string() }),
     }
 }
@@ -95,10 +92,10 @@ async fn sets() -> Vec<Value> {
             .map(|i| {
                 let p = tree.proof(i).expect("proof");
                 json!({
-                    "root": fr_to_dec(&p.root),
-                    "leaf": fr_to_dec(&p.leaf),
+                    "root": node_to_hex(&p.root),
+                    "leaf": node_to_hex(&p.leaf),
                     "pathBits": p.path_bits,
-                    "siblings": p.siblings.iter().map(fr_to_dec).collect::<Vec<_>>(),
+                    "siblings": p.siblings.iter().map(node_to_hex).collect::<Vec<_>>(),
                 })
             })
             .collect();
@@ -110,7 +107,7 @@ async fn sets() -> Vec<Value> {
                 .collect::<Vec<_>>(),
             "compact": text(&compact),
             "pretty": text(&pretty),
-            "root": fr_to_dec(&root),
+            "root": node_to_hex(&root),
             "proofs": proofs,
             "slots": parts.iter().map(|(a, _)| slot_key_address(a).to_string()).collect::<Vec<_>>(),
             "node": {
@@ -143,6 +140,7 @@ fn documents() -> Vec<(&'static str, String)> {
     ]))
     .expect("tree")
     .root();
+    // A dump file (`{"root", "participants"}`); `root` is the raw JSON value.
     let dump = |root: &str| {
         format!(
             r#"{{"root":{root},"participants":[{{"addressIndex":0,"address":"0x{a}","weight":1}},{{"addressIndex":1,"address":"0x{b}","weight":2}},{{"addressIndex":2,"address":"0x{c}","weight":3}}]}}"#
@@ -262,8 +260,18 @@ fn documents() -> Vec<(&'static str, String)> {
                 "{{\"key\":\"0x{a}\",\"weight\":\"1\"}}\n{{\"key\":\"0x{b}\",\"weight\":\"2\"}}\n{{\"key\":\"0x{c}\",\"weight\":\"3\"}}\n"
             ),
         ),
-        ("dump with its root", dump(&fr_to_dec(&root))),
-        ("dump with another root", dump("5")),
+        ("dump with its root", dump(&format!(r#""{}""#, node_to_hex(&root)))),
+        (
+            "dump with its root in upper hex",
+            dump(&format!(r#""0x{}""#, hex::encode_upper(root))),
+        ),
+        ("dump with another root", dump(&format!(r#""{}""#, node_to_hex(&[5; 32])))),
+        ("dump with a decimal root", dump("5")),
+        ("dump with a decimal string root", dump(r#""5""#)),
+        (
+            "dump with a short root",
+            dump(&format!(r#""0x{}""#, &hex::encode(root)[2..])),
+        ),
         (
             "participants twice",
             format!(
@@ -287,7 +295,7 @@ async fn demo() -> Vec<Value> {
             "path": path,
             "sha256": hex::encode(Sha256::digest(&body)),
             "members": file.participants.len(),
-            "root": fr_to_dec(&root),
+            "root": node_to_hex(&root),
             "rewritten": pretty(&file) == body,
             "node": fetch(&body, &root).await.is_ok(),
         }));

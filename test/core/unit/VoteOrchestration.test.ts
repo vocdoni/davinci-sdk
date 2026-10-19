@@ -1,4 +1,4 @@
-import { Interface, Wallet, ZeroAddress, concat, getBytes, hexlify, sha256 } from 'ethers';
+import { Interface, Wallet, ZeroAddress, concat, getBytes, hexlify, sha256, toBeHex } from 'ethers';
 import {
   CensusOrigin,
   CensusWitnessError,
@@ -26,8 +26,8 @@ import {
 import {
   BN254_FR,
   addressToField,
+  ballotPublicSignals,
   bjjMulBase,
-  computeBallotInputsHash,
   isIdentityCiphertext,
   processIdToField,
   recoverVoteIdSigner,
@@ -158,7 +158,7 @@ function viewOf(e: Election, overrides: Record<string, unknown> = {}) {
     },
     census: {
       censusOrigin: e.origin,
-      censusRoot: BigInt(e.root).toString(),
+      censusRoot: toBeHex(BigInt(e.root), 32),
       censusURI: 'https://files.example.org/census.json',
     },
     stateRoot: e.latestStateRoot,
@@ -184,10 +184,10 @@ async function participantOf(census: MerkleCensus, address: string) {
     address: address.toLowerCase(),
     weight: census.getWeight(address),
     censusProof: {
-      root: p.root.toString(),
-      leaf: p.leaf.toString(),
+      root: toBeHex(p.root, 32),
+      leaf: toBeHex(p.leaf, 32),
       pathBits: Number(p.pathBits),
-      siblings: p.siblings.map(String),
+      siblings: p.siblings.map(s => toBeHex(s, 32)),
     },
   };
 }
@@ -302,7 +302,7 @@ async function setup(options: SetupOptions = {}) {
     proved.push(ballot);
     return Promise.resolve({
       proof: { ...REAL_PROOF.proof, curve: 'bn128' },
-      publicSignals: ballot.publicSignals.map(String) as [string, string, string],
+      publicSignals: ballot.publicSignals.map(String),
     });
   };
   const service = new VoteOrchestrationService(registry, api, VOTER, {
@@ -357,6 +357,8 @@ describe('VoteOrchestrationService.submitVote', () => {
     ]);
 
     const [{ vote }] = votes();
+    // The registry's census root is a Keccak root above the BN254 modulus.
+    expect(BigInt(state.election.root) >= BN254_FR).toBe(true);
     expect(vote.processId).toBe(PID);
     expect(vote.address.toLowerCase()).toBe(VOTER.address.toLowerCase());
     expect(`0x${vote.voteId.toString(16)}`).toBe(result.voteId);
@@ -368,9 +370,11 @@ describe('VoteOrchestrationService.submitVote', () => {
     expect(vote.ballot.slice(0, 3).some(isIdentityCiphertext)).toBe(false);
     expect(vote.ballotProof.pi_a).toEqual(REAL_PROOF.proof.pi_a);
     expect(recoverVoteIdSigner(vote.voteId, vote.signature)).toBe(VOTER.address);
-    // The inputs hash binds the registry's key, mode and the census weight.
-    expect(vote.ballotInputsHash).toBe(
-      await computeBallotInputsHash({
+    // The proof binds the registry's key and mode and the census weight: the
+    // 71 signals the node derives from the vote and the process.
+    expect(vote).not.toHaveProperty('ballotInputsHash');
+    expect(proved[0].publicSignals).toEqual(
+      ballotPublicSignals({
         processId: processIdToField(PID),
         ballotMode: state.election.mode,
         encryptionKey: KEY_POINT,
@@ -380,11 +384,6 @@ describe('VoteOrchestrationService.submitVote', () => {
         weight: 3n,
       })
     );
-    expect(proved[0].publicSignals).toEqual([
-      addressToField(VOTER.address),
-      vote.voteId,
-      vote.ballotInputsHash,
-    ]);
   });
 
   it('draws a fresh ballot secret each time, and takes the deprecated randomness', async () => {
@@ -566,7 +565,9 @@ describe('VoteOrchestrationService.submitVote', () => {
       origin: CensusOrigin.OffchainDynamic,
       routes: [
         (node, method, path) =>
-          path === `/processes/${PID}` ? view(lagging.state.election, '5', 2) : undefined,
+          path === `/processes/${PID}`
+            ? view(lagging.state.election, toBeHex(5n, 32), 2)
+            : undefined,
       ],
     });
     await lagging.service.submitVote({ processId: PID, choices: [1, 0, 0] });
@@ -574,7 +575,9 @@ describe('VoteOrchestrationService.submitVote', () => {
     const pinned = await setup({
       routes: [
         (node, method, path) =>
-          path === `/processes/${PID}` ? view(pinned.state.election, '5', 1) : undefined,
+          path === `/processes/${PID}`
+            ? view(pinned.state.election, toBeHex(5n, 32), 1)
+            : undefined,
       ],
     });
     await expect(pinned.service.submitVote({ processId: PID, choices: [1, 0, 0] })).rejects.toThrow(
@@ -759,7 +762,7 @@ describe('VoteOrchestrationService.submitVote', () => {
       [SequencerErrorCode.SlotBusy, 'slot 5 has too many queued votes', 'slot-busy'],
       [SequencerErrorCode.MalformedRequest, 'address not in the census', 'not-in-census'],
       [SequencerErrorCode.MalformedRequest, 'CSP census proof required', 'invalid'],
-      [SequencerErrorCode.InvalidVote, 'inputs hash does not match the vote', 'invalid'],
+      [SequencerErrorCode.InvalidVote, 'ballot proof does not verify', 'invalid'],
       [SequencerErrorCode.NotAcceptingVotes, 'not accepting votes: ended', 'closed'],
       [SequencerErrorCode.MaxVotersReached, 'max voters reached', 'max-voters'],
       [SequencerErrorCode.NotStarted, 'not open yet: voting starts at 5', 'not-started'],
@@ -791,7 +794,7 @@ describe('VoteOrchestrationService.submitVote', () => {
       prove: () =>
         Promise.resolve({
           proof: REAL_PROOF.proof,
-          publicSignals: REAL_PROOF.public_signals as [string, string, string],
+          publicSignals: REAL_PROOF.public_signals,
         }),
     });
     await expect(service.submitVote({ processId: PID, choices: [1, 0, 0] })).rejects.toThrow(
@@ -1159,7 +1162,7 @@ describe.skipIf(!DIR)('VoteOrchestrationService with the real ballot prover', ()
   });
 
   it('casts a vote whose proof the node verifies under the pinned key', async () => {
-    const { registry, api, votes, chain } = await setup();
+    const { registry, api, votes, chain, state } = await setup();
     const prover = new BallotProver({ artifacts: { dir: DIR } });
     const service = new VoteOrchestrationService(registry, api, VOTER, {
       provider: chain,
@@ -1167,7 +1170,16 @@ describe.skipIf(!DIR)('VoteOrchestrationService with the real ballot prover', ()
     });
     await service.submitVote({ processId: PID, choices: [0, 0, 1] });
     const [{ vote }] = votes();
-    const signals = [addressToField(VOTER.address), vote.voteId, vote.ballotInputsHash];
+    // The signals a node derives from the vote and the registry's process.
+    const signals = ballotPublicSignals({
+      processId: processIdToField(PID),
+      ballotMode: state.election.mode,
+      encryptionKey: KEY_POINT,
+      address: addressToField(VOTER.address),
+      voteId: vote.voteId,
+      ballot: vote.ballot,
+      weight: vote.weight,
+    });
     expect(await verifyBallotProof(REAL_PROOF.vk, vote.ballotProof, signals)).toBe(true);
   }, 120_000);
 });

@@ -12,7 +12,7 @@ export enum SequencerErrorCode {
    * census, a missing CSP proof or a vote for another process.
    */
   MalformedRequest = 40001,
-  /** 400: the vote failed a protocol check (proof, signature, inputs hash, census binding, ballot, weight). */
+  /** 400: the vote failed a protocol check (proof, signature, census binding, ballot, weight). */
   InvalidVote = 40002,
   /** 404: not found. */
   NotFound = 40401,

@@ -42,10 +42,7 @@ export async function s4(live: Live, row: Row): Promise<void> {
   const deployed = await live.org.exclusive(() =>
     deployOwnedCensus(live.wallet, (label, hash) => live.org.record(`s4 ${label}`, hash))
   );
-  say(
-    `s4: OwnedCensus ${deployed.address} on PoseidonT3 ${deployed.poseidonT3}` +
-      (deployed.deployedLibrary ? ' (deployed)' : '')
-  );
+  say(`s4: OwnedCensus ${deployed.address}`);
   const contract = new OnchainCensusService(deployed.address, live.wallet);
   await live.org.send('s4 addMembers', () =>
     contract.addMembers(

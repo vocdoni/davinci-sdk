@@ -11,7 +11,13 @@ import {
   type BallotArtifactSet,
 } from '../../../src/prover';
 import type { Groth16Proof } from '../../../src/sequencer/types';
-import { PINNED_VKEY_TEXT, REAL_PROOF, V1_VKEY, realProofBallot } from '../../helpers/realProof';
+import {
+  NO_PHASE2_VKEY,
+  OTHER_VKEY,
+  PINNED_VKEY_TEXT,
+  REAL_PROOF,
+  realProofBallot,
+} from '../../helpers/realProof';
 
 // Proving and the proving key's own VK are mocked (the real ones need the
 // 35 MB zkey: RealProver.test.ts); verification is snarkjs' own.
@@ -83,18 +89,44 @@ beforeEach(() => {
 describe('verifyBallotProof', () => {
   it('verifies the real proof under the pinned key, and nothing else', async () => {
     const vk = REAL_PROOF.vk;
+    expect(REAL_PROOF.public_signals).toHaveLength(71);
     expect(await verifyBallotProof(vk, REAL_PROOF.proof, REAL_PROOF.public_signals)).toBe(true);
     const signals = REAL_PROOF.public_signals.map(BigInt);
     expect(await verifyBallotProof(vk, REAL_PROOF.proof, signals)).toBe(true);
     const other = [...REAL_PROOF.public_signals];
     other[1] = (BigInt(other[1]) + 1n).toString();
     expect(await verifyBallotProof(vk, REAL_PROOF.proof, other)).toBe(false);
-    expect(await verifyBallotProof(vk, REAL_PROOF.proof, other.slice(0, 2))).toBe(false);
-    expect(await verifyBallotProof(V1_VKEY, REAL_PROOF.proof, REAL_PROOF.public_signals)).toBe(
+    expect(await verifyBallotProof(vk, REAL_PROOF.proof, other.slice(0, 70))).toBe(false);
+    expect(await verifyBallotProof(OTHER_VKEY, REAL_PROOF.proof, REAL_PROOF.public_signals)).toBe(
       false
     );
     const garbage = { ...REAL_PROOF.proof, pi_a: ['x', 'y', '1'] } as Groth16Proof;
     expect(await verifyBallotProof(vk, garbage, REAL_PROOF.public_signals)).toBe(false);
+  });
+
+  it('binds every one of the 71 public signals', async () => {
+    const vk = REAL_PROOF.vk;
+    for (let i = 0; i < 71; i++) {
+      const tampered = [...REAL_PROOF.public_signals];
+      tampered[i] = (BigInt(tampered[i]) + 1n).toString();
+      expect(await verifyBallotProof(vk, REAL_PROOF.proof, tampered), `signal ${i}`).toBe(false);
+    }
+    // Two fields swapped: the order is part of the statement.
+    const swapped = [...REAL_PROOF.public_signals];
+    [swapped[7], swapped[11]] = [swapped[11], swapped[7]];
+    expect(await verifyBallotProof(vk, REAL_PROOF.proof, swapped)).toBe(false);
+  }, 60_000);
+
+  it('refuses a key without a phase-2 contribution before verifying', async () => {
+    const verify = vi.spyOn(snarkjs.groth16, 'verify');
+    expect(
+      await verifyBallotProof(NO_PHASE2_VKEY, REAL_PROOF.proof, REAL_PROOF.public_signals)
+    ).toBe(false);
+    const shaped = { ...REAL_PROOF.vk, IC: REAL_PROOF.vk.IC.slice(0, 4) };
+    expect(await verifyBallotProof(shaped, REAL_PROOF.proof, REAL_PROOF.public_signals)).toBe(
+      false
+    );
+    expect(verify).not.toHaveBeenCalled();
   });
 });
 
@@ -112,7 +144,7 @@ describe('loadBallotArtifacts', () => {
   });
 
   it('refuses a proving key that carries another verification key', async () => {
-    exportVk.mockResolvedValue(V1_VKEY);
+    exportVk.mockResolvedValue(OTHER_VKEY);
     const err = (await loadBallotArtifacts(BALLOT_VK_HASH, artifacts(server().fetchImpl)).catch(
       (e: unknown) => e
     )) as ArtifactError;
@@ -127,11 +159,14 @@ describe('loadBallotArtifacts', () => {
   });
 
   it('refuses a verification key file that is not the registry key', async () => {
-    const v1 = toUtf8Bytes(JSON.stringify(V1_VKEY));
-    const entry = { ...ENTRY, vkey: { url: 'https://files.example/v1.json', sha256: sha256(v1) } };
+    const other = toUtf8Bytes(JSON.stringify(OTHER_VKEY));
+    const entry = {
+      ...ENTRY,
+      vkey: { url: 'https://files.example/other.json', sha256: sha256(other) },
+    };
     const err = (await loadBallotArtifacts(BALLOT_VK_HASH, {
       table: { [BALLOT_VK_HASH]: entry },
-      vkey: { data: v1 },
+      vkey: { data: other },
       fetchImpl: server().fetchImpl,
     }).catch((e: unknown) => e)) as ArtifactError;
     expect(err.file).toBe('vkey');

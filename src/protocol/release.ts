@@ -1,7 +1,7 @@
 /**
  * @fileoverview Pinned values of the davinci-zkvm release the SDK trusts, from
  * davinci-zkvm `rust-sdk/src/release.rs` (ZisK 1.3.2-alpha, davinci-zkvm
- * branch feat/zisk-1.3.2). A deployment is only trusted when its registry immutables
+ * branch feat/protocol-v5 at 867316b). A deployment is only trusted when its registry immutables
  * equal these; `test/protocol/unit/Protocol.test.ts` checks them against a
  * verbatim copy of `release.rs`.
  *
@@ -13,11 +13,11 @@
 
 /** Vote-batch guest program vk: registry `batchProgramVK()`. */
 export const BATCH_PROGRAM_VK =
-  '0xe39e460085ecddecf365649a61183a71c0fe778aa9c06fd2aa1a6c43cddb988b';
+  '0x1e4a74a1c6fb1cd1874d80895e1e075930837955efb4a135539016f7cdead2a8';
 
 /** Results guest program vk: registry `resultsProgramVK()`. */
 export const RESULTS_PROGRAM_VK =
-  '0x394694558f39d0b2da0bbb09322333a0f567ee8d16bea2f354543a086587d167';
+  '0xde55d751582e510bf378d4eec0d98ee3fa5817a50b77bc0e5ce560035e29e4e9';
 
 /** ZisK vadcop-final setup root: registry `rootCVadcopFinal()` and verifier `getRootCVadcopFinal()`. */
 export const ROOT_C_VADCOP_FINAL =
@@ -30,9 +30,10 @@ export const ZISK_VERIFIER_CODEHASH =
 /**
  * sha256 of the ballot proof VK wire bytes (see `ballotVkHash`): registry
  * `ballotVKHash()` and state leaf 0x07. The key is davinci-circom
- * `artifacts/ballot_proof_vkey.json` at a39a9f9.
+ * `artifacts/ballot_proof_vkey.json` at e99127d, its development setup
+ * (`artifacts/DEV_VK_HASH`); the production ceremony replaces it.
  */
-export const BALLOT_VK_HASH = '0xbf1e6590bb1ba883d601c4d7d1c6fa2722a78590716874019db6d68fc776bb0e';
+export const BALLOT_VK_HASH = '0xe8e1e7377394b6600e7e31f2f2d012f148694d07c6088b205371a0fcc96418a9';
 
 /** The pins a deployment is checked against, by registry getter name. */
 export const RELEASE_PINS = {

@@ -135,7 +135,7 @@ Each control reads the process and the chain clock first and refuses what the re
 | `endProcess(pid)` | READY or PAUSED, from the start (before it: `cancelProcess`) | ENDED; the end moves to now; admitted votes still settle through the grace window | `ProcessStatusError` |
 | `pauseProcess(pid)` | READY, before the end | PAUSED; nodes take votes but settle none until resumed | `ProcessStatusError` |
 | `resumeProcess(pid)` | PAUSED | READY; the queued votes settle | `ProcessStatusError` |
-| `cancelProcess(pid)` | READY or PAUSED, any time, the grace window included (a DKG process is ENDED once its decryption is requested) | CANCELED; no results | `ProcessStatusError` |
+| `cancelProcess(pid)` | READY or PAUSED, until the grace end, the grace window included (a DKG process is ENDED once its decryption is requested) | CANCELED; no results | `ProcessStatusError` |
 | `extendProcess(pid, seconds)` | READY or PAUSED, before the end | the end moves later; returns `{ duration }` | `ProcessDurationError` |
 | `closeProcessIn(pid, seconds, { slack? })` | READY or PAUSED, before the end | the end moves earlier, with notice (`references/grace.md`) | `ProcessDurationError` |
 | `setProcessGrace(pid, seconds)` | READY or PAUSED, before the end, within `graceFloor..graceCeil` | the grace window | `ProcessGraceError` |
@@ -160,7 +160,7 @@ try {
 
 ### Cleaning up
 
-`cancelOpenProcesses()` cancels the processes this SDK instance created that are still READY or PAUSED; `{ processIds }` cancels those instead, and `{ all: true }` every process the signer ever created on the registry. It tries them all and reports `{ canceled, failed }`.
+`cancelOpenProcesses()` cancels the processes this SDK instance created that are still READY or PAUSED; `{ processIds }` cancels those instead, and `{ all: true }` every process the signer ever created on the registry. A process past its grace end is left alone: the registry no longer cancels it, since its results may be on their way. It tries the rest and reports `{ canceled, failed }`.
 
 ## Read a process: `getProcess`
 

@@ -1,13 +1,16 @@
 import { toBeHex } from 'ethers';
-import { BN254_FR } from '../../crypto/field';
 import { CensusError } from '../errors';
 import { CensusOrigin } from '../types';
 import { Census } from './Census';
 
-function rootValue(root: string | bigint): bigint {
+// A Merkle root is a census value, `0x` and exactly 64 hex digits as every
+// wire writes it; a CSP root is the CSP's address.
+function rootValue(root: string | bigint, merkle: boolean): bigint {
   if (typeof root === 'bigint') return root;
-  if (/^0x[0-9a-fA-F]{1,64}$/.test(root)) return BigInt(root);
-  throw new CensusError(`census root ${root} is not a bigint or 0x hex of at most 32 bytes`);
+  if ((merkle ? /^0x[0-9a-fA-F]{64}$/ : /^0x[0-9a-fA-F]{1,64}$/).test(root)) return BigInt(root);
+  throw new CensusError(
+    `census root ${root} is not a bigint or ${merkle ? '0x and 64 hex digits' : '0x hex of at most 32 bytes'}`
+  );
 }
 
 /**
@@ -19,23 +22,26 @@ function rootValue(root: string | bigint): bigint {
 export class PublishedCensus extends Census {
   /**
    * @param censusOrigin - Static or updatable Merkle, or CSP
-   * @param root - The lean-IMT root (a field element) or the CSP address, as
-   *   a bigint or `0x` hex
+   * @param root - The Keccak lean-IMT root, a bigint below 2^256 or `0x` and
+   *   exactly 64 hex digits; or the CSP address, a bigint or `0x` hex of up to
+   *   32 bytes
    * @param uri - The census file URL, or where the CSP is
    * @throws CensusError for an on-chain origin, a root out of range or an empty URI
    */
   constructor(censusOrigin: CensusOrigin, root: string | bigint, uri: string) {
     super(censusOrigin);
-    const value = rootValue(root);
+    let value: bigint;
     switch (censusOrigin) {
       case CensusOrigin.OffchainStatic:
       case CensusOrigin.OffchainDynamic:
-        if (value === 0n || value >= BN254_FR) {
-          throw new CensusError('a Merkle census root is a non-zero field element');
+        value = rootValue(root, true);
+        if (value <= 0n || value >> 256n !== 0n) {
+          throw new CensusError('a Merkle census root is a non-zero 256-bit value');
         }
         break;
       case CensusOrigin.CSP:
-        if (value === 0n || value >> 160n !== 0n) {
+        value = rootValue(root, false);
+        if (value <= 0n || value >> 160n !== 0n) {
           throw new CensusError('a CSP census root is the CSP address');
         }
         break;

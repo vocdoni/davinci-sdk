@@ -17,7 +17,7 @@ An election is a process in the `ProcessRegistry` contract, which is the source 
 ## The life of an election
 
 1. **Creation.** The organizer publishes the census (Merkle file, contract or CSP) and the metadata document, gets the election key (from the key node, or from the DKG through the registry), and calls `newProcess` with the ballot mode, the census, the metadata URL and its SHA-256, the timing and the key mode. Nodes bootstrap the process from the `ProcessCreated` event.
-2. **Voting.** From the start to the end, voters send ballots to nodes. A node checks each ballot (proof, signature, census, inputs hash) before queueing it.
+2. **Voting.** From the start to the end, voters send ballots to nodes. A node checks each ballot (proof, signature, census) before queueing it.
 3. **Batching and settlement.** A node seals a batch when enough ballots wait, when the oldest has waited long enough, or near the end. The zkVM guest verifies the batch's Groth16 proofs, re-encrypts every ballot, re-randomizes a sample of other occupied slots, updates the state tree and the encrypted accumulator, and lays out the blob data. The node proves it as a PLONK and sends `submitStateTransition` with the blobs.
 4. **Grace window.** Admission closes at the end; batches of ballots taken before it keep landing until `graceEnd = min(end + graceMaxTotal, max(end, lastVoteAt) + grace)` (`references/grace.md`).
 5. **Results.** After the grace end the key holder decrypts the accumulator: the key node with a second zkVM guest proving 16 Chaum–Pedersen decryptions, or the committee with proofs of every share. The registry checks the result against the final state root and stores it (`references/results.md`).
@@ -27,7 +27,7 @@ An election is a process in the `ProcessRegistry` contract, which is the source 
 ## The ballot
 
 - **16 fields**, always. A ballot is 16 ElGamal ciphertexts on BabyJubJub (circomlib twisted Edwards form, the election key's curve). Fields past the ballot mode's `numFields` hold the identity ciphertext, which the guest checks before skipping them.
-- **Ballot proof.** A Groth16 proof (BN254) of the `BallotProof(16)` circuit shows the plaintexts follow the ballot mode and the voter's weight, and that the ciphertexts and the vote id were derived from the voter's secret `k`. Its public signals are the voter's address, the vote id and an inputs hash: a MultiPoseidon of the process id, the packed ballot mode, the election key, the address, the vote id, the 64 ballot coordinates and the weight.
+- **Ballot proof.** A Groth16 proof (BN254) of the `BallotProof(16)` circuit shows the plaintexts follow the ballot mode and the voter's weight, and that the ciphertexts and the vote id were derived from the voter's secret `k`. Its 71 public signals are, in order, the voter's address, the vote id, the process id, the packed ballot mode, the election key's x and y, the weight, then `c1.x, c1.y, c2.x, c2.y` of each of the 16 fields (`ballotPublicSignals`). A vote does not carry them: the node and the guest derive them from the vote, the census and the state tree.
 - **Field nonces.** Field `i` (from 0) is encrypted under `k_{i+1}`, with `k_1 = Poseidon(k)` and `k_{i+1} = Poseidon(k_i)`: the chain depends on `k` alone, not on the process, the voter or the key. Two ballots with one `k` share every `C1 = k_{i+1}·G`, and under one election key `C2 − C2' = (m − m')·G`, a small discrete log that gives anyone the difference of the choices. A `k` is therefore used for one ballot only: never for another voter, another process or a revote.
 - **Vote id.** `2^63 + (Poseidon(processId, address, k) mod 2^63)`. The voter signs it (secp256k1, personal-sign); the guest checks the signature against the address. It is no guard against reusing `k`: the same `k` in another process or for another voter gives another vote id, which nothing refuses. Only the same voter's `k` in the same process repeats a vote id, which nodes refuse as a duplicate.
 - **Circuit files.** The wasm, the proving key and the verification key are keyed by the ballot VK hash the registry pins. The SDK checks each file's sha256 and that both verification keys (the file and the one inside the proving key) hash to the registry's value; the guest checks the same hash against the state tree.
@@ -36,10 +36,12 @@ An election is a process in the `ProcessRegistry` contract, which is the source 
 
 | Origin | Root in the registry | Membership proof |
 | --- | --- | --- |
-| 1 static Merkle | lean-IMT root of the census file | lean-IMT path of `(address << 88) \| weight` |
+| 1 static Merkle | Keccak lean-IMT root of the census file | lean-IMT path of `(address << 88) \| weight` |
 | 2 updatable Merkle | the current version's root | the same, at the current root |
 | 3 on-chain contract | roots the contract recorded since the process's creation | the same, from the contract's logs |
 | 4 CSP | the CSP's address | an ECDSA attestation of `(process, address, weight, index)` |
+
+The Merkle census is a lean incremental Merkle tree whose node is `keccak256(left ‖ right)` over 32-byte big-endian values; a lone right-most node moves up unhashed and an empty tree's root is zero. Leaves are below 2^248, while roots and inner nodes are full 256-bit values, most of them above the BN254 modulus: the SDK holds them as bigints and writes them as `0x` and 64 hex digits.
 
 Each voter owns one **ballot slot** in the state tree: `0x10 + (be64(sha256("davinci-slot-v1" ‖ address)[0..8]) mod (2^63 − 16))` for a Merkle census, `0x10 + index` for a CSP. A revote writes the same slot again: the latest ballot replaces the earlier one, and the accumulator subtracts the old and adds the new. The slot comes from the address, not the voter's position in the tree, so a growing census never moves a voter.
 

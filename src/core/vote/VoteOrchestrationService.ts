@@ -546,7 +546,6 @@ export class VoteOrchestrationService {
       voteId: built.voteId,
       ballot: built.ballot,
       ballotProof: proof,
-      ballotInputsHash: built.inputsHash,
       signature,
       weight,
       ...(censusProof?.type === 'csp' && { censusProof }),

@@ -42,15 +42,15 @@ export interface BallotArtifactSet {
   vkey: ArtifactFile;
 }
 
-const A39A9F9 = 'a39a9f9867bb70726ad2137ed536d75670e042b9';
-const CDN_A39A9F9 = `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${A39A9F9}`;
-const GITHUB_A39A9F9 = `https://raw.githubusercontent.com/vocdoni/davinci-circom/${A39A9F9}/artifacts`;
+const E99127D = 'e99127d5a7190d152ccf94c5f457ad126fe62d03';
+const CDN_E99127D = `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${E99127D}`;
+const GITHUB_E99127D = `https://raw.githubusercontent.com/vocdoni/davinci-circom/${E99127D}/artifacts`;
 
-// A file of the a39a9f9 set: the CDN first, raw GitHub at the commit after it.
-const a39a9f9 = (file: string, sha: string): ArtifactFile =>
+// A file of the e99127d set: the CDN first, raw GitHub at the commit after it.
+const e99127d = (file: string, sha: string): ArtifactFile =>
   Object.freeze({
-    url: `${CDN_A39A9F9}/${file}`,
-    mirrors: Object.freeze([`${GITHUB_A39A9F9}/${file}`]),
+    url: `${CDN_E99127D}/${file}`,
+    mirrors: Object.freeze([`${GITHUB_E99127D}/${file}`]),
     sha256: sha,
   });
 
@@ -58,26 +58,28 @@ const a39a9f9 = (file: string, sha: string): ArtifactFile =>
  * The circuit files this release knows, by the ballot VK hash they prove
  * under.
  *
- * `0xbf1e…bb0e`, the key of the registry, is davinci-circom commit
- * `a39a9f9` (`BallotProof(16)`, 64,816 constraints). Its files come from the
- * DAVINCI CDN (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<commit>/<file>`)
+ * `0xe8e1…18a9` is davinci-circom commit `e99127d` (`BallotProof(16)` with 71
+ * public inputs, 61,678 constraints), whose development trusted setup anyone
+ * can reproduce: proofs under it can be forged, so no launched registry pins
+ * it. Its files come from the DAVINCI CDN
+ * (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<commit>/<file>`)
  * and, when that fails, from raw GitHub at the commit; both copies are checked
  * against the same sha256.
  */
 export const BALLOT_ARTIFACTS: Readonly<Record<string, BallotArtifactSet>> = Object.freeze({
-  '0xbf1e6590bb1ba883d601c4d7d1c6fa2722a78590716874019db6d68fc776bb0e': Object.freeze({
-    source: `davinci-circom ${A39A9F9}`,
-    wasm: a39a9f9(
+  '0xe8e1e7377394b6600e7e31f2f2d012f148694d07c6088b205371a0fcc96418a9': Object.freeze({
+    source: `davinci-circom ${E99127D}`,
+    wasm: e99127d(
       'ballot_proof.wasm',
-      '0x07ecaef89f730cd4a3ee0355821a1fee4eb235fe8934f3c4bf24744bf1c7e4d5'
+      '0x5b65876e8ca3acbe44191049cb86f917febb83cd3f0c56d3d7c828e3ebca6b86'
     ),
-    zkey: a39a9f9(
+    zkey: e99127d(
       'ballot_proof_pkey.zkey',
-      '0x4fa825ca364142b066f4a905564f54ed9ff330e6b748c517d08708f866eedf1e'
+      '0x610313b7dc2439180f17944625eab13206ea33249b1680e73b191ec7693c72c7'
     ),
-    vkey: a39a9f9(
+    vkey: e99127d(
       'ballot_proof_vkey.json',
-      '0x498fa6f25d2b4adebe880eb2aa368712fba2821dda5a94efaea4d62725fa9ad7'
+      '0x976577a9624aa410befb8cf6879092d07c2c82a52c4a28189b19c94d9c3c920d'
     ),
   }),
 });

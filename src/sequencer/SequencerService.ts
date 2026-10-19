@@ -188,7 +188,7 @@ export class VocdoniSequencerService extends BaseService {
     if (
       p.address.toLowerCase() !== addr ||
       p.censusProof.leaf !== leaf ||
-      !(await verifyLeanIMTProof(p.censusProof))
+      !verifyLeanIMTProof(p.censusProof)
     ) {
       throw this.mismatch('participant proof is not for this address');
     }

@@ -561,10 +561,16 @@
     "observer": {
       "ballotVkHash": "0x0303030303030303030303030303030303030303030303030303030303030303",
       "batchProgramVk": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "bisections": 0,
       "chainId": 31337,
+      "guestRejections": 0,
+      "heldBatches": 0,
+      "isolatedVotes": 0,
       "lostRaces": 3,
       "observer": true,
       "processRegistry": "0x0202020202020202020202020202020202020202",
+      "rebuilds": 0,
+      "reorgs": 0,
       "resultsProgramVk": "0x0505050505050505050505050505050505050505050505050505050505050505",
       "sequencerAddress": null,
       "settledBySelf": 7,
@@ -573,10 +579,16 @@
     "sequencer": {
       "ballotVkHash": "0x0303030303030303030303030303030303030303030303030303030303030303",
       "batchProgramVk": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "bisections": 0,
       "chainId": 31337,
+      "guestRejections": 0,
+      "heldBatches": 0,
+      "isolatedVotes": 0,
       "lostRaces": 3,
       "observer": false,
       "processRegistry": "0x0202020202020202020202020202020202020202",
+      "rebuilds": 0,
+      "reorgs": 0,
       "resultsProgramVk": "0x0505050505050505050505050505050505050505050505050505050505050505",
       "sequencerAddress": "0x0101010101010101010101010101010101010101",
       "settledBySelf": 7,
@@ -743,12 +755,12 @@
   "participant": {
     "address": "0x0606060606060606060606060606060606060606",
     "censusProof": {
-      "leaf": "10642655260782738549960568475063226824749079472937622782807290410874961927",
+      "leaf": "0x0006060606060606060606060606060606060606060000000000000000000007",
       "pathBits": 3,
-      "root": "8968276146194805015978015668956675092963841824772149378841211958919241599207",
+      "root": "0x3b93bc1d33b9fa1a9526a4d5ab9a7759ac20c9e15d6f6fc7eef375b537126bba",
       "siblings": [
-        "11178647682667153453586042692189084050560295780819292723755375342273699149810",
-        "134128628277932807562970746937804139049410259292042133681231779156583638585"
+        "0xa57edf58bc7e8af306c7c5de6d8cbcf39b1989cab7f26c3738a4f5aa50db9ff0",
+        "0x29147b901adc9fd3c22318dc38fb473478b28f92e53e948556228211e87e9f1e"
       ]
     },
     "weight": "7"
@@ -787,7 +799,7 @@
       ]
     },
     {
-      "label": "proof leaf = p",
+      "label": "proof leaf as decimal p",
       "ok": false,
       "ops": [
         {
@@ -797,6 +809,35 @@
             "leaf"
           ],
           "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "proof root above p",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "proof sibling as decimal",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "siblings",
+            0
+          ],
+          "value": "7"
         }
       ]
     },
@@ -1371,7 +1412,7 @@
       },
       "census": {
         "censusOrigin": 1,
-        "censusRoot": "5",
+        "censusRoot": "0x0505050505050505050505050505050505050505050505050505050505050505",
         "censusURI": "file:///tmp/census.json"
       },
       "duration": 7200,
@@ -1403,7 +1444,7 @@
       },
       "census": {
         "censusOrigin": 1,
-        "censusRoot": "5",
+        "censusRoot": "0x0505050505050505050505050505050505050505050505050505050505050505",
         "censusURI": "file:///tmp/census.json"
       },
       "duration": 7200,
@@ -1748,7 +1789,7 @@
       ]
     },
     {
-      "label": "census root = p",
+      "label": "census root as decimal p",
       "ok": false,
       "ops": [
         {
@@ -1758,6 +1799,62 @@
             "censusRoot"
           ],
           "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "census root as decimal",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusRoot"
+          ],
+          "value": "5"
+        }
+      ]
+    },
+    {
+      "label": "census root above p",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusRoot"
+          ],
+          "value": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "census root upper hex",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusRoot"
+          ],
+          "value": "0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+        }
+      ]
+    },
+    {
+      "label": "census root short",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "census",
+            "censusRoot"
+          ],
+          "value": "0x05"
         }
       ]
     },
@@ -2267,7 +2364,6 @@
           }
         }
       ],
-      "ballotInputsHash": "999",
       "ballotProof": {
         "curve": "bn128",
         "pi_a": [
@@ -2472,7 +2568,6 @@
           }
         }
       ],
-      "ballotInputsHash": "999",
       "ballotProof": {
         "curve": "bn128",
         "pi_a": [
@@ -2502,13 +2597,13 @@
         "protocol": "groth16"
       },
       "censusProof": {
-        "leaf": "5321327630391369274980284237531613412374539736468811391403645205437480961",
+        "leaf": "0x0003030303030303030303030303030303030303030000000000000000000001",
         "pathBits": 3,
-        "root": "4177383426488611943439950432088536559788492868229848189889437642440785991273",
+        "root": "0x1d8d6d6b0d65e74e896abd32ebbc2d8dfa3dfc9164cae4f2bb566e118b82dfd8",
         "siblings": [
-          "3547551753594246183320189491687742274916359824312540927602430136958320641",
-          "549211108558326606991856655932027951231195219014355207363467304607847299210",
-          "7095103507188492366640378983375484549832719648625081855204860273916641281"
+          "0x0002020202020202020202020202020202020202020000000000000000000001",
+          "0xeb5f5768b7dce30b13965af811b50e8ef9f3d8b37050aca1439e75591fda1889",
+          "0x0004040404040404040404040404040404040404040000000000000000000001"
         ],
         "type": "merkle"
       },
@@ -2681,7 +2776,6 @@
           }
         }
       ],
-      "ballotInputsHash": "999",
       "ballotProof": {
         "curve": "bn128",
         "pi_a": [
@@ -2723,7 +2817,7 @@
       "ops": []
     },
     {
-      "label": "Fr = p",
+      "label": "ballotInputsHash",
       "ok": false,
       "ops": [
         {
@@ -2731,111 +2825,7 @@
           "path": [
             "ballotInputsHash"
           ],
-          "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
-        }
-      ]
-    },
-    {
-      "label": "hex Fr",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "0x10"
-        }
-      ]
-    },
-    {
-      "label": "negative Fr",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "-1"
-        }
-      ]
-    },
-    {
-      "label": "number Fr",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": 5
-        }
-      ]
-    },
-    {
-      "label": "empty Fr",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": ""
-        }
-      ]
-    },
-    {
-      "label": "Fr with leading zeros",
-      "ok": true,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "000999"
-        }
-      ]
-    },
-    {
-      "label": "Fr of 80 zeros",
-      "ok": true,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "00000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        }
-      ]
-    },
-    {
-      "label": "Fr of 81 digits",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        }
-      ]
-    },
-    {
-      "label": "Fr with a sign",
-      "ok": false,
-      "ops": [
-        {
-          "op": "set",
-          "path": [
-            "ballotInputsHash"
-          ],
-          "value": "+999"
+          "value": "999"
         }
       ]
     },
@@ -3259,7 +3249,7 @@
       ]
     },
     {
-      "label": "census proof root = p",
+      "label": "census proof root as decimal p",
       "ok": false,
       "ops": [
         {
@@ -3269,6 +3259,148 @@
             "root"
           ],
           "value": "21888242871839275222246405745257275088548364400416034343698204186575808495617"
+        }
+      ]
+    },
+    {
+      "label": "census proof root above p",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ]
+    },
+    {
+      "label": "census proof root upper hex",
+      "ok": true,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"
+        }
+      ]
+    },
+    {
+      "label": "census proof root without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "census proof root with 0X",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0Xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "census proof root of 63 digits",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "census proof root of 65 digits",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ]
+    },
+    {
+      "label": "census proof root as a number",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "root"
+          ],
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "census proof leaf as decimal",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "leaf"
+          ],
+          "value": "5"
+        }
+      ]
+    },
+    {
+      "label": "census proof sibling without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "siblings",
+            0
+          ],
+          "value": "abababababababababababababababababababababababababababababababab"
+        }
+      ]
+    },
+    {
+      "label": "census proof sibling not hex",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "censusProof",
+            "siblings",
+            0
+          ],
+          "value": "0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
         }
       ]
     },
@@ -3379,7 +3511,7 @@
     },
     {
       "label": "proof with an extra field",
-      "ok": true,
+      "ok": false,
       "ops": [
         {
           "op": "set",

@@ -1,26 +1,20 @@
 /**
  * @fileoverview The Merkle census and ballot slots, as davinci-zkvm
- * `rust-sdk/src/census.rs` computes them: the lean incremental Merkle tree
- * (lean-imt-go shape, iden3 Poseidon of two inputs), its compact proofs, the
- * census leaf `(address << 88) | weight` and the slot of each voter.
+ * `rust-sdk/src/census.rs` computes them: the Keccak lean incremental Merkle
+ * tree (lean-imt-go shape, `keccak256(left || right)` over 32-byte big-endian
+ * values), its compact proofs, the census leaf `(address << 88) | weight` and
+ * the slot of each voter.
  */
 
-import { getBytes, sha256, toUtf8Bytes, concat } from 'ethers';
-import {
-  BN254_FR,
-  addressToField,
-  assertFieldElement,
-  bigIntToHex,
-  bytesToBigInt,
-  parseHexBytes,
-} from './field';
-import { PoseidonHasher, getPoseidon } from './poseidon';
+import { getBytes, keccak256, sha256, toBeHex, toUtf8Bytes, concat } from 'ethers';
+import { addressToField, bigIntToHex, bytesToBigInt, parseHexBytes } from './field';
 import { BALLOT_MAX, BALLOT_MIN, CENSUS_WEIGHT_BITS, MAX_CENSUS_DEPTH } from '../protocol/limits';
 
 /**
  * A compact lean-IMT inclusion proof: levels where the node has no sibling
  * are skipped, and bit `i` of `pathBits` is set when the i-th sibling is on
- * the left.
+ * the left. Every value is a 256-bit integer (most roots are above the BN254
+ * modulus); the leaf is below 2^248.
  */
 export interface LeanIMTProof {
   root: bigint;
@@ -29,14 +23,35 @@ export interface LeanIMTProof {
   siblings: bigint[];
 }
 
+const NODE_LIMIT = 1n << 256n;
+const LEAF_LIMIT = 1n << 248n;
+
+// A census value: a 256-bit integer, never reduced.
+const isNode = (x: bigint) => x >= 0n && x < NODE_LIMIT;
+
+function assertLeaf(leaf: bigint, what: string): bigint {
+  if (leaf < 0n || leaf >= LEAF_LIMIT) throw new RangeError(`${what} is not below 2^248`);
+  return leaf;
+}
+
 /**
- * Append-only lean incremental Merkle tree, same shape as lean-imt-go: a node
- * without a right sibling is carried up unhashed. Build it with
- * {@link LeanIMT.create}; after that every operation is synchronous.
+ * The census tree's node hash: `keccak256(be32(left) || be32(right))`,
+ * Solidity's `keccak256(abi.encode(left, right))` (davinci-zkvm `census::hash2`).
+ *
+ * @throws RangeError for a value outside `[0, 2^256)`
+ */
+export function censusNodeHash(left: bigint, right: bigint): bigint {
+  return BigInt(keccak256(concat([toBeHex(left, 32), toBeHex(right, 32)])));
+}
+
+/**
+ * Append-only lean incremental Merkle tree, same shape as lean-imt-go and the
+ * census contract's `KeccakLeanIMT`: a node without a right sibling is carried
+ * up unhashed, and the root of an empty tree is zero.
  *
  * @example
  * ```typescript
- * const tree = await LeanIMT.create([censusLeaf(a, 1n), censusLeaf(b, 2n)]);
+ * const tree = new LeanIMT([censusLeaf(a, 1n), censusLeaf(b, 2n)]);
  * const proof = tree.proof(1);
  * ```
  */
@@ -44,30 +59,23 @@ export class LeanIMT {
   // levels[0] are the leaves; the last level is [root] once non-empty.
   private levels: bigint[][];
 
-  private constructor(
-    private readonly hasher: PoseidonHasher,
-    leaves: bigint[]
-  ) {
-    this.levels = [leaves];
-    let level = leaves;
+  /**
+   * A tree over `leaves`, in order (n - 1 hashes).
+   *
+   * @throws RangeError for a leaf outside `[0, 2^248)`
+   */
+  constructor(leaves: readonly bigint[] = []) {
+    leaves.forEach((l, i) => assertLeaf(l, `leaf ${i}`));
+    this.levels = [[...leaves]];
+    let level = this.levels[0];
     while (level.length > 1) {
       const next: bigint[] = [];
       for (let i = 0; i < level.length; i += 2) {
-        next.push(i + 1 < level.length ? this.hash(level[i], level[i + 1]) : level[i]);
+        next.push(i + 1 < level.length ? censusNodeHash(level[i], level[i + 1]) : level[i]);
       }
       this.levels.push(next);
       level = next;
     }
-  }
-
-  /** A tree over `leaves`, in order (n - 1 hashes). Leaves are field elements. */
-  static async create(leaves: readonly bigint[] = []): Promise<LeanIMT> {
-    leaves.forEach((l, i) => assertFieldElement(l, `leaf ${i}`));
-    return new LeanIMT(await getPoseidon(), [...leaves]);
-  }
-
-  private hash(a: bigint, b: bigint): bigint {
-    return this.hasher.hash([a, b]);
   }
 
   /** Number of leaves. */
@@ -96,9 +104,13 @@ export class LeanIMT {
     return this.levels[0].indexOf(leaf);
   }
 
-  /** Appends a leaf, updating one path. */
+  /**
+   * Appends a leaf, updating one path.
+   *
+   * @throws RangeError for a leaf outside `[0, 2^248)`
+   */
   insert(leaf: bigint): void {
-    assertFieldElement(leaf, 'leaf');
+    assertLeaf(leaf, 'leaf');
     const size = this.size + 1;
     const depth = size === 1 ? 0 : (size - 1).toString(2).length;
     while (this.levels.length < depth + 1) this.levels.push([]);
@@ -106,7 +118,7 @@ export class LeanIMT {
     let index = size - 1;
     for (let level = 0; level < depth; level++) {
       this.levels[level][index] = node;
-      if (index & 1) node = this.hash(this.levels[level][index - 1], node);
+      if (index & 1) node = censusNodeHash(this.levels[level][index - 1], node);
       index >>= 1;
     }
     this.levels[depth] = [node];
@@ -135,26 +147,22 @@ export class LeanIMT {
 }
 
 /**
- * Verifies a compact lean-IMT proof by the guest's rules: at most 61
- * siblings, no path bit above the sibling count, and the Poseidon walk
- * reaches the root.
+ * Verifies a compact lean-IMT proof by the guest's rules: the leaf is below
+ * 2^248 (check 3A.6), at most 61 siblings, no path bit above the sibling
+ * count, and the Keccak walk reaches the root. Root and siblings are any
+ * 256-bit values.
  */
-export async function verifyLeanIMTProof(proof: LeanIMTProof): Promise<boolean> {
+export function verifyLeanIMTProof(proof: LeanIMTProof): boolean {
   const n = proof.siblings.length;
   if (n > MAX_CENSUS_DEPTH || proof.pathBits < 0n || proof.pathBits >> BigInt(n) !== 0n) {
     return false;
   }
-  const canonical = (x: bigint) => x >= 0n && x < BN254_FR;
-  if (!canonical(proof.leaf) || !canonical(proof.root)) return false;
-  const h = await getPoseidon();
+  if (proof.leaf < 0n || proof.leaf >= LEAF_LIMIT || !isNode(proof.root)) return false;
+  if (!proof.siblings.every(isNode)) return false;
   let node = proof.leaf;
-  try {
-    proof.siblings.forEach((s, i) => {
-      node = (proof.pathBits >> BigInt(i)) & 1n ? h.hash([s, node]) : h.hash([node, s]);
-    });
-  } catch {
-    return false;
-  }
+  proof.siblings.forEach((s, i) => {
+    node = (proof.pathBits >> BigInt(i)) & 1n ? censusNodeHash(s, node) : censusNodeHash(node, s);
+  });
   return node === proof.root;
 }
 

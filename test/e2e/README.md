@@ -79,7 +79,7 @@ home, default `~/.cache/davinci-sdk-e2e/docker`) and `E2E_LOG` (default
 `~/.cache/davinci-sdk-e2e/<phase>-<time>.log`).
 
 The circuit files come from the SDK's pinned table (davinci-circom on raw
-GitHub) and are checked as always; the cache only saves the 44 MB download.
+GitHub) and are checked as always; the cache only saves the 35 MB download.
 
 ## Running it
 
@@ -135,12 +135,10 @@ commit, or from `fixtures_commit`. Secrets:
 
 - Scenarios, voters and documents are in `spec.ts`; run `prepare` after any
   change there, then commit and push the fixtures.
-- `contracts/census.json` holds the creation code of `OwnedCensus` and
-  `PoseidonT3` at the commit of the vendored census ABIs. `yarn sync:abis
-  --census <checkout>` rewrites it with them; the anvil suite checks it
-  against its own build (`test/anvil/liveCensus.test.ts`). The run links the
-  `PoseidonT3` at its usual deterministic address when the chain has it, and
-  deploys one otherwise.
+- `contracts/census.json` holds the creation code of `OwnedCensus` at the
+  commit of the vendored census ABIs; its Keccak lean-IMT links no library.
+  `yarn sync:abis --census <checkout>` rewrites it with them; the anvil suite
+  checks it against its own build (`test/anvil/liveCensus.test.ts`).
 - The helpers have offline tests in `unit/`, part of `yarn test:unit`.
 
 ## Measured
@@ -172,9 +170,9 @@ sequencer-key election had its results 4 to 6 minutes after the close was
 sent.
 
 Cost: the organizer sent 31 transactions, 15.0 M gas in all. At the 14-17 wei
-gas price of that day this was 2.3e-10 xDAI. The largest items are the
-`PoseidonT3` library deployment (5.2 M gas; Gnosis has none at its
-deterministic address, so every run deploys one), the `OwnedCensus`
+gas price of that day this was 2.3e-10 xDAI. The largest items were the
+`PoseidonT3` library deployment (5.2 M gas; the census contract has needed
+none since its Keccak tree), the `OwnedCensus`
 deployment (1.5 M) and the creations (0.6-0.7 M with a sequencer key, 1.0 M
 for `dkg`, 1.4 M for `dkg-locked`). Settlements and results are paid by the
 node operators. Keep the organizer above the 0.005 ETH the run checks for

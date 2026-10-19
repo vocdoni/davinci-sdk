@@ -77,7 +77,7 @@ const status = await cluster.getVoteStatus(processId, voteId); // the vote's nod
 
 ## Wire format
 
-On the wire, field names are camelCase, field elements decimal strings, bytes `0x` hex, points twisted Edwards `{ x, y }`, and a ballot exactly 16 ciphertexts. The node decodes strictly: no unknown fields, exact lengths, every value in range. The SDK's types hold bigints and checked points; `encodeVoteRequest`/`decodeVoteRequest` and `encodeCensusFile`/`decodeCensusFile` convert. A vote body carries `weight` (decimal) and, for a CSP census, `censusProof: { type: 'csp', r, s, recid, index }`; for a Merkle census the node derives the proof and the SDK sends none.
+On the wire, field names are camelCase, field elements decimal strings, census values (roots, leaves, siblings) `0x` and exactly 64 hex digits, bytes `0x` hex, points twisted Edwards `{ x, y }`, and a ballot exactly 16 ciphertexts. The node decodes strictly: no unknown fields, exact lengths, every value in range. The SDK's types hold bigints and checked points; `encodeVoteRequest`/`decodeVoteRequest` and `encodeCensusFile`/`decodeCensusFile` convert. A vote body carries `weight` (decimal), the ballot proof without its public signals (the node derives all 71 from the vote and the process) and, for a CSP census, `censusProof: { type: 'csp', r, s, recid, index }`; for a Merkle census the node derives the proof and the SDK sends none. A body with a field the node does not know, such as an SDK 4 vote's `ballotInputsHash`, is refused with 40001.
 
 ## Errors
 
@@ -94,7 +94,7 @@ All extend `SequencerError`. The node's `code` is the HTTP status times 100 plus
 | Code | Name | Meaning |
 | --- | --- | --- |
 | 40001 | `MalformedRequest` | malformed request; for a vote also an address outside the census or a missing CSP proof |
-| 40002 | `InvalidVote` | the vote failed a protocol check (proof, signature, inputs hash, census binding, ballot, weight) |
+| 40002 | `InvalidVote` | the vote failed a protocol check (proof, signature, census binding, ballot, weight) |
 | 40401 | `NotFound` | not found |
 | 40402 | `UnknownProcess` | a process this node does not know or serve |
 | 40801 | `RequestTimeout` | the node's 60 s deadline; a vote may still have been admitted |

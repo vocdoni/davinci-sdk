@@ -1,7 +1,7 @@
 /**
  * @fileoverview Ballots and the values the ballot proof binds: the packed
  * ballot mode, the 16-field encryption with identity padding, the vote id and
- * the inputs hash, as davinci-zkvm `rust-sdk/src/ballot.rs` and the
+ * the 71 public signals, as davinci-zkvm `rust-sdk/src/ballot.rs` and the
  * davinci-circom `BallotProof(16)` circuit compute them.
  */
 
@@ -58,7 +58,6 @@ export interface BallotCircuitInputs {
   encryption_pubkey: [string, string];
   k: string;
   cipherfields: [[string, string], [string, string]][];
-  inputs_hash: string;
 }
 
 const MAX_VALUE = 1n << BigInt(MAX_VALUE_BITS);
@@ -232,8 +231,8 @@ export async function computeVoteId(
   return voteIdWith(await getPoseidon(), processId, address, k);
 }
 
-/** What the ballot proof's inputs hash binds. */
-export interface BallotInputsHashParams {
+/** What the ballot proof's public signals are derived from. */
+export interface BallotPublicSignalsParams {
   /** Process id as a field element. */
   processId: bigint;
   ballotMode: BallotModeValues;
@@ -242,30 +241,35 @@ export interface BallotInputsHashParams {
   /** Voter address as a field element. */
   address: bigint;
   voteId: bigint;
+  /** 16 ciphertexts; fields at or above `ballotMode.numFields` must be the identity. */
   ballot: Ballot;
   weight: bigint;
 }
 
 /**
- * The 71 inputs of the inputs hash, in circuit order:
- * `[pid, packedMode, pk.x, pk.y, address, voteId, 64 ballot coords, weight]`.
+ * The 71 public signals of the ballot proof, in circuit order (davinci-zkvm
+ * `ballot::public_signals`): `[address, voteId, processId, packedMode, pk.x,
+ * pk.y, weight]`, then `c1.x, c1.y, c2.x, c2.y` of each of the 16 fields. A
+ * field at or above `numFields` contributes the identity `(0, 1), (0, 1)`,
+ * which is what the batch guest derives for it.
+ *
+ * @throws RangeError for a ballot of other than 16 ciphertexts, padding that
+ *   is not the identity, or a mode that does not pack
  */
-export function ballotInputsHashPreimage(p: BallotInputsHashParams): bigint[] {
+export function ballotPublicSignals(p: BallotPublicSignalsParams): bigint[] {
+  if (!isBallotPaddingValid(p.ballot, p.ballotMode.numFields)) {
+    throw new RangeError('ballot: 16 ciphertexts with the identity past numFields');
+  }
   return [
+    p.address,
+    p.voteId,
     p.processId,
     packBallotMode(p.ballotMode),
     p.encryptionKey.x,
     p.encryptionKey.y,
-    p.address,
-    p.voteId,
-    ...ballotCoords(p.ballot),
     p.weight,
+    ...ballotCoords(p.ballot),
   ];
-}
-
-/** The third public signal of the ballot proof: MultiPoseidon of {@link ballotInputsHashPreimage}. */
-export async function computeBallotInputsHash(p: BallotInputsHashParams): Promise<bigint> {
-  return (await getPoseidon()).multiHash(ballotInputsHashPreimage(p));
 }
 
 /** Everything a vote needs before the proof. */
@@ -289,17 +293,16 @@ export interface BuildBallotParams {
 export interface BuiltBallot {
   ballot: Ballot;
   voteId: bigint;
-  inputsHash: bigint;
   /** snarkjs input for `BallotProof(16)`. Contains the secret `k`. */
   circuitInputs: BallotCircuitInputs;
-  /** The public signals the proof must carry: `[address, voteId, inputsHash]`. */
-  publicSignals: [bigint, bigint, bigint];
+  /** The 71 public signals the proof must carry (see {@link ballotPublicSignals}). */
+  publicSignals: bigint[];
 }
 
 /**
  * Builds a ballot like davinci-sequencer `Voter::prepare_vote`: checks the
  * key and the field count, encrypts with identity padding, derives the vote
- * id and the inputs hash, and assembles the circuit inputs.
+ * id and the public signals, and assembles the circuit inputs.
  *
  * It does not check the choices against the ballot mode; see `checkBallot`.
  */
@@ -319,17 +322,15 @@ export async function buildBallot(p: BuildBallotParams): Promise<BuiltBallot> {
   const ballot = encryptWith(h, p.encryptionKey, fields, p.k, nf);
   const voteId = voteIdWith(h, processId, address, p.k);
   const packed = packBallotMode(p.ballotMode);
-  const inputsHash = h.multiHash(
-    ballotInputsHashPreimage({
-      processId,
-      ballotMode: p.ballotMode,
-      encryptionKey: p.encryptionKey,
-      address,
-      voteId,
-      ballot,
-      weight: p.weight,
-    })
-  );
+  const publicSignals = ballotPublicSignals({
+    processId,
+    ballotMode: p.ballotMode,
+    encryptionKey: p.encryptionKey,
+    address,
+    voteId,
+    ballot,
+    weight: p.weight,
+  });
   const dec = (x: bigint) => x.toString();
   const circuitInputs: BallotCircuitInputs = {
     fields: Array.from({ length: NUM_FIELDS }, (_, i) => dec(fields[i] ?? 0n)),
@@ -344,13 +345,6 @@ export async function buildBallot(p: BuildBallotParams): Promise<BuiltBallot> {
       [dec(c.c1.x), dec(c.c1.y)],
       [dec(c.c2.x), dec(c.c2.y)],
     ]),
-    inputs_hash: dec(inputsHash),
   };
-  return {
-    ballot,
-    voteId,
-    inputsHash,
-    circuitInputs,
-    publicSignals: [address, voteId, inputsHash],
-  };
+  return { ballot, voteId, circuitInputs, publicSignals };
 }
