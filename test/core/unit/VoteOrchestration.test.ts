@@ -30,7 +30,7 @@ import {
   bjjMulBase,
   isIdentityCiphertext,
   processIdToField,
-  recoverVoteIdSigner,
+  recoverVoteSigner,
   voteIdLeafHash,
   type BallotModeValues,
   type BjjPoint,
@@ -58,7 +58,7 @@ import { REAL_PROOF } from '../../helpers/realProof';
 
 const REGISTRY = OPTIMISM.processRegistry;
 const ORGANIZER = `0x${'0a'.repeat(20)}`;
-const PID = computeProcessId(ORGANIZER, '0x3c3e0777', 1);
+const PID = computeProcessId(ORGANIZER, '0xe8d4e286', 1);
 const NOW = 1_700_000_000;
 const URLS = ['https://a.sequencer.test', 'https://b.sequencer.test', 'https://c.sequencer.test'];
 const KEY_POINT = bjjMulBase(12345n);
@@ -369,7 +369,8 @@ describe('VoteOrchestrationService.submitVote', () => {
     expect(vote.ballot.slice(3).every(isIdentityCiphertext)).toBe(true);
     expect(vote.ballot.slice(0, 3).some(isIdentityCiphertext)).toBe(false);
     expect(vote.ballotProof.pi_a).toEqual(REAL_PROOF.proof.pi_a);
-    expect(recoverVoteIdSigner(vote.voteId, vote.signature)).toBe(VOTER.address);
+    expect(recoverVoteSigner(PID, vote.voteId, vote.ballot, vote.signature)).toBe(VOTER.address);
+    expect(result.signature).toBe(vote.signature);
     // The proof binds the registry's key and mode and the census weight: the
     // 71 signals the node derives from the vote and the process.
     expect(vote).not.toHaveProperty('ballotInputsHash');

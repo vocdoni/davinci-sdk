@@ -221,7 +221,7 @@
     },
     {
       "label": "no 0x",
-      "ok": true,
+      "ok": false,
       "ops": [
         {
           "op": "set",
@@ -353,7 +353,7 @@
     },
     {
       "label": "s without 0x",
-      "ok": true,
+      "ok": false,
       "ops": [
         {
           "op": "set",
@@ -697,6 +697,32 @@
       ]
     },
     {
+      "label": "vk hash without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "ballotVkHash"
+          ],
+          "value": "0303030303030303030303030303030303030303030303030303030303030303"
+        }
+      ]
+    },
+    {
+      "label": "registry without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "processRegistry"
+          ],
+          "value": "2222222222222222222222222222222222222222"
+        }
+      ]
+    },
+    {
       "label": "unknown field",
       "ok": true,
       "ops": [
@@ -851,6 +877,19 @@
             "address"
           ],
           "value": "0x06"
+        }
+      ]
+    },
+    {
+      "label": "address without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "0606060606060606060606060606060606060606"
         }
       ]
     },
@@ -1789,6 +1828,32 @@
       ]
     },
     {
+      "label": "state root without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "stateRoot"
+          ],
+          "value": "0404040404040404040404040404040404040404040404040404040404040404"
+        }
+      ]
+    },
+    {
+      "label": "id without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "id"
+          ],
+          "value": "03030303030303030303030303030303030303030303030303030303030303"
+        }
+      ]
+    },
+    {
       "label": "census root as decimal p",
       "ok": false,
       "ops": [
@@ -2070,6 +2135,33 @@
       ]
     },
     {
+      "label": "root without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "root"
+          ],
+          "value": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+        }
+      ]
+    },
+    {
+      "label": "sibling without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "siblings",
+            0
+          ],
+          "value": "0101010101010101010101010101010101010101010101010101010101010101"
+        }
+      ]
+    },
+    {
       "label": "33-byte sibling",
       "ok": false,
       "ops": [
@@ -2156,6 +2248,21 @@
             "blockNumber"
           ],
           "value": "48600120"
+        }
+      ]
+    },
+    {
+      "label": "tx hash without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "transitions",
+            0,
+            "txHash"
+          ],
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ]
     },
@@ -3027,7 +3134,7 @@
     },
     {
       "label": "vote id without 0x",
-      "ok": true,
+      "ok": false,
       "ops": [
         {
           "op": "set",
@@ -3079,7 +3186,7 @@
     },
     {
       "label": "process id without 0x",
-      "ok": true,
+      "ok": false,
       "ops": [
         {
           "op": "set",
@@ -3113,6 +3220,19 @@
             "address"
           ],
           "value": "0x11111111111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "label": "address without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "address"
+          ],
+          "value": "1111111111111111111111111111111111111111"
         }
       ]
     },
@@ -3152,6 +3272,19 @@
             "signature"
           ],
           "value": "0x07070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707"
+        }
+      ]
+    },
+    {
+      "label": "signature without 0x",
+      "ok": false,
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "signature"
+          ],
+          "value": "0707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707"
         }
       ]
     },

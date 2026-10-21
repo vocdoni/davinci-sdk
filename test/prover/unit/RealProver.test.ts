@@ -1,4 +1,9 @@
-import { addressToField, buildBallot } from '../../../src/crypto';
+import {
+  addressToField,
+  buildBallot,
+  checkBallot,
+  type BallotModeValues,
+} from '../../../src/crypto';
 import { bigIntToHex } from '../../../src/crypto/field';
 import { BALLOT_VK_HASH } from '../../../src/protocol';
 import { BallotProofError, BallotProver, verifyBallotProof } from '../../../src/prover';
@@ -40,8 +45,8 @@ describe.skipIf(!DIR)('BallotProver with the real circuit files', () => {
 
   it('loads the pinned files: sha256s and both verification keys match', async () => {
     const files = await prover.load(BALLOT_VK_HASH);
-    expect(files.zkey.length).toBe(32_649_564);
-    expect(files.wasm.length).toBe(2_428_512);
+    expect(files.zkey.length).toBe(32_428_263);
+    expect(files.wasm.length).toBe(2_430_452);
     expect(files.vkey.IC).toHaveLength(72);
   }, 60_000);
 
@@ -51,6 +56,43 @@ describe.skipIf(!DIR)('BallotProver with the real circuit files', () => {
     expect(publicSignals).toEqual(REAL_PROOF.public_signals);
     expect(await verifyBallotProof(REAL_PROOF.vk, proof, publicSignals)).toBe(true);
   }, 120_000);
+
+  // The budget comparators are 89 bits wide: with maxValueSum 0 every census
+  // weight is a budget, past 2^63 too. a5's process PB: 4 fields of 0..10,
+  // cost exponent 8.
+  const PB: BallotModeValues = {
+    numFields: 4,
+    groupSize: 4,
+    uniqueValues: false,
+    costExponent: 8,
+    maxValue: 10n,
+    minValue: 0n,
+    maxValueSum: 0n,
+    minValueSum: 0n,
+  };
+  it.each([
+    { label: '2^63, a zero ballot', weight: 1n << 63n, fields: [0, 0, 0, 0] },
+    { label: '2^88 - 1, a maximal ballot', weight: (1n << 88n) - 1n, fields: [10, 10, 10, 10] },
+  ])(
+    'proves the ballot of a weight of $label',
+    async ({ weight, fields }) => {
+      expect(checkBallot(fields, PB, weight)).toEqual({ valid: true });
+      const b = REAL_PROOF.ballot;
+      const built = await buildBallot({
+        processId: bigIntToHex(BigInt(b.process_id), 31),
+        address: `0x${b.address}`,
+        encryptionKey: { x: BigInt(b.pk.x), y: BigInt(b.pk.y) },
+        ballotMode: PB,
+        fields,
+        weight,
+        k: 123456789n << 130n,
+      });
+      const { proof, publicSignals } = await prover.prove(built, BALLOT_VK_HASH);
+      expect(publicSignals).toEqual(built.publicSignals.map(String));
+      expect(await verifyBallotProof(REAL_PROOF.vk, proof, publicSignals)).toBe(true);
+    },
+    120_000
+  );
 
   // snarkjs numbers the public signals by declaration order in the circuit;
   // these are the ones the SDK derives, for padded and full ballots alike.

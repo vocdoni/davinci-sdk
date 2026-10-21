@@ -1,13 +1,15 @@
 /**
  * @fileoverview The value checks of the davinci-circom `BallotProof(16)`
  * circuit (`CheckBallotMode` in `ballot_protocol.circom` and the 48-bit
- * message decomposition in `lib/elgamal.circom`), evaluated in the field like
- * the circuit, so a ballot the prover would reject fails before proving.
+ * message decomposition in `lib/elgamal.circom`), so a ballot the prover
+ * would reject fails before proving. The value bounds are evaluated in the
+ * field like the circuit; the cost is compared as an integer, which is what
+ * the circuit's 89-bit comparators do for every mode the registry accepts.
  */
 
 import { BallotModeValues, packBallotMode } from './ballot';
-import { BN254_FR, mod, modPow } from './field';
-import { MAX_VALUE_BITS, NUM_FIELDS, VALUE_SUM_BITS } from '../protocol/limits';
+import { BN254_FR, mod } from './field';
+import { CENSUS_WEIGHT_BITS, MAX_VALUE_BITS, NUM_FIELDS } from '../protocol/limits';
 
 /** Outcome of {@link checkBallot}. */
 export interface BallotCheckResult {
@@ -24,18 +26,15 @@ function lessThan(a: bigint, b: bigint, n: number): boolean | null {
   return (x >> BigInt(n)) & 1n ? false : true;
 }
 
-// circomlib LessEqThan(n): LessThan(n) of (a, b + 1).
-function lessEqThan(a: bigint, b: bigint, n: number): boolean | null {
-  return lessThan(a, mod(b + 1n, BN254_FR), n);
-}
-
 /**
  * Checks the voter's choices against the ballot mode and weight exactly as
  * the circuit constrains them: at most `numFields` values (missing ones are
  * zero), every value below 2^48, the active ones within
- * `[minValue, maxValue]`, pairwise distinct when `uniqueValues`, and
- * `sum(value^costExponent)` (in the field) within `[minValueSum, maxValueSum]`,
- * where a zero `maxValueSum` means the voter's weight.
+ * `[minValue, maxValue]`, pairwise distinct when `uniqueValues`, and the
+ * cost `sum(value^costExponent)` within `[minValueSum, maxValueSum]`, where a
+ * zero `maxValueSum` means the voter's weight (below 2^88). The registry
+ * keeps `numFields * maxValue^costExponent` below 2^63, so the circuit's
+ * field sum is the integer cost and its comparators are exact.
  *
  * @example
  * ```typescript
@@ -57,7 +56,9 @@ export function checkBallot(
   const nf = mode.numFields;
   if (nf > NUM_FIELDS) return fail(`numFields ${nf} exceeds ${NUM_FIELDS}`);
   if (fields.length > nf) return fail(`${fields.length} values for ${nf} fields`);
-  if (weight < 0n || weight >= BN254_FR) return fail('weight is not a field element');
+  if (weight < 0n || weight >> BigInt(CENSUS_WEIGHT_BITS) !== 0n) {
+    return fail(`weight does not fit in ${CENSUS_WEIGHT_BITS} bits`);
+  }
 
   const values: bigint[] = [];
   for (let i = 0; i < NUM_FIELDS; i++) {
@@ -86,14 +87,14 @@ export function checkBallot(
   }
 
   const exp = BigInt(mode.costExponent);
-  const cost = active.reduce((acc, v) => mod(acc + modPow(v, exp, BN254_FR), BN254_FR), 0n);
+  const cost = active.reduce((acc, v) => acc + v ** exp, 0n);
   const max = mode.maxValueSum === 0n ? weight : mode.maxValueSum;
-  const underMax = lessEqThan(cost, max, VALUE_SUM_BITS);
-  if (underMax !== true) {
+  if (cost > max) {
     const bound = mode.maxValueSum === 0n ? `the weight ${weight}` : `maxValueSum ${max}`;
     return fail(`total cost ${cost} exceeds ${bound}`);
   }
-  const overMin = lessEqThan(mode.minValueSum, cost, VALUE_SUM_BITS);
-  if (overMin !== true) return fail(`total cost ${cost} is below minValueSum ${mode.minValueSum}`);
+  if (cost < mode.minValueSum) {
+    return fail(`total cost ${cost} is below minValueSum ${mode.minValueSum}`);
+  }
   return { valid: true };
 }

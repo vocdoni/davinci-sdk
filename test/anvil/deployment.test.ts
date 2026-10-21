@@ -19,6 +19,13 @@ import {
 
 const ACCOUNT = 1;
 
+// The pins of SDK 5.1 (davinci-zkvm v0.4.1, davinci-circom v1.2.0): the release before this one.
+const V51_PINS = {
+  batchProgramVK: '0x1e4a74a1c6fb1cd1874d80895e1e075930837955efb4a135539016f7cdead2a8',
+  resultsProgramVK: '0xde55d751582e510bf378d4eec0d98ee3fa5817a50b77bc0e5ce560035e29e4e9',
+  ballotVKHash: '0x7caffddcd7ea38439cbb45789b810d8eafceca65cff93dbeaae409b2bf64e219',
+} as const;
+
 describe('the anvil deployment', () => {
   let node: MockNode;
 
@@ -102,6 +109,30 @@ describe('the anvil deployment', () => {
       await expect(connect(ACCOUNT, other)).rejects.toMatchObject({ field: 'processRegistry' });
     } finally {
       await other.close();
+    }
+  });
+
+  it('does not mix with the 5.1 release in either direction', async () => {
+    // SDK 5.1's check against this deployment.
+    const registry = registryService(chainProvider());
+    await expect(registry.verifyDeployment(V51_PINS)).rejects.toMatchObject({
+      name: 'DeploymentPinError',
+      field: 'batchProgramVK',
+    });
+    // This SDK against a 5.1 node.
+    const old = await startNode();
+    try {
+      old.info = {
+        ballotVkHash: V51_PINS.ballotVKHash,
+        batchProgramVk: V51_PINS.batchProgramVK,
+        resultsProgramVk: V51_PINS.resultsProgramVK,
+      };
+      await expect(connect(ACCOUNT, old)).rejects.toMatchObject({
+        name: 'NodeMismatchError',
+        field: 'ballotVkHash',
+      });
+    } finally {
+      await old.close();
     }
   });
 

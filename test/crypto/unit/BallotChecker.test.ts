@@ -1,4 +1,4 @@
-import { BN254_FR, BallotModeValues, checkBallot } from '../../../src/crypto';
+import { BallotModeValues, checkBallot } from '../../../src/crypto';
 
 // The CheckBallotMode table of davinci-circom test/ballot_protocol_test.go (a39a9f9), run through
 // the 16-field checker. As in that test, groupSize equals numFields and a missing weight is 0.
@@ -300,10 +300,10 @@ describe('ballot checker', () => {
     );
   });
 
-  it('sums powers in the field, like the circuit', () => {
-    // 2^47 to the 8th wraps around p; the circuit compares the reduced sum.
+  it('compares the integer cost, which the registry keeps below 2^63', () => {
+    // (2^47)^8 is past p: the registry refuses the mode (numFields * maxValue^costExponent
+    // >= 2^63), and the checker compares the integer, never a reduced sum.
     const v = 1n << 47n;
-    const cost = v ** 8n % BN254_FR;
     const m = {
       ...approval16,
       numFields: 1,
@@ -311,15 +311,33 @@ describe('ballot checker', () => {
       maxValue: v,
       maxValueSum: (1n << 63n) - 1n,
     };
-    const r = checkBallot([v], m, 0n);
-    expect(r.valid).toBe(cost < 1n << 63n);
-    if (!r.valid) expect(r.error).toBe(`total cost ${cost} exceeds maxValueSum ${m.maxValueSum}`);
+    expect(checkBallot([v], m, 0n)).toEqual({
+      valid: false,
+      error: `total cost ${v ** 8n} exceeds maxValueSum ${m.maxValueSum}`,
+    });
+    // The largest cost a mode the registry takes can reach: 16 * (2^48 - 1).
+    const top = (1n << 48n) - 1n;
+    const wide = { ...approval16, maxValue: top, maxValueSum: 16n * top };
+    expect(checkBallot(Array<bigint>(16).fill(top), wide, 0n).valid).toBe(true);
   });
 
-  it('cannot prove a weight bound that does not fit the 63-bit comparator', () => {
-    const m = { ...approval16, numFields: 1, maxValueSum: 0n };
-    // value_sum + 2^63 - (weight + 1) goes negative: the comparator has no witness.
-    expect(checkBallot([1], m, 1n << 64n).valid).toBe(false);
-    expect(checkBallot([1], m, (1n << 63n) - 1n).valid).toBe(true);
+  it('compares the cost with any census weight when the weight is the budget', () => {
+    // a5's process PB: 4 fields of 0..10, cost exponent 8, maxValueSum 0.
+    const m = {
+      ...approval16,
+      numFields: 4,
+      groupSize: 4,
+      maxValue: 10n,
+      costExponent: 8,
+      maxValueSum: 0n,
+    };
+    // The 89-bit comparator is exact for every weight below 2^88.
+    expect(checkBallot([0, 0, 0, 0], m, 1n << 63n).valid).toBe(true);
+    expect(checkBallot([10, 0, 0, 0], m, 1n << 63n).valid).toBe(true);
+    expect(checkBallot([10, 10, 10, 10], m, (1n << 88n) - 1n).valid).toBe(true);
+    expect(checkBallot([1], m, 1n << 64n).valid).toBe(true);
+    expect(checkBallot([2, 0, 0, 0], m, 255n).error).toBe('total cost 256 exceeds the weight 255');
+    // A census weight is below 2^88.
+    expect(checkBallot([0, 0, 0, 0], m, 1n << 88n).error).toBe('weight does not fit in 88 bits');
   });
 });

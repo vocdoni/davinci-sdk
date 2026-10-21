@@ -122,7 +122,7 @@ await sdk.updateMetadata(processId, {
 await sdk.updateMetadata(processId, { uri: 'https://files.example.org/budget-2.json' });
 ```
 
-It takes a config, an `ElectionMetadata`, exact bytes (`Uint8Array`) or `{ uri, hash? }`. Only the organizer, while the process is READY or PAUSED and before its end; readers see the new version and the registry emits `ProcessMetadataUpdated`.
+It takes a config, an `ElectionMetadata`, exact bytes (`Uint8Array`) or `{ uri, hash? }`. Only the organizer, while the process is READY or PAUSED and before its start: nodes take votes from the start, so the questions a voter answers never change under them. A process created without a `startDate` starts in its creation block and keeps the document it was created with. Readers see the new version and the registry emits `ProcessMetadataUpdated`; from the start on the refusal is `ProcessMetadataError` with `revertName` `InvalidTimeBounds`.
 
 ## Cross-references
 

@@ -1,21 +1,23 @@
 # Sequencer client vectors
 
-From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer): `wire.json`
-and `census-files.json` at commit `b109a4d9c47451455b54c274aed40827eff38ad0` (branch
-`feat/protocol-v5`: census values `0x` and 64 hex digits, no `ballotInputsHash`, Keccak
-census roots), next to davinci-zkvm `867316bb18e59be3290682719795fb8d41b638b7`;
-`tracker.json` at `cb2d39c91d9b3ed92216dedef7a4ba55b18859a5`, which `tracker-gen`
-reproduces byte for byte at `b109a4d`; `networks.rs` at d1c534c (feat/op-core),
-re-copied at the OP redeploy (Merge and release).
+From [davinci-sequencer](https://github.com/vocdoni/davinci-sequencer): `wire.json` at
+commit `4702cf7e6c41a2868abb84ead13dcfe59ec80672` (branch `feat/v5.1`: every byte string `0x` hex), next to
+davinci-zkvm `4b7b6e8ca5be1ebdbe0742623dd9411f392de830`; `census-files.json` at commit
+`b109a4d9c47451455b54c274aed40827eff38ad0` (branch `feat/protocol-v5`: census values `0x`
+and 64 hex digits, no `ballotInputsHash`, Keccak census roots), next to davinci-zkvm
+`867316bb18e59be3290682719795fb8d41b638b7`;
+`tracker.json` at `e9f941ba998e72c1cd07febfe8cf0a83bb8c648b` (branch `feat/v5.1`); `networks.rs` at `4ae0e5e75e90a3f4ebd821b0b211365741e3ed3a`
+(branch `feat/v5.1`: the protocol v5.1 OP Mainnet registry).
 
 - `networks.rs`: verbatim copy of `client/src/networks.rs`, the known deployments,
-  from branch feat/op-core (commit `d1c534c`, OP Mainnet in L1-blob mode).
+  from branch feat/v5.1 (commit `4ae0e5e`, OP Mainnet in L1-blob mode).
   `test/protocol/unit/Protocol.test.ts` checks `src/networks.ts` against it.
 - `tracker.json`: tracker proofs (arbo inclusion proofs of vote-id leaves in a
   SHA-256, 64-level state tree that also holds config and ballot leaves), as
   `GET /votes/{pid}/voteId/{vid}/proof` serves them, each with the result of the
-  client's `verify_tracker` against an on-chain root. It holds 25 honest proofs and
-  26 tampered or malformed ones. `test/crypto/unit/Tracker.test.ts` requires the
+  client's `verify_tracker` against an on-chain root. It holds 26 honest proofs and
+  28 tampered or malformed ones; one honest proof is a vote id at depth 64, next to
+  the ballot slot it shares 63 key bits with (64 siblings). `test/crypto/unit/Tracker.test.ts` requires the
   same verdict for every case.
 - `tracker-gen/`: the program that wrote `tracker.json`. It builds the trees with
   the sequencer's `arbo` crate and serializes with `davinci_client::api::TrackerProof`.
@@ -54,9 +56,9 @@ re-copied at the OP redeploy (Merge and release).
   census files.
 
 ```
-c921b0b1b30846080bb08f48d3b19d275dd0622a1380eee977981e0818ec6540  networks.rs
-6a6d1f8cb0400f01fb53019a7327661ecee8c228134e9fc45dbba3cc682633e0  tracker.json
-c6c690d5a277d8914223b3466016cefe1d2c9275b3c17d3c3cf72afb1b339c9e  wire.json
+24ff0632e1fc28cf6abb97357d03176cb96191a205d71159723b72ee1b64ad5d  networks.rs
+c88cad4f050f5255b659eee02017e3d2b18cd5301cbe7a355189342f188c002c  tracker.json
+3c38c892879d3a46b36468d34e572868955f9da0074f64df1e573f94268454ca  wire.json
 b293e19055b27ae24d4a536888fa4d2e6c6812a65d560a8d34513f62402bb068  census-files.json
 9ec77a356a33c245334516f3e5521c02849a5bb42e13a7f2139a183cef20ec9e  demo/1-community-project/metadata.json
 0a3fd057ef18c06651369065a661852a96d4b09816af29205f7a1fe8fd662e90  demo/3-budget-2027/census-2.json

@@ -21,8 +21,8 @@ import {
   decodeDavinciError,
 } from '../../../src/contracts/abis';
 
-// Drift guard for the vendored ABIs (davinci-contracts bdccdd6, feat/op-core with
-// the ZisK 1.3.2 stack and the L1-blob mode; the registry ABI is equal at fd79251 minus docs; its ICouncilManager is
+// Drift guard for the vendored ABIs (davinci-contracts 00e5e8f: v0.0.54, the ZisK 1.3.2 stack, the L1-blob
+// mode and the ballot-mode cost rule; the registry ABI is bdccdd6's plus InvalidBallotCost; its ICouncilManager is
 // davinci-dkg-council's v2 adapter surface, verbatim). Every value below is written out by hand from that commit's
 // contracts; a sync that moves any of them must be a deliberate change here
 // too.
@@ -133,7 +133,7 @@ const REGISTRY_EVENTS: Record<string, string> = {
     '0xdca6075f07367349a836825d3ee7c35c204d2e727ae81a5b7a48aca95b9c270b',
 };
 
-// All 64 registry errors, by name.
+// All 65 registry errors, by name.
 const REGISTRY_ERRORS: Record<string, string> = {
   BallotModeMaxValueSumTooLarge: '0x271fb805',
   BallotModeMaxValueTooLarge: '0x481eb79f',
@@ -149,6 +149,7 @@ const REGISTRY_ERRORS: Record<string, string> = {
   EmptyTransition: '0x7f19b8aa',
   GraceOpen: '0xc23ee5e6',
   InvalidAccumulator: '0xa88d6454',
+  InvalidBallotCost: '0xc7206324',
   InvalidBlobCommitmentLength: '0xe2c85a2c',
   InvalidBlobOpening: '0x8308e1e9',
   InvalidBlobsDigest: '0x797265c8',
@@ -327,7 +328,7 @@ describe('vendored contract ABIs', () => {
       commit: string;
       files: Record<string, string>;
     };
-    expect(source.commit).toBe('bdccdd671758ab59e833a7fef90fbe0ebc2509db');
+    expect(source.commit).toBe('00e5e8f45f1b9a48306356615030152d7c8c65f6');
     expect(CONTRACTS_ABI_COMMIT).toBe(source.commit);
     expect(Object.keys(source.files).sort()).toEqual([
       'CouncilAdapter.json',

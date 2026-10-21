@@ -1,8 +1,9 @@
 /**
  * @fileoverview secp256k1 signatures of the protocol, as davinci-zkvm
  * `rust-sdk/src/census.rs` computes and checks them: the CSP census
- * attestation and the voter's signature over its vote id. Both are Ethereum
- * personal-sign (EIP-191) signatures, so an ethers `Signer` produces them.
+ * attestation and the voter's signature over its vote envelope (process id,
+ * vote id and ballot). Both are Ethereum personal-sign (EIP-191) signatures,
+ * so an ethers `Signer` produces them.
  */
 
 import {
@@ -11,10 +12,14 @@ import {
   computeAddress,
   concat,
   getAddress,
+  getBytes,
   hashMessage,
   hexlify,
+  keccak256,
+  toUtf8Bytes,
   type Signer,
 } from 'ethers';
+import { type Ballot, ballotLeafHash } from './ballot';
 import { bigIntToBytes, bigIntToHex, bytesToBigInt, parseHexBytes } from './field';
 import { slotFromCspIndex } from './census';
 import { CENSUS_WEIGHT_BITS, VOTE_ID_MIN } from '../protocol/limits';
@@ -76,15 +81,38 @@ export function cspAttestationHash(
   return hashMessage(cspAttestationMessage(processId, address, weight, index));
 }
 
-/** The 32-byte message a voter signs for its vote id: 24 zero bytes and the id's BE8. */
-export function voteIdSignatureMessage(voteId: bigint): Uint8Array {
+// The 87-byte vote envelope: `"davinci-vote-v1" || pid_BE32 || voteId_BE8 ||
+// ballotLeafHash(ballot)`, the 31-byte process id after one zero byte as in
+// the CSP payload (davinci-zkvm `census::vote_envelope_digest`).
+const VOTE_ENVELOPE_TAG = toUtf8Bytes('davinci-vote-v1');
+
+function voteEnvelope(processId: string, voteId: bigint, ballot: Ballot): Uint8Array {
   if (voteId < 0n || voteId >= 1n << 64n) throw new RangeError('vote id does not fit in a u64');
-  return bigIntToBytes(voteId, 32);
+  const out = new Uint8Array(87);
+  out.set(VOTE_ENVELOPE_TAG, 0);
+  out.set(parseHexBytes(processId, 31, 'process id'), 16);
+  out.set(bigIntToBytes(voteId, 8), 47);
+  out.set(ballotLeafHash(ballot), 55);
+  return out;
 }
 
-/** The personal-sign digest of a vote id. */
-export function voteIdSignatureHash(voteId: bigint): string {
-  return hashMessage(voteIdSignatureMessage(voteId));
+/**
+ * The digest a voter signs for a vote: `keccak256` of the 87-byte envelope
+ * `"davinci-vote-v1" || processId_BE32 || voteId_BE8 || ballotLeafHash(ballot)`
+ * (davinci-zkvm `census::vote_envelope_digest`). It binds the process, the
+ * vote id and the 16 ciphertexts as sent, so a signature is good for that
+ * vote only. The voter personal-signs these 32 bytes; a wallet shows them as
+ * an opaque hash.
+ *
+ * @param processId - `0x` + 62 hex digits
+ * @param voteId - The ballot's vote id
+ * @param ballot - The 16 ciphertexts the vote carries
+ * @returns `0x` + 64 hex digits
+ * @throws RangeError for a vote id outside u64 or a ballot of other than 16
+ *   canonical ciphertexts; TypeError for a malformed process id
+ */
+export function voteEnvelopeDigest(processId: string, voteId: bigint, ballot: Ballot): string {
+  return keccak256(voteEnvelope(processId, voteId, ballot));
 }
 
 // A signer's 65-byte signature as low-S (r, s, recid).
@@ -169,21 +197,41 @@ export function recoverCspSigner(processId: string, a: CspAttestation): string {
 }
 
 /**
- * The voter's signature over its vote id (personal-sign of
- * {@link voteIdSignatureMessage}), low-S with `v` as the recovery id.
+ * The voter's signature over its vote: personal-sign of
+ * {@link voteEnvelopeDigest}, low-S with `v` as the recovery id (the vote
+ * request's `signature`, once encoded). With a `Wallet` it is deterministic
+ * (RFC 6979).
+ *
+ * @throws RangeError for a vote id below 2^63; Error when the signature does
+ *   not recover to the signer's address
  */
-export async function signVoteId(voter: Signer, voteId: bigint): Promise<EcdsaSignature> {
+export async function signVote(
+  voter: Signer,
+  processId: string,
+  voteId: bigint,
+  ballot: Ballot
+): Promise<EcdsaSignature> {
   if (voteId < VOTE_ID_MIN) throw new RangeError('vote id below 2^63');
-  return signChecked(voter, voteIdSignatureMessage(voteId));
+  return signChecked(voter, getBytes(voteEnvelopeDigest(processId, voteId, ballot)));
 }
 
 /**
- * Signer address of a vote-id signature. Accepts `v` in {0, 1, 27, 28} like
- * the sequencer, and rejects high-S.
+ * Signer address of a vote signature (see {@link signVote}), as the
+ * sequencer and the batch guest recover it. Accepts `v` in {0, 1, 27, 28}
+ * and rejects high-S and out-of-range scalars.
+ *
+ * @throws RangeError or TypeError for a malformed signature, vote id,
+ *   process id or ballot
  */
-export function recoverVoteIdSigner(voteId: bigint, sig: EcdsaSignature | string): string {
+export function recoverVoteSigner(
+  processId: string,
+  voteId: bigint,
+  ballot: Ballot,
+  sig: EcdsaSignature | string
+): string {
   const { r, s, v } = typeof sig === 'string' ? decodeEcdsaSignature(sig) : sig;
-  return recover(voteIdSignatureHash(voteId), parseSignature(r, s, v));
+  const digest = getBytes(voteEnvelopeDigest(processId, voteId, ballot));
+  return recover(hashMessage(digest), parseSignature(r, s, v));
 }
 
 /** `r || s || v` as 65 bytes of `0x` hex, `v` the recovery id (the vote request's `signature`). */

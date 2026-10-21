@@ -13,7 +13,7 @@ For the index, see https://raw.githubusercontent.com/vocdoni/davinci-sdk/main/ll
 
 # Davinci SDK (`@vocdoni/davinci-sdk`)
 
-The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet pre-production deployment is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign its vote id and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
+The TypeScript SDK for **DAVINCI**, Vocdoni's private, verifiable voting protocol. An election lives in a `ProcessRegistry` contract (the OP Mainnet pre-production deployment is built in). Voters encrypt their ballot under the election key, prove it valid with a Groth16 proof they compute themselves, sign the vote and send it to a **sequencer node**. Nodes batch ballots, re-encrypt them, prove each batch in a zkVM and settle it on the registry with the data in EIP-4844 blobs. After the end and a short **grace window**, the tally is decrypted by whoever holds the election key (a node, or a committee: the DKG key network or a Council) and stored on-chain.
 
 One facade, **`DavinciSDK`**, does all of it. The layers below it (`ProcessRegistryService`, the node clients, the census classes, the crypto primitives, the prover) are exported too, for the cases the facade does not cover.
 
@@ -268,7 +268,7 @@ const local = new DavinciSDK({
 
 ### The OP Mainnet deployment
 
-`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI pre-production deployment on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.2.0); a public ceremony replaces it before public production. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI pre-production deployment on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.3.0); a public ceremony replaces it before public production. The committees' circuits use development trusted setups during the beta.
 
 Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 
@@ -492,7 +492,7 @@ Each control reads the process and the chain clock first and refuses what the re
 | `setProcessGrace(pid, seconds)` | READY or PAUSED, before the end, within `graceFloor..graceCeil` | the grace window | `ProcessGraceError` |
 | `setProcessMaxVoters(pid, n)` | READY or PAUSED, before the end, at least the votes counted, within the result cap | the voter cap | `ProcessMaxVotersError` |
 | `updateCensus(pid, census)` | origin 2 only, READY or PAUSED, before the end | a new census version (`references/census.md`) | `ProcessCensusError`, `CensusNotUpdatable` |
-| `updateMetadata(pid, metadata)` | READY or PAUSED, before the end | a new metadata document (`references/metadata.md`) | `ProcessMetadataError` |
+| `updateMetadata(pid, metadata)` | READY or PAUSED, before the start | a new metadata document (`references/metadata.md`) | `ProcessMetadataError` |
 | `revealProcessKey(pid, secret)` | `dkg-locked` processes, any time, anyone with the secret | the committee may decrypt (`references/key-modes.md`) | `ProcessKeyRevealError` |
 
 ```ts
@@ -1149,7 +1149,7 @@ await sdk.updateMetadata(processId, {
 await sdk.updateMetadata(processId, { uri: 'https://files.example.org/budget-2.json' });
 ```
 
-It takes a config, an `ElectionMetadata`, exact bytes (`Uint8Array`) or `{ uri, hash? }`. Only the organizer, while the process is READY or PAUSED and before its end; readers see the new version and the registry emits `ProcessMetadataUpdated`.
+It takes a config, an `ElectionMetadata`, exact bytes (`Uint8Array`) or `{ uri, hash? }`. Only the organizer, while the process is READY or PAUSED and before its start: nodes take votes from the start, so the questions a voter answers never change under them. A process created without a `startDate` starts in its creation block and keeps the document it was created with. Readers see the new version and the registry emits `ProcessMetadataUpdated`; from the start on the refusal is `ProcessMetadataError` with `revertName` `InvalidTimeBounds`.
 
 ## Cross-references
 
@@ -1163,7 +1163,7 @@ It takes a config, an `ElectionMetadata`, exact bytes (`Uint8Array`) or `{ uri, 
 
 # `references/voting.md` — Casting a vote
 
-Companion to the [[davinci-sdk]] skill. The facade hides the cryptography: you give `choices`, and `submitVote` reads the election from the registry, gets the voter's census witness, builds the 16-field encrypted ballot, proves it, signs its vote id and sends it to a node. None of it needs a provider: a bare `Wallet` votes.
+Companion to the [[davinci-sdk]] skill. The facade hides the cryptography: you give `choices`, and `submitVote` reads the election from the registry, gets the voter's census witness, builds the 16-field encrypted ballot, proves it, signs the vote and sends it to a node. None of it needs a provider: a bare `Wallet` votes.
 
 ## Act as the voter
 
@@ -1193,7 +1193,7 @@ What happens:
 
 1. **The election, from the registry** (never from a node): it must take votes, from its start to its end, READY or PAUSED. A paused process's votes settle once it resumes. The first node of the voter's order that serves the process is cross-checked against the registry (key, ballot mode, census).
 2. **The census witness:** the voter's weight and proof from the nodes (origins 1 and 2), the census contract (origin 3) or `censusProviders.csp` (origin 4). See `references/census.md`.
-3. **The ballot:** the choices are checked against the ballot mode, the 16-field ballot is encrypted under the registry's key (unused fields hold the identity), proved with the circuit files the registry pins, and its vote id signed.
+3. **The ballot:** the choices are checked against the ballot mode, the 16-field ballot is encrypted under the registry's key (unused fields hold the identity), proved with the circuit files the registry pins, and the vote signed (the signature covers the process id, the vote id and the ciphertexts: `voteEnvelopeDigest`).
 4. **The node:** the voter's own node (`references/nodes.md`), with failover only when it is safe.
 
 ### `VoteConfig` and `VoteResult`
@@ -1680,7 +1680,8 @@ A ballot `v[0..numFields)` is valid when every `minValue <= v[i] <= maxValue`, t
 
 - `numFields` outside 1..16 (`InvalidMaxCount`), `groupSize` above `numFields` (`InvalidGroupSize`);
 - a value bound of 2^48 or more, a sum bound of 2^63 or more (`BallotModeMaxValueTooLarge`, …);
-- `minValue > maxValue` (`InvalidMaxMinValueBounds`), `minValueSum > maxValueSum` (`InvalidValueSumBounds`).
+- `minValue > maxValue` (`InvalidMaxMinValueBounds`), `minValueSum > maxValueSum` (`InvalidValueSumBounds`);
+- `costExponent` 0, or `numFields * maxValue^costExponent` of 2^63 or more (`InvalidBallotCost`): the circuit sums the costs in its field and compares them in 89 bits, which is exact only below that bound. A quadratic `budget` is its `maxValue`: with 16 fields it is at most 759,250,124.
 
 The registry also caps `maxValue * maxVoters` at 1e12 (`RESULT_CAP`): a mode with large values limits `maxVoters`.
 
@@ -1754,7 +1755,7 @@ const weighted: BallotMode = {
 ```
 
 - Size `maxValue` to the largest weight; with the result cap, `maxVoters` must stay at most `1e12 / maxValue`.
-- The circuit compares the sum with the weight in 63 bits: a weight of 2^63 or more cannot vote. `createProcess` refuses such a Merkle census object.
+- Every census weight works as a budget (weights are below 2^88): the circuit compares the cost with the weight exactly.
 - `sdk.getAddressWeight(processId, address)` tells a voter its budget.
 
 With any other `maxValueSum`, every voter has the same bounds whatever its weight.
@@ -1863,7 +1864,7 @@ const status = await cluster.getVoteStatus(processId, voteId); // the vote's nod
 
 ## Wire format
 
-On the wire, field names are camelCase, field elements decimal strings, census values (roots, leaves, siblings) `0x` and exactly 64 hex digits, bytes `0x` hex, points twisted Edwards `{ x, y }`, and a ballot exactly 16 ciphertexts. The node decodes strictly: no unknown fields, exact lengths, every value in range. The SDK's types hold bigints and checked points; `encodeVoteRequest`/`decodeVoteRequest` and `encodeCensusFile`/`decodeCensusFile` convert. A vote body carries `weight` (decimal), the ballot proof without its public signals (the node derives all 71 from the vote and the process) and, for a CSP census, `censusProof: { type: 'csp', r, s, recid, index }`; for a Merkle census the node derives the proof and the SDK sends none. A body with a field the node does not know, such as an SDK 4 vote's `ballotInputsHash`, is refused with 40001.
+On the wire, field names are camelCase, field elements decimal strings, census values (roots, leaves, siblings) `0x` and exactly 64 hex digits, bytes `0x` hex, points twisted Edwards `{ x, y }`, and a ballot exactly 16 ciphertexts. The node decodes strictly: no unknown fields, exact lengths, `0x` on every byte string, every value in range; the SDK's decoders read node answers by the same rules. The SDK's types hold bigints and checked points; `encodeVoteRequest`/`decodeVoteRequest` and `encodeCensusFile`/`decodeCensusFile` convert. A vote body carries `weight` (decimal), the ballot proof without its public signals (the node derives all 71 from the vote and the process) and, for a CSP census, `censusProof: { type: 'csp', r, s, recid, index }`; for a Merkle census the node derives the proof and the SDK sends none. A body with a field the node does not know, such as an SDK 4 vote's `ballotInputsHash`, is refused with 40001.
 
 ## Errors
 
@@ -2117,7 +2118,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | `InvalidDuration` | an end not after the start (a non-positive `duration` is refused without a name) |
 | `InvalidMaxVoters` | `maxVoters` not a positive integer |
 | `MaxPossibleResultCapExceeded` | `maxValue * maxVoters` above 1e12 |
-| `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63) |
+| `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, `InvalidBallotCost`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63, a cost exponent of at least 1 and `numFields * maxValue^costExponent` below 2^63) |
 | `InvalidGrace` (`ProcessGraceError`) | `grace` outside `graceFloor..graceCeil` |
 | `DkgDisabledError` (`revertName` `DKGDisabled`) | a DKG key mode on a registry without DKG |
 | `CouncilDisabledError` | `keyMode: 'council'` on a registry without a Council manager, or deployed before the mode |
@@ -2140,7 +2141,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | --- | --- |
 | `Unauthorized` | not the process's organizer |
 | `InvalidStatus` | the status does not allow it (a second pause, a control on an ENDED process, …) |
-| `InvalidTimeBounds` | outside the control's time window: END before the start (cancel instead), a change at or after the end |
+| `InvalidTimeBounds` | outside the control's time window: END before the start (cancel instead), a metadata change at or after the start, any other change at or after the end |
 | `InvalidDuration` | an extension of 0, or a shortened end inside the notice (`closeProcessIn` adds slack for this) |
 | `InvalidGrace` | outside `graceFloor..graceCeil` |
 | `InvalidMaxVoters`, `MaxPossibleResultCapExceeded` | below the votes counted, or over the result cap |
@@ -2223,7 +2224,7 @@ Companion to the [[davinci-sdk]] skill. The protocol under the SDK: the actors, 
 
 ## One-paragraph intuition
 
-An election is a process in the `ProcessRegistry` contract, which is the source of truth. A voter encrypts a ballot under the election key, proves with a zk-SNARK that it follows the ballot mode, signs its vote id and sends it to a sequencer node. Nodes collect ballots, re-encrypt them, and prove each batch in a zkVM guest that checks every ballot proof, the census and the state update; the registry verifies that proof and records the new state root, with the batch's data in EIP-4844 blobs so anyone can rebuild the state. The tally accumulates encrypted. After the voting period and a short grace window, the holder of the election key decrypts only the final tally and proves the decryption; the registry stores it.
+An election is a process in the `ProcessRegistry` contract, which is the source of truth. A voter encrypts a ballot under the election key, proves with a zk-SNARK that it follows the ballot mode, signs the vote and sends it to a sequencer node. Nodes collect ballots, re-encrypt them, and prove each batch in a zkVM guest that checks every ballot proof, the census and the state update; the registry verifies that proof and records the new state root, with the batch's data in EIP-4844 blobs so anyone can rebuild the state. The tally accumulates encrypted. After the voting period and a short grace window, the holder of the election key decrypts only the final tally and proves the decryption; the registry stores it.
 
 ## Actors
 
@@ -2248,7 +2249,8 @@ An election is a process in the `ProcessRegistry` contract, which is the source 
 - **16 fields**, always. A ballot is 16 ElGamal ciphertexts on BabyJubJub (circomlib twisted Edwards form, the election key's curve). Fields past the ballot mode's `numFields` hold the identity ciphertext, which the guest checks before skipping them.
 - **Ballot proof.** A Groth16 proof (BN254) of the `BallotProof(16)` circuit shows the plaintexts follow the ballot mode and the voter's weight, and that the ciphertexts and the vote id were derived from the voter's secret `k`. Its 71 public signals are, in order, the voter's address, the vote id, the process id, the packed ballot mode, the election key's x and y, the weight, then `c1.x, c1.y, c2.x, c2.y` of each of the 16 fields (`ballotPublicSignals`). A vote does not carry them: the node and the guest derive them from the vote, the census and the state tree.
 - **Field nonces.** Field `i` (from 0) is encrypted under `k_{i+1}`, with `k_1 = Poseidon(k)` and `k_{i+1} = Poseidon(k_i)`: the chain depends on `k` alone, not on the process, the voter or the key. Two ballots with one `k` share every `C1 = k_{i+1}·G`, and under one election key `C2 − C2' = (m − m')·G`, a small discrete log that gives anyone the difference of the choices. A `k` is therefore used for one ballot only: never for another voter, another process or a revote.
-- **Vote id.** `2^63 + (Poseidon(processId, address, k) mod 2^63)`. The voter signs it (secp256k1, personal-sign); the guest checks the signature against the address. It is no guard against reusing `k`: the same `k` in another process or for another voter gives another vote id, which nothing refuses. Only the same voter's `k` in the same process repeats a vote id, which nodes refuse as a duplicate.
+- **Vote id.** `2^63 + (Poseidon(processId, address, k) mod 2^63)`. It is no guard against reusing `k`: the same `k` in another process or for another voter gives another vote id, which nothing refuses. Only the same voter's `k` in the same process repeats a vote id, which nodes refuse as a duplicate.
+- **Vote signature.** The voter personal-signs (secp256k1) `voteEnvelopeDigest(processId, voteId, ballot)`: `keccak256("davinci-vote-v1" ‖ processId ‖ voteId ‖ ballotLeafHash(ballot))`, with the process id as 32 bytes, the vote id as 8, and `ballotLeafHash` the sha256 of the 64 ballot coordinates. The node and the guest recover the address from it, so a signature is good for that ballot in that process only. A wallet shows the 32 bytes as an opaque hash: it cannot display what it authorizes.
 - **Circuit files.** The wasm, the proving key and the verification key are keyed by the ballot VK hash the registry pins. The SDK checks each file's sha256 and that both verification keys (the file and the one inside the proving key) hash to the registry's value; the guest checks the same hash against the state tree.
 
 ## Censuses and slots

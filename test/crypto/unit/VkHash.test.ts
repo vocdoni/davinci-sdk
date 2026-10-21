@@ -9,13 +9,13 @@ import { loadFixture } from '../../helpers/fixtures';
 
 // Vectors: davinci-zkvm rust-sdk/testdata/{hashes,real_proof,genesis}.json and
 // rust-sdk/assets/ballot_proof_vkey.json (davinci-circom artifacts/ballot_proof_vkey.json at
-// v1.2.0, the pre-production ceremony key whose wire hash is artifacts/VK_HASH).
+// v1.3.0, the pre-production ceremony key whose wire hash is artifacts/VK_HASH).
 interface Hashes {
   ballot_vk_leaf: string;
 }
 
-// davinci-circom v1.2.0 artifacts/VK_HASH.
-const CEREMONY_VK_HASH = '0x7caffddcd7ea38439cbb45789b810d8eafceca65cff93dbeaae409b2bf64e219';
+// davinci-circom v1.3.0 artifacts/VK_HASH.
+const CEREMONY_VK_HASH = '0x67e8e6b47ea32cf144d6e72886f02b95ed068b157f9d4ccc8e97f335858e4963';
 
 const clone = (vk: SnarkjsVerificationKey) =>
   JSON.parse(JSON.stringify(vk)) as SnarkjsVerificationKey;

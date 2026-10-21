@@ -1,6 +1,6 @@
 # `references/voting.md` — Casting a vote
 
-Companion to the [[davinci-sdk]] skill. The facade hides the cryptography: you give `choices`, and `submitVote` reads the election from the registry, gets the voter's census witness, builds the 16-field encrypted ballot, proves it, signs its vote id and sends it to a node. None of it needs a provider: a bare `Wallet` votes.
+Companion to the [[davinci-sdk]] skill. The facade hides the cryptography: you give `choices`, and `submitVote` reads the election from the registry, gets the voter's census witness, builds the 16-field encrypted ballot, proves it, signs the vote and sends it to a node. None of it needs a provider: a bare `Wallet` votes.
 
 ## Act as the voter
 
@@ -30,7 +30,7 @@ What happens:
 
 1. **The election, from the registry** (never from a node): it must take votes, from its start to its end, READY or PAUSED. A paused process's votes settle once it resumes. The first node of the voter's order that serves the process is cross-checked against the registry (key, ballot mode, census).
 2. **The census witness:** the voter's weight and proof from the nodes (origins 1 and 2), the census contract (origin 3) or `censusProviders.csp` (origin 4). See `references/census.md`.
-3. **The ballot:** the choices are checked against the ballot mode, the 16-field ballot is encrypted under the registry's key (unused fields hold the identity), proved with the circuit files the registry pins, and its vote id signed.
+3. **The ballot:** the choices are checked against the ballot mode, the 16-field ballot is encrypted under the registry's key (unused fields hold the identity), proved with the circuit files the registry pins, and the vote signed (the signature covers the process id, the vote id and the ciphertexts: `voteEnvelopeDigest`).
 4. **The node:** the voter's own node (`references/nodes.md`), with failover only when it is safe.
 
 ### `VoteConfig` and `VoteResult`

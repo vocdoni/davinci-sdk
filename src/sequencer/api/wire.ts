@@ -3,7 +3,7 @@
  * of davinci-sequencer `client/src/api.rs` read and write them. Decoding only
  * accepts canonical values: field elements are decimal strings below p,
  * census values `0x` and exactly 64 hex digits (either case), points lie on
- * the curve, byte strings have their exact length, and the
+ * the curve, byte strings are `0x` hex of their exact length, and the
  * bodies the node checks field by field (votes, census proofs, points, ballot
  * modes) carry no unknown field. Responses may grow new fields.
  */
@@ -100,25 +100,33 @@ function censusValue(v: unknown, path: string): bigint {
 const u128 = (v: unknown, path: string) => decimal(v, path, 39, U128_BOUND);
 const u64Decimal = (v: unknown, path: string) => decimal(v, path, 39, U64_BOUND);
 
-// Exactly `length` bytes of hex, `0x` optional; returned lowercase with `0x`.
+// `0x` (lowercase x, as the node requires) and exactly `length` bytes of hex;
+// returned lowercase.
 function hexBytes(v: unknown, path: string, length: number): string {
   const s = string(v, path);
-  const h = s.startsWith('0x') ? s.slice(2) : s;
-  if (h.length !== 2 * length || !/^[0-9a-fA-F]*$/.test(h)) {
+  if (!s.startsWith('0x') || s.length !== 2 + 2 * length || !/^[0-9a-fA-F]*$/.test(s.slice(2))) {
     fail(path, `want ${length} bytes of hex`);
   }
-  return `0x${h.toLowerCase()}`;
+  return s.toLowerCase();
 }
 
-// Any even number of hex digits, `0x` optional.
+// `0x` and any even number of hex digits; returned lowercase.
 function hexVar(v: unknown, path: string): string {
   const s = string(v, path);
-  const h = s.startsWith('0x') ? s.slice(2) : s;
-  if (h.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(h)) fail(path, 'want hex bytes');
-  return `0x${h.toLowerCase()}`;
+  if (!s.startsWith('0x') || s.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(s.slice(2))) {
+    fail(path, 'want hex bytes');
+  }
+  return s.toLowerCase();
 }
 
 const address = (v: unknown, path: string) => getAddress(hexBytes(v, path, 20));
+
+// A census file's member key: `0x` optional, as the nodes' census loader
+// reads it (davinci-sequencer `census.rs::parse_address`).
+function censusKey(v: unknown, path: string): string {
+  const s = string(v, path);
+  return address(s.startsWith('0x') ? s : `0x${s}`, path);
+}
 const processId = (v: unknown, path: string) => hexBytes(v, path, 31);
 
 function voteId(v: unknown, path: string): bigint {
@@ -529,7 +537,7 @@ export function decodeCensusFile(json: unknown): CensusFile {
     participants: array(o.participants, 'census.participants').map((p, i) => {
       const path = `census.participants[${i}]`;
       const v = object(p, path);
-      return { key: address(v.key, `${path}.key`), weight: u128(v.weight, `${path}.weight`) };
+      return { key: censusKey(v.key, `${path}.key`), weight: u128(v.weight, `${path}.weight`) };
     }),
   };
 }

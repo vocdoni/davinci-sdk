@@ -32,7 +32,6 @@ import {
 } from '../../contracts/types';
 import { BJJ_SUBGROUP_ORDER, type BjjPoint } from '../../crypto/babyjubjub';
 import type { BallotModeValues } from '../../crypto/ballot';
-import { VALUE_SUM_BITS } from '../../protocol/limits';
 import { computeProcessId } from '../../networks';
 import { BallotMode } from '../types';
 import {
@@ -171,8 +170,7 @@ interface BaseProcessConfig {
    * raw `BallotMode` from a friendly typed shape. Use this field when
    * you need to express a ballot that does not map to a preset. It must
    * fit the registry and the ballot circuit (`ballotModeValues`). A
-   * `maxValueSum` of 0 makes each voter's census weight the budget: the
-   * circuit compares it in 63 bits, so no weight may reach 2^63.
+   * `maxValueSum` of 0 makes each voter's census weight the budget.
    */
   ballot?: BallotMode;
 
@@ -924,20 +922,6 @@ export class ProcessOrchestrationService {
       );
     }
 
-    // A zero maxValueSum makes the weight the budget, compared in 63 bits.
-    if (ballotMode.maxValueSum === 0n && census instanceof MerkleCensus) {
-      const heavy = census.participants.find(
-        p => BigInt(p.weight) >> BigInt(VALUE_SUM_BITS) !== 0n
-      );
-      if (heavy) {
-        throw create(
-          `${heavy.key} has weight ${heavy.weight}: with maxValueSum 0 the weight is the ` +
-            `voter's budget, which the ballot circuit compares in ${VALUE_SUM_BITS} bits, ` +
-            `so it must stay below 2^${VALUE_SUM_BITS}`
-        );
-      }
-    }
-
     // The grace window to set after the creation, within the registry's bounds.
     const grace = config.grace;
     if (grace !== undefined) {
@@ -1679,9 +1663,11 @@ export class ProcessOrchestrationService {
    * document to publish through the uploader (a config is built with
    * `buildElectionMetadata`, bytes are published as given), or one already
    * served, with its hash or hashed from the URL. Only the organizer, only
-   * while READY or PAUSED and before the end (the meaning of every ballot
-   * field is fixed from then on), all checked before anything is uploaded.
-   * Readers see the change as a new metadata version.
+   * while READY or PAUSED and before the start (nodes take votes from the
+   * start, and the meaning of every ballot field is fixed from then on), all
+   * checked before anything is uploaded. A process that starts in its
+   * creation block never changes its metadata. Readers see the change as a
+   * new metadata version.
    *
    * @throws nothing: a refusal is a `Failed` event with a `ProcessMetadataError`
    *   or a metadata error
@@ -1697,7 +1683,22 @@ export class ProcessOrchestrationService {
   ): AsyncGenerator<TxStatusEvent<Done>> {
     return this.guarded(async () => {
       const op = 'setProcessMetadata';
-      await this.changeableProcess(processId, ProcessMetadataError, op, 'update the metadata of');
+      const action = 'update the metadata of';
+      const { process, now } = await this.changeableProcess(
+        processId,
+        ProcessMetadataError,
+        op,
+        action
+      );
+      if (now >= process.startTime) {
+        throw refused(
+          ProcessMetadataError,
+          op,
+          `cannot ${action} process ${process.processId}: it started at ` +
+            `${when(process.startTime)}, and the registry allows it only before the start`,
+          'InvalidTimeBounds'
+        );
+      }
       let published: PublishedMetadata;
       if (!(metadata instanceof Uint8Array) && 'uri' in metadata) {
         const uri = metadata.uri;

@@ -12,7 +12,7 @@ import { expect } from 'vitest';
 import { KeyMode } from '../../../src/contracts/types';
 import { isValidEncryptionKey } from '../../../src/crypto/babyjubjub';
 import { buildBallot, isBallotPaddingValid } from '../../../src/crypto/ballot';
-import { encodeEcdsaSignature, signVoteId } from '../../../src/crypto/ecdsa';
+import { encodeEcdsaSignature, signVote } from '../../../src/crypto/ecdsa';
 import { randomBallotSecret } from '../../../src/crypto/encryption';
 import type { DavinciSDK } from '../../../src/DavinciSDK';
 import { pickNode } from '../../../src/sequencer/routing';
@@ -59,7 +59,7 @@ async function sendWithWeight(
     voteId: built.voteId,
     ballot: built.ballot,
     ballotProof: proof,
-    signature: encodeEcdsaSignature(await signVoteId(voter, built.voteId)),
+    signature: encodeEcdsaSignature(await signVote(voter, processId, built.voteId, built.ballot)),
     weight,
   };
   return sdk.api.nodes.submitVote(request).then(

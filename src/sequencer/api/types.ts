@@ -162,7 +162,7 @@ export interface VoteRequest {
   ballot: Ballot;
   /** snarkjs Groth16 proof of `BallotProof(16)`; nodes derive its 71 public signals. */
   ballotProof: Groth16Proof;
-  /** 65 bytes `r || s || v`, personal-sign over the vote id. */
+  /** 65 bytes `r || s || v`, personal-sign of `voteEnvelopeDigest(processId, voteId, ballot)`. */
   signature: string;
   /** The census weight, below 2^128 (a usable one is below 2^88). */
   weight: bigint;

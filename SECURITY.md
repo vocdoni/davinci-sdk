@@ -77,6 +77,8 @@ const { k } = await sdk.submitVote({ processId: id, choices: [1, 0] });
 
 Ballot secrets and organizer secrets are drawn from the platform's secure random source; a ballot secret given by hand below 2^128 is refused. Never give one ballot secret to two ballots, whether of two voters, in two processes or for a revote: the field nonces derive from `k` alone, so the two ballots share their `C1`s and, under one election key, `C2 − C2'` reveals the difference of the choices. Their vote ids differ, so no node refuses them; leave `k` out and the SDK draws a fresh one for every ballot. In a browser, keys live in memory: prefer a wallet extension or a hardware wallet for organizer accounts, and protect the page against XSS.
 
+A vote is signed over `voteEnvelopeDigest(processId, voteId, ballot)`, so its signature is good for that ballot in that process only. It is a personal-sign of an opaque 32-byte hash: a wallet cannot show what it authorizes, and a page that can ask the voter's wallet for that signature can cast a vote of its own making. Sign votes only from a page you trust.
+
 ## Contact
 
 - Security: security@vocdoni.io

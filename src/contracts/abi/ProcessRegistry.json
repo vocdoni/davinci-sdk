@@ -1815,6 +1815,11 @@
   },
   {
     "type": "error",
+    "name": "InvalidBallotCost",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidBlobCommitmentLength",
     "inputs": []
   },

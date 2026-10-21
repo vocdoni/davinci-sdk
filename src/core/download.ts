@@ -28,7 +28,8 @@ function publicV4([a, b, c]: number[]): boolean {
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
-    (a === 192 && b === 0 && c === 2) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 198 && (b & 0xfe) === 18) ||
     (a === 198 && b === 51 && c === 100) ||
     (a === 203 && b === 0 && c === 113) ||
     a >= 224
@@ -52,6 +53,8 @@ function publicV6(s: number[]): boolean {
   const v4 = () => publicV4([s[6] >> 8, s[6] & 0xff, s[7] >> 8, s[7] & 0xff]);
   const zeroTo = (n: number) => s.slice(0, n).every(p => p === 0);
   if (zeroTo(5) && s[5] === 0xffff) return v4();
+  // IPv4-translated ::ffff:0:a.b.c.d (RFC 2765).
+  if (zeroTo(4) && s[4] === 0xffff && s[5] === 0) return v4();
   const loopback = zeroTo(7) && s[7] === 1;
   const unspecified = zeroTo(8);
   if (zeroTo(6) && !loopback && !unspecified) return v4();
@@ -61,6 +64,7 @@ function publicV6(s: number[]): boolean {
     (s[0] & 0xff00) === 0xff00 ||
     (s[0] & 0xfe00) === 0xfc00 ||
     (s[0] & 0xffc0) === 0xfe80 ||
+    (s[0] & 0xffc0) === 0xfec0 ||
     (s[0] === 0x64 && s[1] === 0xff9b) ||
     s[0] === 0x2002 ||
     (s[0] === 0x2001 && (s[1] === 0x0db8 || s[1] === 0))
@@ -90,7 +94,8 @@ export function checkPublicUrl(uri: string, options: { allowPrivateHosts?: boole
     throw new UrlPolicyError(`only http(s) URLs are read, not ${url.protocol}`, uri);
   }
   if (options.allowPrivateHosts) return url;
-  const host = url.hostname.toLowerCase();
+  // A trailing dot names the same host.
+  const host = url.hostname.toLowerCase().replace(/\.+$/, '');
   let isPublic = true;
   if (host === 'localhost' || host.endsWith('.localhost')) isPublic = false;
   else if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) isPublic = publicV4(host.split('.').map(Number));

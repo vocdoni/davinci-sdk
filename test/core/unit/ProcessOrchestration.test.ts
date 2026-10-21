@@ -64,7 +64,7 @@ const REGISTRY = OPTIMISM.processRegistry;
 const ADAPTER = '0xE9559c78E7ff8c19937A0657a092A221E90CCBC3';
 const KEY = `0x${'11'.repeat(32)}`;
 const ORGANIZER = new Wallet(KEY).address;
-const PREFIX = '0x3c3e0777';
+const PREFIX = '0xe8d4e286';
 const pidOf = (nonce: number, creator = ORGANIZER) => computeProcessId(creator, PREFIX, nonce);
 const PID = pidOf(0);
 const KEY_NODE = 'https://key.sequencer.test';
@@ -546,6 +546,12 @@ describe('ProcessOrchestrationService.createProcess', () => {
       'InvalidValueSumBounds',
       'minValueSum 2 exceeds'
     );
+    await refusal(
+      create({ ballot: { ...ballot, costExponent: 0 } }),
+      ProcessCreateError,
+      'InvalidBallotCost',
+      'costExponent 0'
+    );
     const many = [
       { title: 'q', choices: Array.from({ length: 17 }, (_, i) => ({ title: `${i}`, value: i })) },
     ];
@@ -598,34 +604,21 @@ describe('ProcessOrchestrationService.createProcess', () => {
     expect(chain.sent).toHaveLength(1);
   });
 
-  it('keeps census weights provable when the weight is the budget', async () => {
-    const { orchestrator, host, chain } = setup();
+  it('takes every census weight when the weight is the budget', async () => {
+    const { orchestrator, chain } = setup();
     const weighted = { ...ballot, maxValue: '1000', maxValueSum: '0' };
-    const heavy = members(A, { key: B, weight: (1n << 63n).toString() });
-    await refusal(
-      orchestrator.createProcess({
+    // The ballot circuit compares the cost with the weight exactly below 2^88.
+    for (const weight of [(1n << 63n) - 1n, 1n << 63n, (1n << 88n) - 1n]) {
+      const heavy = members(A, { key: B, weight: weight.toString() });
+      await orchestrator.createProcess({
         title: 't',
         census: heavy,
         ballot: weighted,
         timing,
         questions,
-      }),
-      ProcessCreateError,
-      undefined,
-      `${B} has weight 9223372036854775808: with maxValueSum 0 the weight is the voter's budget`
-    );
-    expect(host.uploads).toHaveLength(0);
-    const fits = members(A, { key: B, weight: ((1n << 63n) - 1n).toString() });
-    await orchestrator.createProcess({
-      title: 't',
-      census: fits,
-      ballot: weighted,
-      timing,
-      questions,
-    });
-    // With a fixed budget the weight is not compared.
-    await orchestrator.createProcess({ title: 't', census: heavy, ballot, timing, questions });
-    expect(chain.sent).toHaveLength(2);
+      });
+    }
+    expect(chain.sent).toHaveLength(3);
   });
 
   it('refuses a sequencer key that is not a prime-order point, sending nothing', async () => {
@@ -1583,7 +1576,8 @@ describe('ProcessOrchestrationService.updateCensus', () => {
 
 describe('ProcessOrchestrationService.updateMetadata', () => {
   it('publishes a config, a document or bytes, or takes a URL, then sets it', async () => {
-    const { host, orchestrator, sent } = setup();
+    const { host, orchestrator, sent, state, wallet } = setup();
+    state.process = onchainProcess(wallet.address, { startTime: BigInt(NOW + 100) });
     const config = { title: 'Parks', questions };
     const doc = buildElectionMetadata({ ...config, description: 'v2' });
     const raw = toUtf8Bytes('{"title":{"default":"raw"}}');
@@ -1605,6 +1599,25 @@ describe('ProcessOrchestrationService.updateMetadata', () => {
     ]);
   });
 
+  it('changes the metadata only before the start, as the registry', async () => {
+    const { host, orchestrator, sent, state, wallet } = setup();
+    const doc = { uri: 'https://files.example.org/m.json', hash: `0x${'ab'.repeat(32)}` };
+    // The registry refuses from block.timestamp >= startTime on; the head is at NOW.
+    state.process = onchainProcess(wallet.address, { startTime: BigInt(NOW + 1) });
+    await orchestrator.updateMetadata(PID, doc);
+    for (const startTime of [NOW, NOW - 100]) {
+      state.process = onchainProcess(wallet.address, { startTime: BigInt(startTime) });
+      await refusal(
+        orchestrator.updateMetadata(PID, { title: 't', questions }),
+        ProcessMetadataError,
+        'InvalidTimeBounds',
+        'only before the start'
+      );
+    }
+    expect(host.uploads).toHaveLength(0);
+    expect(sent().map(t => t.name)).toEqual(['setProcessMetadata']);
+  });
+
   it('refuses a closed process before uploading', async () => {
     const { host, orchestrator, state, wallet } = setup();
     state.process = onchainProcess(wallet.address, { status: ProcessStatus.CANCELED });
@@ -1621,7 +1634,7 @@ describe('ProcessOrchestrationService.updateMetadata', () => {
       'InvalidTimeBounds',
       'only before the end'
     );
-    state.process = onchainProcess(wallet.address);
+    state.process = onchainProcess(wallet.address, { startTime: BigInt(NOW + 100) });
     await refusal(
       orchestrator.updateMetadata(PID, { uri: '' }),
       ProcessMetadataError,

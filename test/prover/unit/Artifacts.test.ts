@@ -18,17 +18,17 @@ import {
 import { checkVerificationKey, loadArtifactFile } from '../../../src/prover/artifacts';
 import { NO_PHASE2_VKEY, OTHER_VKEY, PINNED_VKEY_TEXT } from '../../helpers/realProof';
 
-// davinci-circom v1.2.0: sha256sum of the checkout's artifacts/ (the ceremony key).
-const V120 = '69df9559043d88d363e4d341fdeff76a305a26eb';
+// davinci-circom v1.3.0: sha256sum of the checkout's artifacts/ (the ceremony key).
+const V130 = 'e65e15dab664836893a261e7bd419317219f48d6';
 const PINNED = {
-  wasm: ['ballot_proof.wasm', '5b65876e8ca3acbe44191049cb86f917febb83cd3f0c56d3d7c828e3ebca6b86'],
+  wasm: ['ballot_proof.wasm', '05df6ff4b6e9d914f7125674b18ee57bf106d3fc5b449e2501b3eaa97f099fcc'],
   zkey: [
     'ballot_proof_pkey.zkey',
-    'e634798d1a4bca81c743348f654e7cd8d458bd396065dbca1cfc4a0c6a90b084',
+    '1c17aedc4021d717f464dee89a6b8ede9fe1799e7e308f776ee31ca6933fd2c0',
   ],
   vkey: [
     'ballot_proof_vkey.json',
-    '4a05045a22a5019ca6cff8057b77c9968856175f9b20705e86925b6f12112f4b',
+    'd2d36491e4b2c69e36199976b4b124334b4cb683577510f9ddb1bc2620f3f248',
   ],
 } as const;
 
@@ -53,16 +53,16 @@ function serve(files: Record<string, Uint8Array | number>) {
 }
 
 describe('the ballot artifact table', () => {
-  it('pins the registry key to davinci-circom v1.2.0 on the CDN, then raw GitHub', () => {
+  it('pins the registry key to davinci-circom v1.3.0 on the CDN, then raw GitHub', () => {
     expect(Object.keys(BALLOT_ARTIFACTS)).toEqual([BALLOT_VK_HASH]);
     const entry = BALLOT_ARTIFACTS[BALLOT_VK_HASH];
-    expect(entry.source).toContain(V120);
+    expect(entry.source).toContain(V130);
     for (const name of ['wasm', 'zkey', 'vkey'] as const) {
       const [file, hash] = PINNED[name];
       expect(entry[name]).toEqual({
-        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${V120}/${file}`,
+        url: `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${V130}/${file}`,
         mirrors: [
-          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${V120}/artifacts/${file}`,
+          `https://raw.githubusercontent.com/vocdoni/davinci-circom/${V130}/artifacts/${file}`,
         ],
         sha256: `0x${hash}`,
       });

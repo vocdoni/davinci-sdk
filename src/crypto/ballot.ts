@@ -1,10 +1,12 @@
 /**
  * @fileoverview Ballots and the values the ballot proof binds: the packed
- * ballot mode, the 16-field encryption with identity padding, the vote id and
- * the 71 public signals, as davinci-zkvm `rust-sdk/src/ballot.rs` and the
- * davinci-circom `BallotProof(16)` circuit compute them.
+ * ballot mode, the 16-field encryption with identity padding, the vote id,
+ * the 71 public signals and the ballot leaf hash, as davinci-zkvm
+ * `rust-sdk/src/ballot.rs` and the davinci-circom `BallotProof(16)` circuit
+ * compute them.
  */
 
+import { concat, getBytes, sha256 } from 'ethers';
 import { BjjPoint, isValidEncryptionKey } from './babyjubjub';
 import {
   ElGamalCiphertext,
@@ -12,7 +14,7 @@ import {
   elgamalEncrypt,
   isIdentityCiphertext,
 } from './encryption';
-import { addressToField, assertFieldElement, processIdToField } from './field';
+import { addressToField, assertFieldElement, bigIntToBytes, processIdToField } from './field';
 import { PoseidonHasher, getPoseidon } from './poseidon';
 import {
   CENSUS_WEIGHT_BITS,
@@ -206,6 +208,22 @@ export function ballotCoords(ballot: Ballot): bigint[] {
   return ballot.flatMap(c => [c.c1.x, c.c1.y, c.c2.x, c.c2.y]);
 }
 
+/**
+ * The ballot's leaf digest: `sha256` of its 64 coordinates
+ * ({@link ballotCoords}) as 32-byte big-endian words, 2048 bytes (davinci-zkvm
+ * `ballot::ballot_leaf_hash`). The vote signature covers it, so it is taken
+ * over the ballot as sent, padding included.
+ *
+ * @throws RangeError for a ballot of other than 16 ciphertexts or a
+ *   coordinate that is not a field element
+ */
+export function ballotLeafHash(ballot: Ballot): Uint8Array {
+  const words = ballotCoords(ballot).map(c =>
+    bigIntToBytes(assertFieldElement(c, 'ballot coordinate'), 32)
+  );
+  return getBytes(sha256(concat(words)));
+}
+
 function voteIdWith(h: PoseidonHasher, processId: bigint, address: bigint, k: bigint): bigint {
   return VOTE_ID_MIN | (h.hash([processId, address, k]) & (VOTE_ID_MIN - 1n));
 }
@@ -257,9 +275,23 @@ export interface BallotPublicSignalsParams {
  *   is not the identity, or a mode that does not pack
  */
 export function ballotPublicSignals(p: BallotPublicSignalsParams): bigint[] {
+  // What the batch guest binds (FAIL_BINDING otherwise): 1..16 live fields,
+  // canonical coordinates and signals, a vote id in [2^63, 2^64).
+  assertFieldCount(p.ballotMode.numFields, 0);
   if (!isBallotPaddingValid(p.ballot, p.ballotMode.numFields)) {
     throw new RangeError('ballot: 16 ciphertexts with the identity past numFields');
   }
+  assertFieldElement(p.processId, 'process id');
+  assertFieldElement(p.address, 'address');
+  assertFieldElement(p.encryptionKey.x, 'election key x');
+  assertFieldElement(p.encryptionKey.y, 'election key y');
+  if (p.weight < 0n || p.weight >> BigInt(CENSUS_WEIGHT_BITS) !== 0n) {
+    throw new RangeError(`weight does not fit in ${CENSUS_WEIGHT_BITS} bits`);
+  }
+  if (p.voteId < VOTE_ID_MIN || p.voteId >> 64n !== 0n) {
+    throw new RangeError('vote id not in [2^63, 2^64)');
+  }
+  for (const c of ballotCoords(p.ballot)) assertFieldElement(c, 'ballot coordinate');
   return [
     p.address,
     p.voteId,

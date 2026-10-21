@@ -17,7 +17,7 @@ import {
 } from '../../census/types';
 import { buildBallot } from '../../crypto/ballot';
 import { checkBallot } from '../../crypto/ballotChecker';
-import { encodeEcdsaSignature, signVoteId } from '../../crypto/ecdsa';
+import { encodeEcdsaSignature, signVote } from '../../crypto/ecdsa';
 import { randomBallotSecret } from '../../crypto/encryption';
 import { assertFieldElement } from '../../crypto/field';
 import { verifyTrackerProof, type TrackerProof } from '../../crypto/tracker';
@@ -142,7 +142,10 @@ export interface VoteResult {
   /** `0x` + 16 hex digits. */
   voteId: string;
 
-  /** The voter's signature over the vote id, 65 bytes of `0x` hex. */
+  /**
+   * The voter's signature over the vote (process id, vote id and ballot,
+   * `voteEnvelopeDigest`), 65 bytes of `0x` hex.
+   */
   signature: string;
 
   /** The voter's address, checksummed. */
@@ -427,7 +430,7 @@ export class VoteOrchestrationService {
   /**
    * @param registry - The registry for reads (a provider is enough)
    * @param api - The sequencer nodes
-   * @param signer - The voter: it signs vote ids, and needs no provider
+   * @param signer - The voter: it signs its votes, and needs no provider
    * @param options - Prover, census providers, documents and the finalize writer
    */
   constructor(
@@ -479,7 +482,7 @@ export class VoteOrchestrationService {
    *    census contract's weight (on-chain census), or the CSP's attestation
    *    (`censusProviders.csp`), and checks it is the voter's.
    * 4. Checks the choices against the ballot mode, builds the 16-field
-   *    ballot, proves it and signs its vote id.
+   *    ballot, proves it and signs the vote (process id, vote id and ballot).
    * 5. Sends it to the voter's node (`pickNode`), failing over when that is
    *    safe; a revote goes to the node of the voter's previous ballot. That
    *    node is remembered in memory only: across reloads, tabs or devices,
@@ -537,7 +540,9 @@ export class VoteOrchestrationService {
     if (publicSignals.join() !== built.publicSignals.join()) {
       throw new BallotProofError("the proof's public signals are not the ballot's");
     }
-    const signature = encodeEcdsaSignature(await signVoteId(this.signer, built.voteId));
+    const signature = encodeEcdsaSignature(
+      await signVote(this.signer, processId, built.voteId, built.ballot)
+    );
 
     // 5. Submission. A Merkle proof is left out: nodes derive their own.
     const request: VoteRequest = {

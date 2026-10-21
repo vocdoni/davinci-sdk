@@ -1,7 +1,7 @@
 /**
  * Protocol cryptography of the zkVM stack: BabyJubJub and ElGamal, ballots
  * and their public signals, the Keccak Merkle census and slots, CSP and
- * vote-id signatures, tracker proofs, the ballot VK hash and the DKG
+ * vote signatures, tracker proofs, the ballot VK hash and the DKG
  * organizer proof.
  * Every function computes byte for byte what the davinci-zkvm Rust SDK does.
  */
@@ -38,6 +38,7 @@ export {
   type BuildBallotParams,
   type BuiltBallot,
   ballotCoords,
+  ballotLeafHash,
   ballotPublicSignals,
   buildBallot,
   computeVoteId,
@@ -67,11 +68,10 @@ export {
   decodeEcdsaSignature,
   encodeEcdsaSignature,
   recoverCspSigner,
-  recoverVoteIdSigner,
+  recoverVoteSigner,
   signCspAttestation,
-  signVoteId,
-  voteIdSignatureHash,
-  voteIdSignatureMessage,
+  signVote,
+  voteEnvelopeDigest,
 } from './ecdsa';
 export { type TrackerProof, verifyTrackerProof, voteIdLeafHash } from './tracker';
 export {

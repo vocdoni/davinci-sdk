@@ -7,7 +7,7 @@
 
 import { getAddress } from 'ethers';
 import { censusLeaf, slotFromCspIndex, verifyLeanIMTProof } from '../crypto/census';
-import { recoverCspSigner } from '../crypto/ecdsa';
+import { recoverCspSigner, type CspAttestation } from '../crypto/ecdsa';
 import type { CensusProofWire } from '../sequencer/api/types';
 import { CensusWitnessError } from './errors';
 import { CensusOrigin, type CensusWitness } from './types';
@@ -30,6 +30,27 @@ export interface CheckedWitness {
 }
 
 const MAX_WIRE_INDEX = BigInt(Number.MAX_SAFE_INTEGER);
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+
+// The node folds a high-S attestation to its low-S twin and maps v 27/28 to
+// 0/1 (davinci-sequencer `low_s`); the strict recover here takes neither, so
+// give it the canonical spelling of the same signature. Values the node
+// refuses too (r or s out of range, another v) are left for the recover.
+function canonicalSignature(a: CspAttestation): CspAttestation {
+  let recid = a.recid as number;
+  if (recid === 27 || recid === 28) recid -= 27;
+  let s = a.s;
+  try {
+    const sv = BigInt(a.s);
+    if (recid <= 1 && sv > SECP256K1_N >> 1n && sv < SECP256K1_N) {
+      s = `0x${(SECP256K1_N - sv).toString(16).padStart(64, '0')}`;
+      recid ^= 1;
+    }
+  } catch {
+    // Not a number: the recover refuses it.
+  }
+  return { ...a, s, recid: recid as 0 | 1 };
+}
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -92,7 +113,7 @@ function checkWitness(
   if (origin !== CensusOrigin.CSP) {
     throw new CensusWitnessError(`a CSP attestation for a census of origin ${origin}`);
   }
-  const a = witness.attestation;
+  const a = canonicalSignature(witness.attestation);
   let signer: string;
   try {
     signer = recoverCspSigner(process.processId, a);

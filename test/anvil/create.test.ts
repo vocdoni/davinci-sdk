@@ -298,6 +298,43 @@ describe('process creation', () => {
         },
         'InvalidMaxCount',
       ],
+      // The cost rule: an exponent of at least 1, 16 * (2^15)^4 = 2^64 is not below 2^63.
+      [
+        {
+          electionPreset: undefined,
+          ballot: {
+            numFields: 2,
+            maxValue: '1',
+            minValue: '0',
+            uniqueValues: false,
+            costExponent: 0,
+            maxValueSum: '1',
+            minValueSum: '0',
+          },
+        },
+        'InvalidBallotCost',
+      ],
+      [
+        {
+          electionPreset: undefined,
+          ballot: {
+            numFields: 16,
+            maxValue: String(2 ** 15),
+            minValue: '0',
+            uniqueValues: false,
+            costExponent: 4,
+            maxValueSum: '0',
+            minValueSum: '0',
+          },
+          questions: [
+            {
+              title: 'Spread your budget',
+              choices: Array.from({ length: 16 }, (_, i) => ({ title: `${i}`, value: i })),
+            },
+          ],
+        },
+        'InvalidBallotCost',
+      ],
     ];
     for (const [overrides, revertName] of cases) {
       const err = await streamError(sdk.createProcessStream(election(census, overrides)));
@@ -330,6 +367,20 @@ describe('process creation', () => {
         'InvalidCensusAddress',
       ],
       [{ encryptionKey: undefined, dkg: dkgAutomaticParams() }, 'DKGDisabled'],
+      [{ ballotMode: { ...params.ballotMode, costExponent: 0 } }, 'InvalidBallotCost'],
+      [
+        {
+          ballotMode: {
+            ...params.ballotMode,
+            numFields: 16,
+            groupSize: 16,
+            maxValue: 2n ** 15n,
+            costExponent: 4,
+            maxValueSum: 0n,
+          },
+        },
+        'InvalidBallotCost',
+      ],
     ];
     for (const [overrides, revertName] of cases) {
       const err = await streamError(registry.newProcess({ ...params, ...overrides }));

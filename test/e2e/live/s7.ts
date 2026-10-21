@@ -1,9 +1,10 @@
 /**
  * @fileoverview Scenario 7: metadata. The creation commits the sha256 of the
- * document it publishes, and readers verify it. Before the end the organizer
- * points the process at a tampered copy registered under the update's hash
- * (readers must refuse it: `metadataVerified` false), then at the update
- * itself. The results come back titled from the verified update.
+ * document it publishes, and readers verify it. Before the start the
+ * organizer points the process at a tampered copy registered under the
+ * update's hash (readers must refuse it: `metadataVerified` false), then at
+ * the update itself; from the start on the registry refuses any change. The
+ * results come back titled from the verified update.
  */
 
 import { expect } from 'vitest';
@@ -21,11 +22,13 @@ import {
 } from '../spec';
 import type { Live } from './context';
 import {
+  DURATION,
   checkReceipts,
   checkResults,
   closeSoon,
   createElection,
   follow,
+  until,
   vote,
   voterSdks,
   waitServed,
@@ -33,6 +36,10 @@ import {
   type Cast,
   type Election,
 } from './flow';
+import { callOnly, refusedByCall } from './negatives';
+
+/** Seconds from the creation's turn to the start: the metadata changes before it. */
+const START_IN = 180;
 
 /**
  * The metadata of `e`, created from `S7`: verified as created, refused as a
@@ -81,9 +88,25 @@ export async function changeMetadata(live: Live, e: Election): Promise<void> {
 
 export async function s7(live: Live, row: Row): Promise<void> {
   const voters = live.voters.s7;
-  const e = await createElection(live, 's7', S7, { census: plainCensus(voters) });
+  const e = await createElection(live, 's7', S7, { census: plainCensus(voters) }, async () => ({
+    startDate: Number(await live.sdk.registry.getChainTime()) + START_IN,
+    duration: DURATION,
+  }));
   row.processId = e.processId;
   await changeMetadata(live, e);
+
+  // From the start on the metadata is frozen.
+  const { startTime } = await live.sdk.registry.getProcess(e.processId);
+  const chainTime = () => live.sdk.registry.getChainTime();
+  await until('s7: started', async () => (await chainTime()) >= startTime, 10 * 60_000);
+  const frozen = await refusedByCall('s7 setProcessMetadata after the start', () =>
+    callOnly(live).setProcessMetadata(
+      e.processId,
+      live.host.url('s7-metadata-update.json'),
+      fileHash(metadataBytes(S7_UPDATE))
+    )
+  );
+  expect(frozen.revertName).toBe('InvalidTimeBounds');
 
   await waitServed(
     live,

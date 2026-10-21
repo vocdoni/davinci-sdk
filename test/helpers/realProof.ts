@@ -31,7 +31,7 @@ interface RealProofJson {
 
 export const REAL_PROOF = loadFixture<RealProofJson>('zkvm/real_proof.json');
 
-/** The pinned verification key, byte for byte (davinci-circom v1.2.0, the pre-production ceremony key). */
+/** The pinned verification key, byte for byte (davinci-circom v1.3.0, the pre-production ceremony key). */
 export const PINNED_VKEY_TEXT = readFixture('zkvm/ballot_proof_vkey.json');
 
 /** A well-formed ballot key that is not the pinned one: its IC points 1 and 2 swapped. */

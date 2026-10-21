@@ -89,10 +89,13 @@ export class BaseService {
 
     const timeoutMs = config.timeoutMs ?? this.defaultTimeoutMs;
     const { signal, cleanup, timedOut } = this.createRequestSignal(timeoutMs, config.signal);
+    // A node never redirects an API call; following one would hand the
+    // configured headers and a vote body to whatever host the node names.
     const init: RequestInit = {
       method,
       headers,
       signal,
+      redirect: 'manual',
     };
 
     if (config.data !== undefined && method !== 'GET' && method !== 'HEAD') {

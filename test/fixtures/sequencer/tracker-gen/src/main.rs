@@ -82,5 +82,27 @@ fn main() {
     let tp = TrackerProof { process_id: pid, vote_id: absent, root, siblings: p.siblings };
     cases.push(case("absent vote id", &tp, &root));
 
+    // A vote id whose low 63 bits are a ballot slot's key splits from that
+    // slot at bit 63 only: its leaf sits at depth 64, after 64 siblings.
+    let mut twins = Tree::new(MemoryStorage::new(), 64, Sha256).unwrap();
+    let slot = 0x25u64;
+    let twin = (1u64 << 63) | slot;
+    twins.add(&0u64.to_le_bytes(), &[1u8; 32]).unwrap();
+    twins.add(&slot.to_le_bytes(), &[0x26; 32]).unwrap();
+    twins.add(&twin.to_le_bytes(), &[0u8; 32]).unwrap();
+    let p = twins.gen_proof(&twin.to_le_bytes()).unwrap();
+    assert!(p.exists);
+    assert_eq!(p.siblings.len(), 64);
+    let root = twins.root();
+    let tp = TrackerProof { process_id: pid, vote_id: twin, root, siblings: p.siblings };
+    assert!(api::verify_tracker(&tp, &root));
+    cases.push(case("vote at depth 64, next to its slot twin", &tp, &root));
+    let mut t = tp.clone();
+    t.siblings[63][0] ^= 1;
+    cases.push(case("vote at depth 64, twin sibling tampered", &t, &root));
+    let mut t = tp.clone();
+    t.siblings.push([0u8; 32]);
+    cases.push(case("vote at depth 64, 65 siblings", &t, &root));
+
     println!("{}", serde_json::to_string_pretty(&json!({ "cases": cases })).unwrap());
 }

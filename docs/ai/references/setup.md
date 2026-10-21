@@ -122,7 +122,7 @@ const local = new DavinciSDK({
 
 ### The OP Mainnet deployment
 
-`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI pre-production deployment on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.2.0); a public ceremony replaces it before public production. The committees' circuits use development trusted setups during the beta.
+`network: 'optimism'` (the default, `OPTIMISM`) is the DAVINCI pre-production deployment on OP Mainnet (chain 10), in L1-blob mode: batches settle on OP and their blobs are published on Ethereum, so `beaconUrls` are Ethereum beacon APIs. Its registry has the DKG and Council adapters and creates elections in every key mode: a sequencer key, **Automatic** (`'dkg'`, `'dkg-locked'`) and **Election committee** (`'council'`); `references/key-modes.md` compares them. Ballots are proved under a pre-production ballot key from a phase-2 ceremony (davinci-circom v1.3.0); a public ceremony replaces it before public production. The committees' circuits use development trusted setups during the beta.
 
 Gnosis is retired: releases up to 3.x defaulted to the Gnosis registry R2 (`gnosis`, chain 100), and v4 has no `gnosis` preset or `GNOSIS` export. Its processes stay readable as a custom network, through nodes that still follow it, with the release pins check off (the registry pins ZisK 1.3.0 values):
 

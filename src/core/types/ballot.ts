@@ -35,13 +35,33 @@ function modeByte(v: unknown, what: string): number {
   return v;
 }
 
+// The registry's cost rule (`ProcessRegistry._validateNewProcess`, rust-sdk
+// `BallotMode::validate`): a cost exponent of at least 1 and
+// numFields * maxValue^costExponent below 2^63, so a ballot's cost never wraps
+// in the field and the circuit's budget comparators compare integers.
+function checkCostRule(m: BallotModeValues): void {
+  const revert = 'InvalidBallotCost';
+  if (m.costExponent === 0) {
+    throw new BallotModeError('ballot mode: costExponent 0: the registry needs at least 1', revert);
+  }
+  if ((BigInt(m.numFields) * m.maxValue ** BigInt(m.costExponent)) >> 63n !== 0n) {
+    throw new BallotModeError(
+      `ballot mode: numFields * maxValue^costExponent = ${m.numFields} * ${m.maxValue}^` +
+        `${m.costExponent} is not below 2^63`,
+      revert
+    );
+  }
+}
+
 /**
  * The registry form of a ballot mode (integer bounds, `groupSize` defaulting
  * to `numFields`), checked against what the registry and the ballot circuit
  * accept: 1 to 16 fields, `groupSize <= numFields`, value bounds below 2^48,
- * sum bounds below 2^63, `minValue <= maxValue` and
- * `minValueSum <= maxValueSum`. A `maxValueSum` of 0 makes each voter's census
- * weight the budget, so `minValueSum` must be 0 too.
+ * sum bounds below 2^63, `minValue <= maxValue`,
+ * `minValueSum <= maxValueSum`, a `costExponent` of at least 1 and
+ * `numFields * maxValue^costExponent` below 2^63 (so the circuit's cost is
+ * the integer cost). A `maxValueSum` of 0 makes each voter's census weight
+ * the budget, so `minValueSum` must be 0 too.
  *
  * @throws BallotModeError naming the rule, and the registry's revert for it
  *
@@ -105,6 +125,7 @@ export function ballotModeValues(mode: BallotMode): BallotModeValues {
       'InvalidValueSumBounds'
     );
   }
+  checkCostRule(values);
   packBallotMode(values);
   return values;
 }
@@ -188,7 +209,8 @@ export type ElectionPreset =
   /**
    * Quadratic voting. Voters distribute a fixed `budget` across options;
    * the cost of placing `v` votes on an option is `v ** 2`. `minValueSum`
-   * defaults to 0 (no minimum spend).
+   * defaults to 0 (no minimum spend). The registry needs
+   * `numFields * budget ** 2` below 2^63.
    *
    * BallotMode: (minValue, maxValue) = (0, budget), uniqueValues = false,
    * costExponent = 2, (minValueSum, maxValueSum) = (minValueSum ?? 0, budget).

@@ -37,7 +37,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | `InvalidDuration` | an end not after the start (a non-positive `duration` is refused without a name) |
 | `InvalidMaxVoters` | `maxVoters` not a positive integer |
 | `MaxPossibleResultCapExceeded` | `maxValue * maxVoters` above 1e12 |
-| `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63) |
+| `BallotModeError` (`registryError`: `InvalidMaxCount`, `InvalidGroupSize`, `InvalidMaxMinValueBounds`, `InvalidValueSumBounds`, `BallotModeMaxValueTooLarge`, `InvalidBallotCost`, …) | the ballot mode does not fit the registry or the circuit (16 fields, values below 2^48, sums below 2^63, a cost exponent of at least 1 and `numFields * maxValue^costExponent` below 2^63) |
 | `InvalidGrace` (`ProcessGraceError`) | `grace` outside `graceFloor..graceCeil` |
 | `DkgDisabledError` (`revertName` `DKGDisabled`) | a DKG key mode on a registry without DKG |
 | `CouncilDisabledError` | `keyMode: 'council'` on a registry without a Council manager, or deployed before the mode |
@@ -60,7 +60,7 @@ Local checks and the simulation both fail the stream with a `Failed` event (the 
 | --- | --- |
 | `Unauthorized` | not the process's organizer |
 | `InvalidStatus` | the status does not allow it (a second pause, a control on an ENDED process, …) |
-| `InvalidTimeBounds` | outside the control's time window: END before the start (cancel instead), a change at or after the end |
+| `InvalidTimeBounds` | outside the control's time window: END before the start (cancel instead), a metadata change at or after the start, any other change at or after the end |
 | `InvalidDuration` | an extension of 0, or a shortened end inside the notice (`closeProcessIn` adds slack for this) |
 | `InvalidGrace` | outside `graceFloor..graceCeil` |
 | `InvalidMaxVoters`, `MaxPossibleResultCapExceeded` | below the votes counted, or over the result cap |

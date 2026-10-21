@@ -9,6 +9,7 @@ import type { QuestionConfig } from '../../src/core/types/metadata';
 import {
   acrossTheEnd,
   addresses,
+  chainTime,
   connect,
   election,
   startNode,
@@ -28,6 +29,9 @@ const QUESTIONS: [QuestionConfig] = [
     ],
   },
 ];
+
+// The metadata can change only before the start: a process that opens in 10 minutes.
+const upcoming = async () => ({ startDate: Number(await chainTime()) + 600, duration: 3600 });
 
 describe('metadata', () => {
   let node: MockNode;
@@ -72,7 +76,7 @@ describe('metadata', () => {
   });
 
   it('moves a process to a new document, published or already served', async () => {
-    const { processId } = await sdk.createProcess(election(census));
+    const { processId } = await sdk.createProcess(election(census, { timing: await upcoming() }));
 
     // A config is built and published.
     await sdk.updateMetadata(processId, { title: 'Corrected', questions: QUESTIONS });
@@ -119,7 +123,7 @@ describe('metadata', () => {
         maxValueSum: '1',
         minValueSum: '0',
       },
-      timing: { duration: 3600 },
+      timing: await upcoming(),
       metadataUri: url,
     });
     expect(await sdk.getProcess(processId)).toMatchObject({
@@ -152,7 +156,7 @@ describe('metadata', () => {
   });
 
   it('refuses a metadata change the registry would', async () => {
-    const { processId } = await sdk.createProcess(election(census));
+    const { processId } = await sdk.createProcess(election(census, { timing: await upcoming() }));
     const empty = await streamError(sdk.updateMetadataStream(processId, { uri: '' }));
     expect(empty).toBeInstanceOf(ProcessMetadataError);
     expect(empty).toMatchObject({ revertName: 'InvalidMetadata' });
@@ -176,13 +180,15 @@ describe('metadata', () => {
       )
     ).toMatchObject({ revertName: 'Unauthorized' });
 
-    const end = await sdk.registry.getProcessEndTime(processId);
+    // The registry takes a new document until one second before the start.
+    const { startTime } = await sdk.registry.getProcess(processId);
     const uri = 'https://files.example.org/final.json';
     const hash = sha256('0x02');
     await acrossTheEnd(
-      end,
+      startTime,
       () => sdk.updateMetadataStream(processId, { uri, hash }),
-      () => sdk.processes.setProcessMetadata(processId, uri, hash)
+      () => sdk.processes.setProcessMetadata(processId, uri, hash),
+      /only before the start/
     );
   });
 });

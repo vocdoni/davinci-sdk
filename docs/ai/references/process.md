@@ -141,7 +141,7 @@ Each control reads the process and the chain clock first and refuses what the re
 | `setProcessGrace(pid, seconds)` | READY or PAUSED, before the end, within `graceFloor..graceCeil` | the grace window | `ProcessGraceError` |
 | `setProcessMaxVoters(pid, n)` | READY or PAUSED, before the end, at least the votes counted, within the result cap | the voter cap | `ProcessMaxVotersError` |
 | `updateCensus(pid, census)` | origin 2 only, READY or PAUSED, before the end | a new census version (`references/census.md`) | `ProcessCensusError`, `CensusNotUpdatable` |
-| `updateMetadata(pid, metadata)` | READY or PAUSED, before the end | a new metadata document (`references/metadata.md`) | `ProcessMetadataError` |
+| `updateMetadata(pid, metadata)` | READY or PAUSED, before the start | a new metadata document (`references/metadata.md`) | `ProcessMetadataError` |
 | `revealProcessKey(pid, secret)` | `dkg-locked` processes, any time, anyone with the secret | the committee may decrypt (`references/key-modes.md`) | `ProcessKeyRevealError` |
 
 ```ts

@@ -38,7 +38,7 @@ notice, the grace window follows, then the results.
 | 4 | `OwnedCensus` contract (origin 3), 3 random members, a 4th added while voting runs | sequencer | the contract deployed by the organizer; the nodes index it (each proves every member's weight); the weight as budget (`maxValueSum` 0) |
 | 5 | static, 2 voters | `dkg` | the committee's pool key; a quadratic ballot; after the grace window a node requests the decryption, the committee decrypts, the tally is stored |
 | 6 | static, 2 voters | `dkg-locked` | results locked after the grace window, even once the decryption is requested; a wrong secret refused (`InvalidOrganizerSecret`) as an `eth_call`; the tally after `revealProcessKey` |
-| 7 | static, 2 voters | sequencer | the metadata hash round trip; `setProcessMetadata` to a tampered copy registered under another document's hash (`metadataVerified: false`), then to the update; results titled from the verified update |
+| 7 | static, 2 voters | sequencer | the metadata hash round trip; before the start, `setProcessMetadata` to a tampered copy registered under another document's hash (`metadataVerified: false`), then to the update; from the start, `setProcessMetadata` refused (`InvalidTimeBounds`) as an `eth_call`; results titled from the verified update |
 | 8 | static, 1 member, no votes | sequencer | as `eth_call`s, nothing sent: END before the start, a grace outside the floor and ceiling, shortening inside the notice, PAUSE and max voters after the end; then CANCEL, and the results read `canceled` |
 
 For every election with votes the suite also checks that the result states

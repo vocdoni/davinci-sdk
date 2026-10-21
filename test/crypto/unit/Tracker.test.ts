@@ -2,7 +2,7 @@ import { concat, getBytes, hexlify, sha256 } from 'ethers';
 import { TrackerProof, verifyTrackerProof, voteIdLeafHash } from '../../../src/crypto';
 import { loadFixture } from '../../helpers/fixtures';
 
-// Vectors: test/fixtures/sequencer/tracker.json, arbo proofs from davinci-sequencer cb2d39c with
+// Vectors: test/fixtures/sequencer/tracker.json, arbo proofs from davinci-sequencer c30eb56 with
 // the verdict of its `verify_tracker` (generator in test/fixtures/sequencer/tracker-gen).
 interface TrackerWire {
   processId: string;
@@ -21,8 +21,8 @@ describe('tracker proofs', () => {
   const v = loadFixture<TrackerVectors>('sequencer/tracker.json');
 
   it('verify exactly like the sequencer client', () => {
-    expect(v.cases.filter(c => c.valid).length).toBe(25);
-    expect(v.cases.filter(c => !c.valid).length).toBe(26);
+    expect(v.cases.filter(c => c.valid).length).toBe(26);
+    expect(v.cases.filter(c => !c.valid).length).toBe(28);
     for (const c of v.cases) {
       expect(verifyTrackerProof(decode(c.proof), c.onchainRoot), c.label).toBe(c.valid);
     }
@@ -37,6 +37,17 @@ describe('tracker proofs', () => {
     expect(hexlify(voteIdLeafHash(0x8000000000000102n))).toBe(
       sha256(concat([le8, new Uint8Array(32), new Uint8Array([1])]))
     );
+  });
+
+  it('verify a vote id at depth 64, next to the slot it shares 63 bits with', () => {
+    const c = v.cases.find(x => x.label === 'vote at depth 64, next to its slot twin');
+    if (!c) throw new Error('no depth-64 case');
+    const p = decode(c.proof);
+    // Vote id 2^63 | 0x25 and slot 0x25 part at bit 63: 64 siblings, the last the slot's leaf.
+    expect(p.voteId).toBe((1n << 63n) | 0x25n);
+    expect(p.siblings).toHaveLength(64);
+    expect(BigInt(p.siblings[63])).not.toBe(0n);
+    expect(verifyTrackerProof(p, c.onchainRoot)).toBe(true);
   });
 
   it('refuse more than 64 levels even when the walk reaches the root', () => {

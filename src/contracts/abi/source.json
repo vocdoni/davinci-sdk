@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/vocdoni/davinci-contracts",
-  "commit": "bdccdd671758ab59e833a7fef90fbe0ebc2509db",
+  "commit": "00e5e8f45f1b9a48306356615030152d7c8c65f6",
   "files": {
-    "ProcessRegistry.json": "7e86da7e8d559ea269c64d8e69f5775a062bd309e2b91afe5ce7d7e1bf0820a7",
+    "ProcessRegistry.json": "84304d4119d30acec38d9ef92acfc77ea575fbae2ecd18b903d390b39139415b",
     "DavinciDKGAdapter.json": "ec0a2749cb12cfd43ec3b10254637a11c8b748740e9e18f1b4371533a589b423",
     "ZiskVerifier.json": "22431cbd2927017e37290f228117c66b2ef67f61d9f828c52eb5467202224957",
     "ICensusValidator.json": "d2d82b24d28cf5cdc8d665dd489ce709e1e2094466be729b0059298bbf9fad94",

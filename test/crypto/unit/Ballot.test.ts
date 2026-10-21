@@ -7,6 +7,7 @@ import {
   IDENTITY_CIPHERTEXT,
   addressToField,
   ballotCoords,
+  ballotLeafHash,
   ballotPublicSignals,
   bjjAdd,
   bjjMulBase,
@@ -397,5 +398,35 @@ describe('field encodings', () => {
     expect(processIdToField(`0x${'00'.repeat(30)}ff`)).toBe(255n);
     expect(() => addressToField('0x1234')).toThrow('20 bytes');
     expect(() => processIdToField(`0x${'00'.repeat(32)}`)).toThrow('31 bytes');
+  });
+});
+
+describe('ballot leaf hash', () => {
+  // hashes.json: davinci-zkvm `ballot::ballot_leaf_hash` of three ballots and of the identity ballot.
+  const hashes = loadFixture<{
+    ballot_leaves: { ballot: string[]; hash: string }[];
+    identity_ballot: string;
+  }>('zkvm/hashes.json');
+  const fromCoords = (c: string[]): Ballot =>
+    Array.from({ length: 16 }, (_, i) => ({
+      c1: { x: BigInt(c[4 * i]), y: BigInt(c[4 * i + 1]) },
+      c2: { x: BigInt(c[4 * i + 2]), y: BigInt(c[4 * i + 3]) },
+    }));
+  const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+
+  it('hashes the 64 coordinates as 32-byte big-endian words like the Rust SDK', () => {
+    expect(hashes.ballot_leaves.length).toBeGreaterThan(0);
+    for (const v of hashes.ballot_leaves) {
+      expect(hex(ballotLeafHash(fromCoords(v.ballot)))).toBe(v.hash);
+    }
+    const identity = Array.from({ length: 16 }, () => ({ ...IDENTITY_CIPHERTEXT }));
+    expect(hex(ballotLeafHash(identity))).toBe(hashes.identity_ballot);
+  });
+
+  it('refuses a ballot that is not 16 canonical ciphertexts', () => {
+    const b = fromCoords(hashes.ballot_leaves[0].ballot);
+    expect(() => ballotLeafHash(b.slice(1))).toThrow('16 ciphertexts');
+    const over = [{ c1: { x: BN254_FR, y: 1n }, c2: b[0].c2 }, ...b.slice(1)];
+    expect(() => ballotLeafHash(over)).toThrow('not a field element');
   });
 });

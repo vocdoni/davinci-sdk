@@ -376,6 +376,13 @@ describe('presets within the ballot circuit', () => {
       resolveElectionPreset({ type: 'rating', maxValue: 2 ** 48 - 1 }, questionsWith(16))
         .maxValueSum
     ).toBe(String(16 * (2 ** 48 - 1)));
+    // A quadratic budget is a maxValue squared: numFields * budget^2 stays below 2^63.
+    expect(
+      resolveElectionPreset({ type: 'quadratic', budget: 2 ** 29 }, questionsWith(16)).maxValue
+    ).toBe(String(2 ** 29));
+    expect(() =>
+      resolveElectionPreset({ type: 'quadratic', budget: 2 ** 30 }, questionsWith(16))
+    ).toThrow('16 * 1073741824^2 is not below 2^63');
     // A minimum spend above the budget has no ballot.
     expect(() =>
       resolveElectionPreset({ type: 'quadratic', budget: 4, minValueSum: 5 }, questionsWith(3))
@@ -435,6 +442,30 @@ describe('ballotModeValues', () => {
     expect(
       refusal({ maxValueSum: String(2n ** 63n - 1n), minValueSum: String(2n ** 63n) })?.[0]
     ).toBe('BallotModeMinValueSumTooLarge');
+  });
+
+  it('refuses a cost the circuit would not compare as an integer, naming the registry error', () => {
+    const R2 = 'InvalidBallotCost';
+    expect(refusal({ costExponent: 0 })).toEqual([
+      R2,
+      'ballot mode: costExponent 0: the registry needs at least 1',
+    ]);
+    // numFields * maxValue^costExponent must stay below 2^63.
+    const at = (numFields: number, maxValue: bigint, costExponent: number) =>
+      refusal({ numFields, maxValue: String(maxValue), costExponent, maxValueSum: '0' });
+    expect(at(16, 2n ** 48n - 1n, 1)).toBeUndefined();
+    expect(at(16, 2n ** 15n, 4)).toEqual([
+      R2,
+      'ballot mode: numFields * maxValue^costExponent = 16 * 32768^4 is not below 2^63',
+    ]);
+    // 2^63 - 1 itself is no such product (maxValue < 2^48, numFields <= 16): the closest each side.
+    expect(at(1, 2n ** 21n - 1n, 3)).toBeUndefined();
+    expect(at(8, 2n ** 20n, 3)?.[0]).toBe(R2);
+    expect(at(7, 2n ** 20n, 3)).toBeUndefined();
+    expect(at(1, 1n, 255)).toBeUndefined();
+    expect(at(1, 2n, 62)).toBeUndefined();
+    expect(at(1, 2n, 63)?.[0]).toBe(R2);
+    expect(at(16, 0n, 255)).toBeUndefined();
   });
 
   it('refuses bounds and bytes that are not integers', () => {

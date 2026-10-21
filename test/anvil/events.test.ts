@@ -7,6 +7,7 @@ import {
   addresses,
   anvil,
   chainProvider,
+  chainTime,
   connect,
   election,
   registryService,
@@ -49,9 +50,13 @@ describe('registry events', () => {
     census = new OffchainDynamicCensus();
     census.add(addresses(2));
 
-    // One process through every organizer change.
+    // One process through every organizer change; the metadata changes before the start.
     const created = await sdk.createProcess(
-      election(census, { grace: ANVIL_GRACE.graceFloor, maxVoters: 10 })
+      election(census, {
+        grace: ANVIL_GRACE.graceFloor,
+        maxVoters: 10,
+        timing: { startDate: Number(await chainTime()) + 60, duration: 3600 },
+      })
     );
     processId = created.processId;
     fromBlock = Number((await sdk.registry.getProcess(processId)).creationBlock);
@@ -73,7 +78,7 @@ describe('registry events', () => {
     });
     await sdk.pauseProcess(processId);
     await sdk.resumeProcess(processId);
-    await warp(30);
+    await warp(90);
     await sdk.endProcess(processId);
   });
 

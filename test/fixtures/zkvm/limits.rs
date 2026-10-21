@@ -9,7 +9,14 @@ pub const REFRESH_KAPPA: usize = 1;
 pub const NUM_FIELDS: usize = 16;
 /// Flat ballot width: NUM_FIELDS ciphertexts x 4 coordinates.
 pub const BALLOT_COORDS: usize = NUM_FIELDS * 4;
+/// Depth of the arbo state tree: keys have 64 path bits and a leaf can sit at
+/// depth 64 (vote id `2^63 | k` next to key `k`). Trees are created with it;
+/// never change it (arbo pins it in storage).
 pub const SMT_LEVELS: usize = 64;
+/// Sibling slots of every state-tree proof sent to the guests and the
+/// registry: one more than `SMT_LEVELS`, because the circomlib processor needs
+/// a zero sentinel below the deepest leaf. Shorter arbo proofs are zero-padded.
+pub const SMT_PROOF_LEVELS: usize = SMT_LEVELS + 1;
 pub const MAX_BLOBS: usize = 32;
 /// EIP-7594 cap on blobs per transaction.
 pub const TX_BLOB_CAP: usize = 6;

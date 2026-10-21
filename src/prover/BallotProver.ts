@@ -40,12 +40,40 @@ export type ProvableBallot = Pick<BuiltBallot, 'circuitInputs' | 'publicSignals'
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+const BN254_FQ = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
+
+// What the node's parser takes: decimal coordinates below the base field
+// modulus (snarkjs would reduce larger ones), no identity point, groth16/bn128.
+function canonicalProof(p: Groth16Proof): boolean {
+  const coord = (v: unknown) =>
+    typeof v === 'string' && /^[0-9]{1,80}$/.test(v) && BigInt(v) < BN254_FQ;
+  const g1 = (v: unknown) =>
+    Array.isArray(v) && v.length === 3 && v[2] !== '0' && coord(v[0]) && coord(v[1]);
+  const g2 = (v: unknown) => {
+    if (!Array.isArray(v) || v.length !== 3) return false;
+    const pairs = v as unknown[];
+    if (!pairs.every(c => Array.isArray(c) && c.length === 2)) return false;
+    const [x, y, z] = pairs as [string, string][];
+    return (
+      !(z[0] === '0' && z[1] === '0') && coord(x[0]) && coord(x[1]) && coord(y[0]) && coord(y[1])
+    );
+  };
+  return (
+    (p.protocol ?? 'groth16') === 'groth16' &&
+    (p.curve ?? 'bn128') === 'bn128' &&
+    g1(p.pi_a) &&
+    g2(p.pi_b) &&
+    g1(p.pi_c)
+  );
+}
+
 /**
  * Verifies a ballot proof under `vkey`. Trust the answer only for a key
  * whose `ballotVkHash` equals the registry's `ballotVKHash()`, as the keys a
  * {@link BallotProver} loads do.
  *
- * @returns false for a proof that does not verify or does not parse, other
+ * @returns false for a proof that does not verify or does not parse (a coordinate
+ *   at or above the base field modulus, an identity point), other
  *   than 71 public signals, or a key `ballotVkHash` refuses (other than 72 IC
  *   points, `delta == gamma`, a point off its curve)
  */
@@ -55,6 +83,7 @@ export async function verifyBallotProof(
   publicSignals: readonly (string | bigint)[]
 ): Promise<boolean> {
   if (publicSignals.length !== BALLOT_PROOF_PUBLIC_SIGNALS) return false;
+  if (!canonicalProof(proof)) return false;
   try {
     ballotVkWireBytes(vkey);
     return await snarkjs.groth16.verify(vkey, publicSignals.map(String), proof);

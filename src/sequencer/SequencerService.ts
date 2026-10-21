@@ -67,9 +67,10 @@ export class VocdoniSequencerService extends BaseService {
    */
   constructor(baseURL: string, config: BaseServiceConfig = {}) {
     super(baseURL, {
-      timeoutMs: SEQUENCER_TIMEOUT_MS,
-      maxResponseBytes: SEQUENCER_MAX_RESPONSE_BYTES,
       ...config,
+      // An explicit undefined keeps the default, not no limit.
+      timeoutMs: config.timeoutMs ?? SEQUENCER_TIMEOUT_MS,
+      maxResponseBytes: config.maxResponseBytes ?? SEQUENCER_MAX_RESPONSE_BYTES,
     });
   }
 

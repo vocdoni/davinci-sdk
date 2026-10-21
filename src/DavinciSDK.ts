@@ -715,7 +715,8 @@ export class DavinciSDK {
    *    from `censusProviders.csp` for a CSP census.
    * 3. The choices are checked against the ballot mode, then the 16-field
    *    ballot is built under the registry's key, proved (the circuit files
-   *    are downloaded once and checked) and its vote id signed.
+   *    are downloaded once and checked) and the vote signed: the signature
+   *    covers the process id, the vote id and the ciphertexts.
    * 4. It goes to the voter's node (`pickNode`), failing over only when that
    *    is safe. A revote goes to the node that took the voter's previous
    *    ballot, so it queues behind it. This SDK remembers that node in memory
@@ -1422,7 +1423,8 @@ export class DavinciSDK {
    * generator of transaction status events. A config or a document is
    * published through the uploader (bytes as given); a document already
    * served is given as `{ uri, hash? }`. The registry allows it while the
-   * process is READY or PAUSED, before the end; readers see a new version.
+   * process is READY or PAUSED, before its start (so never for a process
+   * that starts in its creation block); readers see a new version.
    *
    * @param processId - The process ID
    * @param metadata - The new document, or where it is served

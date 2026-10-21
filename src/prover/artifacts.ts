@@ -42,15 +42,15 @@ export interface BallotArtifactSet {
   vkey: ArtifactFile;
 }
 
-const V120 = '69df9559043d88d363e4d341fdeff76a305a26eb';
-const CDN_V120 = `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${V120}`;
-const GITHUB_V120 = `https://raw.githubusercontent.com/vocdoni/davinci-circom/${V120}/artifacts`;
+const V130 = 'e65e15dab664836893a261e7bd419317219f48d6';
+const CDN_V130 = `https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/${V130}`;
+const GITHUB_V130 = `https://raw.githubusercontent.com/vocdoni/davinci-circom/${V130}/artifacts`;
 
-// A file of the v1.2.0 set: the CDN first, raw GitHub at the same commit after it.
-const v120 = (file: string, sha: string): ArtifactFile =>
+// A file of the v1.3.0 set: the CDN first, raw GitHub at the same commit after it.
+const v130 = (file: string, sha: string): ArtifactFile =>
   Object.freeze({
-    url: `${CDN_V120}/${file}`,
-    mirrors: Object.freeze([`${GITHUB_V120}/${file}`]),
+    url: `${CDN_V130}/${file}`,
+    mirrors: Object.freeze([`${GITHUB_V130}/${file}`]),
     sha256: sha,
   });
 
@@ -58,28 +58,29 @@ const v120 = (file: string, sha: string): ArtifactFile =>
  * The circuit files this release knows, by the ballot VK hash they prove
  * under.
  *
- * `0x7caf…e219` is davinci-circom v1.2.0 (commit `69df955`: `BallotProof(16)`
- * with 71 public inputs, 61,678 constraints) under its pre-production phase-2
- * ceremony key (`CEREMONY.md` in davinci-circom). A public ceremony replaces
- * it before public production. Its files come from the DAVINCI CDN
+ * `0x67e8…4963` is davinci-circom v1.3.0 (commit `e65e15d`: `BallotProof(16)`
+ * with 71 public inputs, 61,232 constraints, exact 89-bit budget
+ * comparators) under its pre-production phase-2 ceremony key (`CEREMONY.md`
+ * in davinci-circom). A public ceremony replaces it before public production.
+ * Its files come from the DAVINCI CDN
  * (`https://davinci-assets.fra1.cdn.digitaloceanspaces.com/ballot/<commit>/<file>`)
  * and, when that fails, from raw GitHub at the commit; both copies are checked
  * against the same sha256.
  */
 export const BALLOT_ARTIFACTS: Readonly<Record<string, BallotArtifactSet>> = Object.freeze({
-  '0x7caffddcd7ea38439cbb45789b810d8eafceca65cff93dbeaae409b2bf64e219': Object.freeze({
-    source: `davinci-circom v1.2.0 ${V120}`,
-    wasm: v120(
+  '0x67e8e6b47ea32cf144d6e72886f02b95ed068b157f9d4ccc8e97f335858e4963': Object.freeze({
+    source: `davinci-circom v1.3.0 ${V130}`,
+    wasm: v130(
       'ballot_proof.wasm',
-      '0x5b65876e8ca3acbe44191049cb86f917febb83cd3f0c56d3d7c828e3ebca6b86'
+      '0x05df6ff4b6e9d914f7125674b18ee57bf106d3fc5b449e2501b3eaa97f099fcc'
     ),
-    zkey: v120(
+    zkey: v130(
       'ballot_proof_pkey.zkey',
-      '0xe634798d1a4bca81c743348f654e7cd8d458bd396065dbca1cfc4a0c6a90b084'
+      '0x1c17aedc4021d717f464dee89a6b8ede9fe1799e7e308f776ee31ca6933fd2c0'
     ),
-    vkey: v120(
+    vkey: v130(
       'ballot_proof_vkey.json',
-      '0x4a05045a22a5019ca6cff8057b77c9968856175f9b20705e86925b6f12112f4b'
+      '0xd2d36491e4b2c69e36199976b4b124334b4cb683577510f9ddb1bc2620f3f248'
     ),
   }),
 });
@@ -267,12 +268,21 @@ async function readLocal(path: string): Promise<Uint8Array> {
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
-async function read(src: Source, config: ArtifactsConfig): Promise<Uint8Array> {
+// Most a download may read, so a host that never stops cannot fill memory
+// before the sha256 check (the pinned files are 15 KB, 2.3 MB and 31 MB).
+const MAX_ARTIFACT_BYTES: Readonly<Record<ArtifactName, number>> = {
+  vkey: 1 << 20,
+  wasm: 64 << 20,
+  zkey: 512 << 20,
+};
+
+async function read(name: ArtifactName, src: Source, config: ArtifactsConfig): Promise<Uint8Array> {
   if ('data' in src) return src.data;
   if ('path' in src) return readLocal(src.path);
   const { bytes } = await download(src.url, {
     fetchImpl: config.fetchImpl,
     stallTimeoutMs: config.timeoutMs ?? ARTIFACT_STALL_TIMEOUT_MS,
+    maxBytes: MAX_ARTIFACT_BYTES[name],
   });
   return bytes;
 }
@@ -293,7 +303,13 @@ export async function loadArtifactFile(
   config: ArtifactsConfig = {}
 ): Promise<Uint8Array> {
   const want = normalizeHash(file.sha256);
-  const cached = await config.cache?.get(want);
+  // A cache that fails is a miss: the pinned download still works.
+  let cached: Uint8Array | undefined;
+  try {
+    cached = await config.cache?.get(want);
+  } catch {
+    cached = undefined;
+  }
   if (cached && sha256(cached) === want) return cached;
 
   const failures: string[] = [];
@@ -301,7 +317,7 @@ export async function loadArtifactFile(
   for (const src of sourcesOf(name, file, config)) {
     let data: Uint8Array;
     try {
-      data = await read(src, config);
+      data = await read(name, src, config);
     } catch (err) {
       failures.push(`cannot read ${describe(src)}: ${message(err)}`);
       cause ??= err;
@@ -312,7 +328,11 @@ export async function loadArtifactFile(
       failures.push(`${describe(src)} has sha256 ${got}, want ${want}`);
       continue;
     }
-    await config.cache?.set(want, data);
+    try {
+      await config.cache?.set(want, data);
+    } catch {
+      // Not kept; the file is good.
+    }
     return data;
   }
   throw new ArtifactError(`${name}: ${failures.join('; ')}`, name, cause);

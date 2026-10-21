@@ -143,19 +143,22 @@ export async function landAt<T>(
 }
 
 /**
- * Runs a change that the registry allows only before a process's `end`
- * across that boundary, and checks every layer refuses it from the end on:
+ * Runs a change that the registry allows only before a process's `end` (or
+ * another boundary, such as the start for the metadata) across that
+ * boundary, and checks every layer refuses it from the boundary on:
  *
  * 1. Landing at `end - 1` it goes through.
  * 2. Checked and simulated at `end - 1` but landing at `end`, it reverts on
  *    chain, and the replay names `InvalidTimeBounds`.
- * 3. With the head at `end`, the SDK refuses it before simulating.
+ * 3. With the head at `end`, the SDK refuses it before simulating, with a
+ *    message matching `rule`.
  * 4. The raw registry service's simulation reverts `InvalidTimeBounds`.
  */
 export async function acrossTheEnd(
   end: bigint,
   change: () => AsyncGenerator<TxStatusEvent<unknown>>,
-  raw: () => AsyncGenerator<TxStatusEvent<unknown>>
+  raw: () => AsyncGenerator<TxStatusEvent<unknown>>,
+  rule: RegExp = /only before the end/
 ): Promise<void> {
   await mineAt(end - 2n);
   await nextBlockAt(end - 1n);
@@ -169,7 +172,7 @@ export async function acrossTheEnd(
 
   const local = await streamError(change());
   expect(local).toMatchObject({ revertName: 'InvalidTimeBounds' });
-  expect(local.message).toMatch(/only before the end/);
+  expect(local.message).toMatch(rule);
 
   const simulated = await streamError(raw());
   expect(simulated).toMatchObject({ revertName: 'InvalidTimeBounds' });

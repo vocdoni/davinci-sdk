@@ -57,7 +57,8 @@ A ballot `v[0..numFields)` is valid when every `minValue <= v[i] <= maxValue`, t
 
 - `numFields` outside 1..16 (`InvalidMaxCount`), `groupSize` above `numFields` (`InvalidGroupSize`);
 - a value bound of 2^48 or more, a sum bound of 2^63 or more (`BallotModeMaxValueTooLarge`, …);
-- `minValue > maxValue` (`InvalidMaxMinValueBounds`), `minValueSum > maxValueSum` (`InvalidValueSumBounds`).
+- `minValue > maxValue` (`InvalidMaxMinValueBounds`), `minValueSum > maxValueSum` (`InvalidValueSumBounds`);
+- `costExponent` 0, or `numFields * maxValue^costExponent` of 2^63 or more (`InvalidBallotCost`): the circuit sums the costs in its field and compares them in 89 bits, which is exact only below that bound. A quadratic `budget` is its `maxValue`: with 16 fields it is at most 759,250,124.
 
 The registry also caps `maxValue * maxVoters` at 1e12 (`RESULT_CAP`): a mode with large values limits `maxVoters`.
 
@@ -131,7 +132,7 @@ const weighted: BallotMode = {
 ```
 
 - Size `maxValue` to the largest weight; with the result cap, `maxVoters` must stay at most `1e12 / maxValue`.
-- The circuit compares the sum with the weight in 63 bits: a weight of 2^63 or more cannot vote. `createProcess` refuses such a Merkle census object.
+- Every census weight works as a budget (weights are below 2^88): the circuit compares the cost with the weight exactly.
 - `sdk.getAddressWeight(processId, address)` tells a voter its budget.
 
 With any other `maxValueSum`, every voter has the same bounds whatever its weight.
