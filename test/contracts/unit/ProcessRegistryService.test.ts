@@ -65,7 +65,7 @@ const CID = `0x${'c1'.repeat(12)}`;
 const RID = `0x${'7e'.repeat(32)}`;
 const KEY = '0x' + '11'.repeat(32);
 const iface = new Interface(PROCESS_REGISTRY_ABI);
-const PID = `0x${'ab'.repeat(20)}e8d4e286${'00'.repeat(6)}01`;
+const PID = `0x${'ab'.repeat(20)}e1b56c76${'00'.repeat(6)}01`;
 const KEY_POINT = bjjMulBase(12345n);
 
 type Process = Record<string, unknown>;
@@ -147,7 +147,7 @@ function setup(calls: Record<string, CallHandler> = {}) {
     graceCeil: () => [600],
     graceMaxTotal: () => [1800],
     noticeMin: () => [60],
-    pidPrefix: () => [0xe8d4e286],
+    pidPrefix: () => [0xe1b56c76],
     processCount: () => [7],
     processNonce: () => [2n],
     MAX_STATUS: () => [4],
@@ -370,7 +370,7 @@ describe('ProcessRegistryService reads', () => {
     expect(await registry.getProcessGraceEnd(PID)).toBe(1_700_003_780n);
     expect(await registry.getProcessEndTime(PID)).toBe(1_700_003_600n);
     expect(await registry.getNextProcessId(ZeroAddress)).toBe(PID);
-    expect(await registry.getPidPrefix()).toBe('0xe8d4e286');
+    expect(await registry.getPidPrefix()).toBe('0xe1b56c76');
     expect(await registry.getProcessCount()).toBe(7);
     expect(await registry.getChainID()).toBe('10');
     expect(await registry.getZiskVerifier()).toBe(VERIFIER);
@@ -504,7 +504,7 @@ describe('ProcessRegistryService.newProcess', () => {
   });
 
   it('fails before sending when the registry no longer assigns the expected id', async () => {
-    const next = `0x${'ab'.repeat(20)}e8d4e286${'00'.repeat(6)}02`;
+    const next = `0x${'ab'.repeat(20)}e1b56c76${'00'.repeat(6)}02`;
     const { registry, chain, wallet } = setup({ getNextProcessId: () => [next] });
     const err = failure(await drain(registry.newProcess(baseParams(), { expectedProcessId: PID })));
     expect(err).toBeInstanceOf(ProcessCreateError);
@@ -522,7 +522,7 @@ describe('ProcessRegistryService.newProcess', () => {
 
   it('fails with WrongProcessIdError when another process took the id', async () => {
     const { registry, chain, wallet } = setup();
-    const other = `0x${'ab'.repeat(20)}e8d4e286${'00'.repeat(6)}02`;
+    const other = `0x${'ab'.repeat(20)}e1b56c76${'00'.repeat(6)}02`;
     chain.onMine = () => ({ status: 1, logs: [createdLog(other, wallet.address)] });
     const err = failure(await drain(registry.newProcess(baseParams(), { expectedProcessId: PID })));
     expect(err).toBeInstanceOf(WrongProcessIdError);
@@ -732,7 +732,7 @@ describe('ProcessRegistryService.createProcess', () => {
     expect(disabled).toBeInstanceOf(DkgDisabledError);
     expect(off.chain.sent).toHaveLength(0);
 
-    const next = `0x${'ab'.repeat(20)}e8d4e286${'00'.repeat(6)}02`;
+    const next = `0x${'ab'.repeat(20)}e1b56c76${'00'.repeat(6)}02`;
     const stale = setup({ getNextProcessId: () => [next] });
     for (const mode of [KeyMode.Sequencer, KeyMode.DkgAutomatic, KeyMode.DkgLocked]) {
       const err = failure(await drain(stale.registry.createProcess(params(mode))));

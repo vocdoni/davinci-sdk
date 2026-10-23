@@ -6,11 +6,11 @@ davinci-zkvm `4b7b6e8ca5be1ebdbe0742623dd9411f392de830`; `census-files.json` at 
 `b109a4d9c47451455b54c274aed40827eff38ad0` (branch `feat/protocol-v5`: census values `0x`
 and 64 hex digits, no `ballotInputsHash`, Keccak census roots), next to davinci-zkvm
 `867316bb18e59be3290682719795fb8d41b638b7`;
-`tracker.json` at `e9f941ba998e72c1cd07febfe8cf0a83bb8c648b` (branch `feat/v5.1`); `networks.rs` at `4ae0e5e75e90a3f4ebd821b0b211365741e3ed3a`
-(branch `feat/v5.1`: the protocol v5.1 OP Mainnet registry).
+`tracker.json` at `e9f941ba998e72c1cd07febfe8cf0a83bb8c648b` (branch `feat/v5.1`); `networks.rs` at `8f0c959f5fd081bf7b4d87180aff61f5da70e5e1`
+(branch `main`: the OP Mainnet registry of 2026-10-23).
 
 - `networks.rs`: verbatim copy of `client/src/networks.rs`, the known deployments,
-  from branch feat/v5.1 (commit `4ae0e5e`, OP Mainnet in L1-blob mode).
+  from branch main (commit `8f0c959`, OP Mainnet in L1-blob mode).
   `test/protocol/unit/Protocol.test.ts` checks `src/networks.ts` against it.
 - `tracker.json`: tracker proofs (arbo inclusion proofs of vote-id leaves in a
   SHA-256, 64-level state tree that also holds config and ballot leaves), as
@@ -56,7 +56,7 @@ and 64 hex digits, no `ballotInputsHash`, Keccak census roots), next to davinci-
   census files.
 
 ```
-24ff0632e1fc28cf6abb97357d03176cb96191a205d71159723b72ee1b64ad5d  networks.rs
+da35ddfb5b10f8483297fa3d002f6a8fe5fdae6c454d9e550b57641697993bbf  networks.rs
 c88cad4f050f5255b659eee02017e3d2b18cd5301cbe7a355189342f188c002c  tracker.json
 3c38c892879d3a46b36468d34e572868955f9da0074f64df1e573f94268454ca  wire.json
 b293e19055b27ae24d4a536888fa4d2e6c6812a65d560a8d34513f62402bb068  census-files.json
